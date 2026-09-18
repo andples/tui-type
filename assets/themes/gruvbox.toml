@@ -1,0 +1,10 @@
+name = "gruvbox"
+
+[colors]
+bg = "#282828"
+fg = "#ebdbb2"
+sub = "#928374"
+main = "#d79921"
+correct = "#ebdbb2"
+error = "#fb4934"
+error_extra = "#cc241d"

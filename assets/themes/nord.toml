@@ -1,0 +1,10 @@
+name = "nord"
+
+[colors]
+bg = "#2e3440"
+fg = "#d8dee9"
+sub = "#616e88"
+main = "#88c0d0"
+correct = "#d8dee9"
+error = "#bf616a"
+error_extra = "#d08770"

@@ -1,0 +1,10 @@
+name = "default"
+
+[colors]
+bg = "#111111"
+fg = "#d1d0c5"
+sub = "#646669"
+main = "#e2b714"
+correct = "#d1d0c5"
+error = "#ca4754"
+error_extra = "#7e2a33"

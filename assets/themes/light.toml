@@ -1,0 +1,10 @@
+name = "light"
+
+[colors]
+bg = "#f5f5f5"
+fg = "#2b2b2b"
+sub = "#9a9a9a"
+main = "#c47a00"
+correct = "#2b2b2b"
+error = "#d0342c"
+error_extra = "#a11d18"

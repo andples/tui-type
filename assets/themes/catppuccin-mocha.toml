@@ -1,0 +1,10 @@
+name = "catppuccin-mocha"
+
+[colors]
+bg = "#1e1e2e"
+fg = "#cdd6f4"
+sub = "#6c7086"
+main = "#cba6f7"
+correct = "#cdd6f4"
+error = "#f38ba8"
+error_extra = "#eba0ac"

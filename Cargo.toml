@@ -1,0 +1,28 @@
+[package]
+name = "ttyp"
+version = "0.1.0"
+edition = "2024"
+description = "Minimal monkeytype-style typing test for the terminal"
+license = "MIT"
+
+[dependencies]
+anyhow = "1.0.104"
+chrono = { version = "0.4.45", features = ["serde"] }
+clap = { version = "4.6.7", features = ["derive"] }
+crossterm = "0.29.0"
+directories = "6.0.0"
+nucleo-matcher = "0.3.1"
+rand = "0.10.2"
+ratatui = "0.30.2"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+thiserror = "2.0.20"
+toml = "1.1.6"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
+
+[lints.clippy]
+all = "warn"

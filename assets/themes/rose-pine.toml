@@ -1,0 +1,10 @@
+name = "rose-pine"
+
+[colors]
+bg = "#191724"
+fg = "#e0def4"
+sub = "#6e6a86"
+main = "#ebbcba"
+correct = "#e0def4"
+error = "#eb6f92"
+error_extra = "#b4637a"
