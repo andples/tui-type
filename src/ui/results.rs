@@ -15,7 +15,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
     let Some(outcome) = &app.outcome else {
         return;
     };
-    let col = content_column(area, app.config.zoom_level().0);
+    let col = content_column(area, app.config.content_width());
     let cfg = &app.config.results;
 
     // headline (2) + gap + detail (1) + gap + chart (n) + gap + hint (1)

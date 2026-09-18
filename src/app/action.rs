@@ -36,8 +36,16 @@ pub enum Action {
     // Housekeeping
     Tick,
     Redraw,
-    ZoomIn,
-    ZoomOut,
+    FontBigger,
+    FontSmaller,
+
+    // Slider (bottom-line numeric picker)
+    SliderDec,
+    SliderInc,
+    SliderMin,
+    SliderMax,
+    SliderConfirm,
+    SliderCancel,
     Quit,
     Nop,
 }

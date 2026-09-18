@@ -11,6 +11,7 @@ use crate::test::Status;
 pub struct InputContext {
     pub screen: Screen,
     pub command_line_open: bool,
+    pub slider_open: bool,
     pub test_status: Status,
 }
 
@@ -29,12 +30,15 @@ pub fn map_key(key: KeyEvent, ctx: InputContext) -> Action {
         return Action::Redraw;
     }
     if ctrl && matches!(key.code, KeyCode::Char('=') | KeyCode::Char('+')) {
-        return Action::ZoomIn;
+        return Action::FontBigger;
     }
     if ctrl && matches!(key.code, KeyCode::Char('-') | KeyCode::Char('_')) {
-        return Action::ZoomOut;
+        return Action::FontSmaller;
     }
 
+    if ctx.slider_open {
+        return map_slider(key);
+    }
     if ctx.command_line_open {
         return map_command_line(key, ctrl, alt);
     }
@@ -77,6 +81,27 @@ fn map_typing(key: KeyEvent, ctrl: bool, alt: bool, status: Status) -> Action {
     }
 }
 
+fn map_slider(key: KeyEvent) -> Action {
+    match key.code {
+        KeyCode::Left
+        | KeyCode::Down
+        | KeyCode::Char('h')
+        | KeyCode::Char('j')
+        | KeyCode::Char('-') => Action::SliderDec,
+        KeyCode::Right
+        | KeyCode::Up
+        | KeyCode::Char('l')
+        | KeyCode::Char('k')
+        | KeyCode::Char('+')
+        | KeyCode::Char('=') => Action::SliderInc,
+        KeyCode::Home | KeyCode::Char('0') => Action::SliderMin,
+        KeyCode::End | KeyCode::Char('$') => Action::SliderMax,
+        KeyCode::Enter | KeyCode::Char(' ') => Action::SliderConfirm,
+        KeyCode::Esc | KeyCode::Char('q') => Action::SliderCancel,
+        _ => Action::Nop,
+    }
+}
+
 fn map_command_line(key: KeyEvent, ctrl: bool, alt: bool) -> Action {
     match key.code {
         KeyCode::Esc => Action::CloseCommandLine,
@@ -114,6 +139,7 @@ mod tests {
         InputContext {
             screen,
             command_line_open: open,
+            slider_open: false,
             test_status: status,
         }
     }

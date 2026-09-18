@@ -9,8 +9,9 @@ use anyhow::{Context, Result};
 use crossterm::event::{self, Event};
 use ratatui::DefaultTerminal;
 
-use crate::command::{self, Command, CommandLine, Completions, ZoomArg};
+use crate::command::{self, Command, CommandLine, Completions};
 use crate::config::{Config, Paths};
+use crate::config::{FONT_SIZE_RANGE, WORDS_PER_LINE_RANGE};
 use crate::language::LanguageRegistry;
 use crate::stats::{LocalJsonlStore, StatsStore, Summary, TestRecord, personal_best};
 use crate::test::{Metrics, Mode, Modifiers, RandomGenerator, Status, TestEngine};
@@ -32,6 +33,46 @@ pub enum Screen {
     Help,
 }
 
+/// Which config value a slider edits.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SliderTarget {
+    FontSize,
+    WordsPerLine,
+}
+
+impl SliderTarget {
+    pub fn label(self) -> &'static str {
+        match self {
+            SliderTarget::FontSize => "font size",
+            SliderTarget::WordsPerLine => "words per line",
+        }
+    }
+
+    pub fn range(self) -> (u8, u8) {
+        match self {
+            SliderTarget::FontSize => FONT_SIZE_RANGE,
+            SliderTarget::WordsPerLine => WORDS_PER_LINE_RANGE,
+        }
+    }
+}
+
+/// An open bottom-line slider. Changes apply live; Esc restores `original`.
+#[derive(Debug, Clone, Copy)]
+pub struct Slider {
+    pub target: SliderTarget,
+    pub value: u8,
+    pub original: u8,
+}
+
+impl Slider {
+    pub fn min(&self) -> u8 {
+        self.target.range().0
+    }
+    pub fn max(&self) -> u8 {
+        self.target.range().1
+    }
+}
+
 /// Everything the results screen needs about the last finished test.
 pub struct Outcome {
     pub metrics: Metrics,
@@ -51,6 +92,7 @@ pub struct App {
     pub screen: Screen,
     pub cmdline: CommandLine,
     pub cmd_open: bool,
+    pub slider: Option<Slider>,
     pub completions: Completions,
     pub notice: Option<(String, Instant)>,
     pub scroll: usize,
@@ -103,6 +145,7 @@ impl App {
             screen: Screen::Typing,
             cmdline: CommandLine::new(),
             cmd_open: false,
+            slider: None,
             completions,
             notice: None,
             scroll: 0,
@@ -137,6 +180,14 @@ impl App {
             return t;
         }
         self.themes.get_or_default(&self.config.theme)
+    }
+
+    /// Max width of the content column for the screen being shown.
+    pub fn screen_width(&self) -> u16 {
+        match self.screen {
+            Screen::Typing => self.config.typing_width(),
+            _ => self.config.content_width(),
+        }
     }
 
     pub fn notify(&mut self, msg: impl Into<String>) {
@@ -196,6 +247,7 @@ impl App {
         InputContext {
             screen: self.screen,
             command_line_open: self.cmd_open,
+            slider_open: self.slider.is_some(),
             test_status: self.engine.status(),
         }
     }
@@ -215,8 +267,29 @@ impl App {
                 }
             }
             Action::Redraw => {}
-            Action::ZoomIn => self.execute(Command::Zoom(ZoomArg::In)),
-            Action::ZoomOut => self.execute(Command::Zoom(ZoomArg::Out)),
+            Action::FontBigger => self.execute(Command::FontSize(Some(
+                self.config.font_size.saturating_add(1),
+            ))),
+            Action::FontSmaller => self.execute(Command::FontSize(Some(
+                self.config.font_size.saturating_sub(1),
+            ))),
+
+            Action::SliderDec => self.slide(|s| s.value.saturating_sub(1).max(s.min())),
+            Action::SliderInc => self.slide(|s| s.value.saturating_add(1).min(s.max())),
+            Action::SliderMin => self.slide(|s| s.min()),
+            Action::SliderMax => self.slide(|s| s.max()),
+            Action::SliderConfirm => {
+                if let Some(s) = self.slider.take() {
+                    self.apply_slider(s.target, s.value);
+                    self.notify(format!("{} {}", s.target.label(), s.value));
+                    self.save_config();
+                }
+            }
+            Action::SliderCancel => {
+                if let Some(s) = self.slider.take() {
+                    self.apply_slider(s.target, s.original);
+                }
+            }
             Action::Quit => self.should_quit = true,
 
             Action::TypeChar(c) => {
@@ -280,6 +353,34 @@ impl App {
         }
         self.screen = screen;
         self.scroll = 0;
+    }
+
+    fn open_slider(&mut self, target: SliderTarget) {
+        let current = match target {
+            SliderTarget::FontSize => self.config.font_size,
+            SliderTarget::WordsPerLine => self.config.words_per_line,
+        };
+        self.slider = Some(Slider {
+            target,
+            value: current,
+            original: current,
+        });
+    }
+
+    /// Update the open slider's value and apply it live.
+    fn slide(&mut self, next: impl FnOnce(&Slider) -> u8) {
+        if let Some(mut s) = self.slider {
+            s.value = next(&s);
+            self.slider = Some(s);
+            self.apply_slider(s.target, s.value);
+        }
+    }
+
+    fn apply_slider(&mut self, target: SliderTarget, value: u8) {
+        match target {
+            SliderTarget::FontSize => self.config.set_font_size(value),
+            SliderTarget::WordsPerLine => self.config.set_words_per_line(value),
+        }
     }
 
     fn close_command_line(&mut self) {
@@ -361,18 +462,21 @@ impl App {
                 self.notify(format!("numbers {}", on_off(self.config.numbers)));
                 changed_test = true;
             }
-            Command::Zoom(arg) => {
-                let level = match arg {
-                    ZoomArg::In => self.config.zoom.saturating_add(1),
-                    ZoomArg::Out => self.config.zoom.saturating_sub(1),
-                    ZoomArg::Level(l) => l,
-                };
-                self.config.set_zoom(level);
-                let (w, lines) = self.config.zoom_level();
-                self.notify(format!(
-                    "zoom {}  ({w} cols, {lines} lines)",
-                    self.config.zoom
-                ));
+            Command::FontSize(None) => {
+                self.open_slider(SliderTarget::FontSize);
+                return;
+            }
+            Command::FontSize(Some(n)) => {
+                self.config.set_font_size(n);
+                self.notify(format!("font size {}", self.config.font_size));
+            }
+            Command::WordsPerLine(None) => {
+                self.open_slider(SliderTarget::WordsPerLine);
+                return;
+            }
+            Command::WordsPerLine(Some(n)) => {
+                self.config.set_words_per_line(n);
+                self.notify(format!("words per line {}", self.config.words_per_line));
             }
             Command::Zen(v) => {
                 self.config.zen = v.unwrap_or(!self.config.zen);
@@ -396,8 +500,10 @@ impl App {
                 if self.themes.get(&self.config.theme).is_none() {
                     self.notify(format!("unknown theme `{}`", self.config.theme));
                 }
-                changed_test = !matches!(key.as_str(), "theme" | "zoom" | "zen")
-                    && !key.starts_with("results.");
+                changed_test = !matches!(
+                    key.as_str(),
+                    "theme" | "zen" | "font_size" | "fontsize" | "words_per_line" | "wpl"
+                ) && !key.starts_with("results.");
             }
         }
         if changed_test {

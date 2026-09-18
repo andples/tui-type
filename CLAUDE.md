@@ -23,7 +23,7 @@ then `tmux send-keys -t t -l 'text'` and `tmux capture-pane -t t -p`.
 - `src/theme/`, `src/language/` — registries: built-ins via `include_str!` from `assets/`, user files in config dir override by name.
 - `src/stats/` — `StatsStore` trait, `LocalJsonlStore`, `Summary`.
 - `src/app/` — `App`, `Action` enum, key→action mapping, event loop.
-- `src/ui/` — rendering only; one file per screen.
+- `src/ui/` — rendering only; one file per screen. `bigtext.rs` rasterizes font8x8 glyphs for `fontsize` 2–4; `slider.rs` is the bottom-line numeric picker.
 
 ## Conventions
 
@@ -31,4 +31,5 @@ then `tmux send-keys -t t -l 'text'` and `tmux capture-pane -t t -p`.
 - Engine methods that depend on time take an `Instant` (`*_at`) so tests are deterministic.
 - Config changes are saved immediately via `App::save_config`.
 - Adding a command: add a `CommandSpec` to `COMMANDS`, a `Command` variant, a `parse` arm, and an `App::execute` arm.
+- Numeric settings use `ArgKind::Slider`: `Command::X(None)` opens the slider (`App::open_slider`), `Some(n)` sets directly.
 - Adding a built-in theme/language: add the TOML under `assets/` and its `include_str!` to the `BUILTIN` list.

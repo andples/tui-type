@@ -5,7 +5,7 @@ pub mod palette;
 
 pub use palette::{CommandLine, Completions, Suggestion};
 
-use crate::config::ResultsConfig;
+use crate::config::{FONT_SIZE_RANGE, ResultsConfig, WORDS_PER_LINE_RANGE, parse_range};
 use crate::test::mode::Mode;
 
 /// Parsed, validated command ready for the app to execute.
@@ -18,7 +18,10 @@ pub enum Command {
     /// `None` toggles.
     Punctuation(Option<bool>),
     Numbers(Option<bool>),
-    Zoom(ZoomArg),
+    /// `None` opens the slider.
+    FontSize(Option<u8>),
+    /// `None` opens the slider.
+    WordsPerLine(Option<u8>),
     Zen(Option<bool>),
     Restart,
     Stats,
@@ -34,13 +37,6 @@ pub enum Command {
     },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ZoomArg {
-    In,
-    Out,
-    Level(u8),
-}
-
 /// What the palette should offer for a command's argument.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArgKind {
@@ -51,7 +47,12 @@ pub enum ArgKind {
     WordPresets,
     OnOff,
     ResultSections,
-    ZoomArgs,
+    /// Numeric setting in an inclusive range. Typing a number sets it
+    /// directly; Enter with no number opens an interactive slider.
+    Slider {
+        min: u8,
+        max: u8,
+    },
     /// Free-form; no completion.
     Free,
 }
@@ -62,7 +63,7 @@ impl ArgKind {
     pub fn accepts_free_text(self) -> bool {
         matches!(
             self,
-            ArgKind::TimePresets | ArgKind::WordPresets | ArgKind::Free
+            ArgKind::TimePresets | ArgKind::WordPresets | ArgKind::Free | ArgKind::Slider { .. }
         )
     }
 }
@@ -130,11 +131,25 @@ pub const COMMANDS: &[CommandSpec] = &[
         requires_arg: false,
     },
     CommandSpec {
-        name: "zoom",
-        aliases: &["z"],
-        usage: "[in|out|0-4]",
-        help: "scale the layout",
-        arg: ArgKind::ZoomArgs,
+        name: "fontsize",
+        aliases: &["fs", "font"],
+        usage: "[1-4]",
+        help: "text size (enter opens a slider)",
+        arg: ArgKind::Slider {
+            min: FONT_SIZE_RANGE.0,
+            max: FONT_SIZE_RANGE.1,
+        },
+        requires_arg: false,
+    },
+    CommandSpec {
+        name: "wordsperline",
+        aliases: &["wpl", "width"],
+        usage: "[4-30]",
+        help: "word box width (enter opens a slider)",
+        arg: ArgKind::Slider {
+            min: WORDS_PER_LINE_RANGE.0,
+            max: WORDS_PER_LINE_RANGE.1,
+        },
         requires_arg: false,
     },
     CommandSpec {
@@ -240,16 +255,8 @@ pub fn parse(line: &str) -> Result<Command, String> {
         "theme" => Command::Theme(need(spec.usage)?.to_string()),
         "punctuation" => Command::Punctuation(opt_on_off(rest)?),
         "numbers" => Command::Numbers(opt_on_off(rest)?),
-        "zoom" => Command::Zoom(match rest {
-            "" | "in" | "+" => ZoomArg::In,
-            "out" | "-" => ZoomArg::Out,
-            n => ZoomArg::Level(
-                n.parse::<u8>()
-                    .ok()
-                    .filter(|l| (*l as usize) < crate::config::ZOOM_LEVELS.len())
-                    .ok_or_else(|| format!("usage: zoom {}", spec.usage))?,
-            ),
-        }),
+        "fontsize" => Command::FontSize(opt_range(rest, FONT_SIZE_RANGE)?),
+        "wordsperline" => Command::WordsPerLine(opt_range(rest, WORDS_PER_LINE_RANGE)?),
         "zen" => Command::Zen(opt_on_off(rest)?),
         "restart" => Command::Restart,
         "stats" => Command::Stats,
@@ -288,6 +295,14 @@ pub fn parse(line: &str) -> Result<Command, String> {
     Ok(cmd)
 }
 
+fn opt_range(rest: &str, range: (u8, u8)) -> Result<Option<u8>, String> {
+    if rest.is_empty() {
+        Ok(None)
+    } else {
+        parse_range(rest, range).map(Some)
+    }
+}
+
 fn opt_on_off(rest: &str) -> Result<Option<bool>, String> {
     if rest.is_empty() {
         Ok(None)
@@ -309,11 +324,8 @@ pub fn arg_candidates(kind: ArgKind, themes: &[String], languages: &[String]) ->
             .iter()
             .map(|s| s.to_string())
             .collect(),
-        ArgKind::ZoomArgs => ["in", "out"]
-            .into_iter()
-            .map(String::from)
-            .chain((0..crate::config::ZOOM_LEVELS.len()).map(|l| l.to_string()))
-            .collect(),
+        // The slider is the completion; the palette stays empty.
+        ArgKind::Slider { .. } => vec![],
     }
 }
 
@@ -334,10 +346,12 @@ mod tests {
         assert_eq!(parse("punc"), Ok(Command::Punctuation(None)));
         assert_eq!(parse("numbers off"), Ok(Command::Numbers(Some(false))));
         assert_eq!(parse("q"), Ok(Command::Quit));
-        assert_eq!(parse("zoom"), Ok(Command::Zoom(ZoomArg::In)));
-        assert_eq!(parse("z out"), Ok(Command::Zoom(ZoomArg::Out)));
-        assert_eq!(parse("zoom 4"), Ok(Command::Zoom(ZoomArg::Level(4))));
-        assert!(parse("zoom 9").is_err());
+        assert_eq!(parse("fontsize"), Ok(Command::FontSize(None)));
+        assert_eq!(parse("fs 3"), Ok(Command::FontSize(Some(3))));
+        assert!(parse("fs 9").is_err());
+        assert_eq!(parse("wpl"), Ok(Command::WordsPerLine(None)));
+        assert_eq!(parse("width 20"), Ok(Command::WordsPerLine(Some(20))));
+        assert!(parse("wpl 2").is_err());
         assert_eq!(parse("zen"), Ok(Command::Zen(None)));
         assert_eq!(
             parse("results chart off"),

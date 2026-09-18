@@ -5,12 +5,17 @@ use std::time::Instant;
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
+use super::bigtext;
 use super::style::{Palette, content_column, vcenter};
 use crate::app::App;
+use crate::config::FontSize;
 use crate::test::{Mode, Status, Word};
+
+const VISIBLE_LINES: usize = 3;
 
 /// Which words go on which line for a given width. Words never wrap
 /// mid-word; extra typed characters widen a word.
@@ -33,8 +38,11 @@ fn layout_lines(words: &[Word], width: usize) -> Vec<(usize, usize)> {
     lines
 }
 
-fn render_word<'a>(w: &Word, is_current: bool, p: &Palette) -> Vec<Span<'a>> {
-    let mut spans = Vec::with_capacity(w.target.len() + 2);
+/// One character cell of the word box: what to draw and how.
+type Cell = (char, Style);
+
+fn word_cells(w: &Word, is_current: bool, p: &Palette) -> Vec<Cell> {
+    let mut cells = Vec::with_capacity(w.target.len() + 2);
     let caret_at = if is_current {
         Some(w.typed.len())
     } else {
@@ -54,7 +62,7 @@ fn render_word<'a>(w: &Word, is_current: bool, p: &Palette) -> Vec<Span<'a>> {
         } else {
             style
         };
-        spans.push(Span::styled(ch.to_string(), style));
+        cells.push((ch, style));
     }
     // Caret sits on the trailing space when the word is fully typed.
     let space_style = if caret_at == Some(n) {
@@ -62,15 +70,17 @@ fn render_word<'a>(w: &Word, is_current: bool, p: &Palette) -> Vec<Span<'a>> {
     } else {
         p.sub()
     };
-    spans.push(Span::styled(" ", space_style));
-    spans
+    cells.push((' ', space_style));
+    cells
 }
 
 pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
-    let (max_width, visible_lines) = app.config.zoom_level();
-    let visible_lines = visible_lines as usize;
-    let col = content_column(area, max_width);
-    let width = col.width as usize;
+    let font = app.config.font_size();
+    let (gw, gh) = font.cell_dims();
+    let col = content_column(area, app.config.typing_width());
+    // Width in glyphs, and the row stride per line (a gap row for big fonts).
+    let width = (col.width / gw).max(1) as usize;
+    let stride = if gh > 1 { gh + 1 } else { 1 };
     let words = app.engine.words();
     let current = app.engine.current_index();
 
@@ -80,26 +90,25 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
         .position(|(s, e)| current >= *s && current < *e)
         .unwrap_or(0);
     let first = current_line.saturating_sub(1);
-    let visible: Vec<Line> = lines
+    let visible: Vec<Vec<Cell>> = lines
         .iter()
         .skip(first)
-        .take(visible_lines)
+        .take(VISIBLE_LINES)
         .map(|(s, e)| {
-            let spans: Vec<Span> = words[*s..*e]
+            words[*s..*e]
                 .iter()
                 .enumerate()
-                .flat_map(|(k, w)| render_word(w, s + k == current, p))
-                .collect();
-            Line::from(spans)
+                .flat_map(|(k, w)| word_cells(w, s + k == current, p))
+                .collect()
         })
         .collect();
 
-    // header (1) + gap (1) + words (n) + gap (1) + mode line (1)
-    let lines_h = visible_lines as u16;
-    let block = vcenter(col, lines_h + 4);
+    // header (1) + gap (1) + words + gap (1) + mode line (1)
+    let words_h = VISIBLE_LINES as u16 * stride - (stride - gh);
+    let block = vcenter(col, words_h + 4);
     let header = Rect::new(block.x, block.y, block.width, 1);
-    let words_area = Rect::new(block.x, block.y + 2, block.width, lines_h);
-    let footer = Rect::new(block.x, block.y + 3 + lines_h, block.width, 1);
+    let words_area = Rect::new(block.x, block.y + 2, block.width, words_h);
+    let footer = Rect::new(block.x, block.y + 3 + words_h, block.width, 1);
     let zen = app.config.zen;
 
     let status = app.engine.status();
@@ -126,7 +135,30 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
     if !zen {
         frame.render_widget(Paragraph::new(counter).style(header_style), header);
     }
-    frame.render_widget(Paragraph::new(visible), words_area);
+
+    if font == FontSize::Normal {
+        let text: Vec<Line> = visible
+            .into_iter()
+            .map(|cells| {
+                Line::from(
+                    cells
+                        .into_iter()
+                        .map(|(c, st)| Span::styled(c.to_string(), st))
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .collect();
+        frame.render_widget(Paragraph::new(text), words_area);
+    } else {
+        let buf = frame.buffer_mut();
+        for (row, cells) in visible.iter().enumerate() {
+            let y = words_area.y + row as u16 * stride;
+            for (i, (c, st)) in cells.iter().enumerate() {
+                let x = words_area.x + i as u16 * gw;
+                bigtext::draw_glyph(buf, words_area, x, y, *c, *st, font);
+            }
+        }
+    }
 
     // The mode line fades out while typing so nothing distracts from the words.
     if status != Status::Running && !zen {

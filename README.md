@@ -24,7 +24,7 @@ Needs a terminal with true-color support.
 | `:` | open the command line (when a test isn't running) |
 | `tab` | restart with new words |
 | `ctrl+w` / `ctrl+backspace` | delete the current word |
-| `ctrl+=` / `ctrl+-` | zoom in / out |
+| `ctrl+=` / `ctrl+-` | font size up / down |
 | `ctrl+c` | quit |
 
 Backspace moves back into the previous word only if it was left with an
@@ -46,7 +46,8 @@ Press `esc`, start typing, and the palette fuzzy-filters as you go.
 | `punctuation [on\|off]` | `punc`, `p` | toggle punctuation |
 | `numbers [on\|off]` | `num`, `n` | toggle numbers |
 | `results <section> [on\|off]` | `res` | show/hide `chart`, `breakdown`, `consistency`, `raw` |
-| `zoom [in\|out\|0-4]` | `z` | layout scale: column width and visible lines (50×2 … 120×5) |
+| `fontsize [1-4]` | `fs`, `font` | text size — 1 normal, 2–4 rendered with block glyphs |
+| `wordsperline [4-30]` | `wpl`, `width` | width of the word box (× 6 characters per word) |
 | `zen [on\|off]` | | words only — hides the brand, timer and mode line |
 | `set <key> <value>` | | any config key, e.g. `set results.chart off` |
 | `restart` | `r` | new test |
@@ -54,7 +55,25 @@ Press `esc`, start typing, and the palette fuzzy-filters as you go.
 | `help` | `h`, `?` | keys and commands |
 | `quit` | `q` | exit |
 
+`fontsize` and `wordsperline` take a number directly, or press `enter`
+with no number to open a slider on the bottom line: `←`/`→` (or `h`/`l`)
+adjust with a live preview, `enter` applies, `esc` reverts.
+
 Every change is written to the config file immediately.
+
+### Font sizes
+
+A terminal can't change its own font from inside a program, so sizes 2–4
+rasterize an 8×8 bitmap font with block characters:
+
+| size | glyph | notes |
+|---|---|---|
+| 1 | terminal font | default |
+| 2 | 4×4 cells (quadrant blocks) | roughly 2× |
+| 3 | 8×4 cells (half blocks) | true aspect, roughly 4× |
+| 4 | 8×8 cells (full blocks) | huge |
+
+`ctrl+=` / `ctrl+-` step the size if your terminal passes those keys through.
 
 ## Files
 

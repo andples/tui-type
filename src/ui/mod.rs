@@ -1,9 +1,11 @@
 //! Rendering. `render` paints the background, dispatches to the active
 //! screen, then overlays the command line or a transient notice.
 
+pub mod bigtext;
 pub mod command_line;
 pub mod help;
 pub mod results;
+pub mod slider;
 pub mod stats;
 pub mod style;
 pub mod typing;
@@ -22,7 +24,7 @@ pub fn render(frame: &mut Frame, app: &App) {
     frame.render_widget(Block::default().style(p.base()), area);
 
     // Brand mark, top-left of the content column (hidden in zen mode).
-    let col = content_column(area, app.config.zoom_level().0);
+    let col = content_column(area, app.screen_width());
     if !(app.config.zen && app.screen == Screen::Typing) {
         frame.render_widget(
             Paragraph::new(Line::from(vec![
@@ -42,7 +44,9 @@ pub fn render(frame: &mut Frame, app: &App) {
         Screen::Help => help::render(frame, app, body, &p),
     }
 
-    if app.cmd_open {
+    if app.slider.is_some() {
+        slider::render(frame, app, area, &p);
+    } else if app.cmd_open {
         command_line::render(frame, app, area, &p);
     } else if let Some(msg) = app.notice_text() {
         let bottom = Rect::new(col.x, area.bottom().saturating_sub(1), col.width, 1);

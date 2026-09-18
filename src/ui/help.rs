@@ -14,7 +14,7 @@ const KEYS: &[(&str, &str)] = &[
     (":", "open command line (when not typing)"),
     ("tab", "restart with new words"),
     ("ctrl+w / ctrl+backspace", "delete word"),
-    ("ctrl+= / ctrl+-", "zoom in / out"),
+    ("ctrl+= / ctrl+-", "font size up / down"),
     ("ctrl+c", "quit"),
     ("↑ ↓ / ctrl+p ctrl+n", "move in the palette"),
     ("tab (in palette)", "complete"),
@@ -22,7 +22,7 @@ const KEYS: &[(&str, &str)] = &[
 ];
 
 pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
-    let col = content_column(area, app.config.zoom_level().0);
+    let col = content_column(area, app.config.content_width());
     let mut lines: Vec<Line> = vec![
         Line::from(Span::styled("keys", p.main_bold())),
         Line::default(),

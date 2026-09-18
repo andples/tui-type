@@ -85,24 +85,76 @@ pub struct Config {
     pub mode: Mode,
     pub punctuation: bool,
     pub numbers: bool,
-    /// Layout scale, index into `ZOOM_LEVELS`.
-    pub zoom: u8,
+    /// Glyph scale for the typing text, see `FontSize`.
+    pub font_size: u8,
+    /// Width of the word box, in words (× 6 characters per word).
+    pub words_per_line: u8,
     /// Words only: hide brand, timer and mode line while typing.
     pub zen: bool,
     pub results: ResultsConfig,
 }
 
-/// (content column width, visible word lines) per zoom level.
-pub const ZOOM_LEVELS: [(u16, u16); 5] = [(50, 2), (65, 3), (80, 3), (100, 4), (120, 5)];
-pub const DEFAULT_ZOOM: u8 = 2;
+pub const FONT_SIZE_RANGE: (u8, u8) = (1, 4);
+pub const WORDS_PER_LINE_RANGE: (u8, u8) = (4, 30);
+/// The conventional word length used to turn words-per-line into columns.
+pub const CHARS_PER_WORD: u16 = 6;
 
-impl Config {
-    pub fn zoom_level(&self) -> (u16, u16) {
-        ZOOM_LEVELS[(self.zoom as usize).min(ZOOM_LEVELS.len() - 1)]
+/// How the typing text is drawn. Sizes above 1 rasterize an 8×8 bitmap font
+/// with block characters.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FontSize {
+    Normal,
+    /// Quadrant blocks: 4 columns × 4 rows per glyph.
+    Quadrant,
+    /// Half blocks: 8 columns × 4 rows per glyph (true aspect ratio).
+    Half,
+    /// Full blocks: 8 columns × 8 rows per glyph.
+    Full,
+}
+
+impl FontSize {
+    pub fn from_level(level: u8) -> Self {
+        match level {
+            0 | 1 => FontSize::Normal,
+            2 => FontSize::Quadrant,
+            3 => FontSize::Half,
+            _ => FontSize::Full,
+        }
     }
 
-    pub fn set_zoom(&mut self, level: u8) {
-        self.zoom = level.min(ZOOM_LEVELS.len() as u8 - 1);
+    /// (columns, rows) one glyph occupies.
+    pub fn cell_dims(self) -> (u16, u16) {
+        match self {
+            FontSize::Normal => (1, 1),
+            FontSize::Quadrant => (4, 4),
+            FontSize::Half => (8, 4),
+            FontSize::Full => (8, 8),
+        }
+    }
+}
+
+impl Config {
+    pub fn font_size(&self) -> FontSize {
+        FontSize::from_level(self.font_size)
+    }
+
+    pub fn set_font_size(&mut self, level: u8) {
+        self.font_size = level.clamp(FONT_SIZE_RANGE.0, FONT_SIZE_RANGE.1);
+    }
+
+    pub fn set_words_per_line(&mut self, n: u8) {
+        self.words_per_line = n.clamp(WORDS_PER_LINE_RANGE.0, WORDS_PER_LINE_RANGE.1);
+    }
+
+    /// Width of the typing box in terminal columns.
+    pub fn typing_width(&self) -> u16 {
+        let (gw, _) = self.font_size().cell_dims();
+        self.words_per_line as u16 * CHARS_PER_WORD * gw
+    }
+
+    /// Width of every other screen: at least room for the results row.
+    pub fn content_width(&self) -> u16 {
+        (self.words_per_line as u16 * CHARS_PER_WORD).max(80)
     }
 }
 
@@ -114,7 +166,8 @@ impl Default for Config {
             mode: Mode::Time(30),
             punctuation: false,
             numbers: false,
-            zoom: DEFAULT_ZOOM,
+            font_size: 1,
+            words_per_line: 13,
             zen: false,
             results: ResultsConfig::default(),
         }
@@ -169,14 +222,11 @@ impl Config {
             "punctuation" => self.punctuation = parse_bool(value)?,
             "numbers" => self.numbers = parse_bool(value)?,
             "zen" => self.zen = parse_bool(value)?,
-            "zoom" => {
-                let level: u8 = value
-                    .parse()
-                    .map_err(|_| format!("bad zoom level `{value}`"))?;
-                if level as usize >= ZOOM_LEVELS.len() {
-                    return Err(format!("zoom level must be 0-{}", ZOOM_LEVELS.len() - 1));
-                }
-                self.zoom = level;
+            "font_size" | "fontsize" => {
+                self.set_font_size(parse_range(value, FONT_SIZE_RANGE)?);
+            }
+            "words_per_line" | "wpl" => {
+                self.set_words_per_line(parse_range(value, WORDS_PER_LINE_RANGE)?);
             }
             "time" => {
                 self.mode = Mode::Time(
@@ -198,6 +248,17 @@ impl Config {
         }
         Ok(())
     }
+}
+
+/// Parse an integer and check it lies in `range` (inclusive).
+pub fn parse_range(value: &str, range: (u8, u8)) -> Result<u8, String> {
+    let n: u8 = value
+        .parse()
+        .map_err(|_| format!("expected a number {}-{}, got `{value}`", range.0, range.1))?;
+    if n < range.0 || n > range.1 {
+        return Err(format!("must be between {} and {}", range.0, range.1));
+    }
+    Ok(n)
 }
 
 /// Filesystem locations. Everything lives under the XDG dirs for `ttyp`.
@@ -269,6 +330,12 @@ mod tests {
         c.set("time", "15").unwrap();
         assert_eq!(c.mode, Mode::Time(15));
         assert!(c.set("bogus", "1").is_err());
+        c.set("wpl", "10").unwrap();
+        assert_eq!(c.typing_width(), 60);
+        c.set("fontsize", "3").unwrap();
+        assert_eq!(c.typing_width(), 480);
+        assert!(c.set("fontsize", "9").is_err());
+        assert!(c.set("wpl", "2").is_err());
         assert!(c.set("numbers", "maybe").is_err());
     }
 }
