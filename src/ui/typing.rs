@@ -12,7 +12,6 @@ use ratatui::widgets::Paragraph;
 use super::bigtext;
 use super::style::{Palette, content_column, vcenter};
 use crate::app::App;
-use crate::config::FontSize;
 use crate::test::{Mode, Status, Word};
 
 const VISIBLE_LINES: usize = 3;
@@ -136,7 +135,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
         frame.render_widget(Paragraph::new(counter).style(header_style), header);
     }
 
-    if font == FontSize::Normal {
+    if font.is_native() {
         let text: Vec<Line> = visible
             .into_iter()
             .map(|cells| {

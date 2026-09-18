@@ -46,7 +46,7 @@ Press `esc`, start typing, and the palette fuzzy-filters as you go.
 | `punctuation [on\|off]` | `punc`, `p` | toggle punctuation |
 | `numbers [on\|off]` | `num`, `n` | toggle numbers |
 | `results <section> [on\|off]` | `res` | show/hide `chart`, `breakdown`, `consistency`, `raw` |
-| `fontsize [1-4]` | `fs`, `font` | text size — 1 normal, 2–4 rendered with block glyphs |
+| `fontsize [1-5]` | `fs`, `font` | text size — 1 terminal font, 2–5 pixel font in block glyphs |
 | `wordsperline [4-30]` | `wpl`, `width` | width of the word box (× 6 characters per word) |
 | `zen [on\|off]` | | words only — hides the brand, timer and mode line |
 | `set <key> <value>` | | any config key, e.g. `set results.chart off` |
@@ -63,15 +63,21 @@ Every change is written to the config file immediately.
 
 ### Font sizes
 
-A terminal can't change its own font from inside a program, so sizes 2–4
-rasterize an 8×8 bitmap font with block characters:
+A terminal can't change its own font from inside a program, so sizes 2–5
+draw a hand-made 4×6 pixel font with block characters. Each step is a
+gentle one:
 
-| size | glyph | notes |
+| size | glyph | rows tall |
 |---|---|---|
-| 1 | terminal font | default |
-| 2 | 4×4 cells (quadrant blocks) | roughly 2× |
-| 3 | 8×4 cells (half blocks) | true aspect, roughly 4× |
-| 4 | 8×8 cells (full blocks) | huge |
+| 1 | terminal font | 1 |
+| 2 (default) | sextant blocks | 2 |
+| 3 | half blocks | 3 |
+| 4 | sextant blocks, 2× pixels | 4 |
+| 5 | half blocks, 2× pixels | 6 |
+
+Sizes 2 and 4 use Unicode 13 sextant characters; if your terminal font
+lacks them it falls back to another installed font (Noto Sans Symbols 2
+covers them). Sizes 3 and 5 only need `▀ ▄ █`.
 
 `ctrl+=` / `ctrl+-` step the size if your terminal passes those keys through.
 

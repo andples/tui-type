@@ -94,41 +94,68 @@ pub struct Config {
     pub results: ResultsConfig,
 }
 
-pub const FONT_SIZE_RANGE: (u8, u8) = (1, 4);
+pub const FONT_SIZE_RANGE: (u8, u8) = (1, 5);
+pub const DEFAULT_FONT_SIZE: u8 = 2;
 pub const WORDS_PER_LINE_RANGE: (u8, u8) = (4, 30);
 /// The conventional word length used to turn words-per-line into columns.
 pub const CHARS_PER_WORD: u16 = 6;
 
-/// How the typing text is drawn. Sizes above 1 rasterize an 8×8 bitmap font
-/// with block characters.
+/// Which block characters rasterize the pixel font.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FontSize {
-    Normal,
-    /// Quadrant blocks: 4 columns × 4 rows per glyph.
-    Quadrant,
-    /// Half blocks: 8 columns × 4 rows per glyph (true aspect ratio).
+pub enum BlockSet {
+    /// 2×3 pixels per cell (Unicode 13 "Symbols for Legacy Computing").
+    Sextant,
+    /// 1×2 pixels per cell (`▀ ▄ █`), available everywhere.
     Half,
-    /// Full blocks: 8 columns × 8 rows per glyph.
-    Full,
 }
+
+impl BlockSet {
+    pub fn pixels_per_cell(self) -> (u16, u16) {
+        match self {
+            BlockSet::Sextant => (2, 3),
+            BlockSet::Half => (1, 2),
+        }
+    }
+}
+
+/// How the typing text is drawn. Size 1 is the terminal's own font; the
+/// rest rasterize the 4×6 pixel font (`ui::font`) at increasing scales so
+/// each step is a gentle one: glyphs are 1, 2, 3, 4 and 6 rows tall.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FontSize(u8);
 
 impl FontSize {
     pub fn from_level(level: u8) -> Self {
-        match level {
-            0 | 1 => FontSize::Normal,
-            2 => FontSize::Quadrant,
-            3 => FontSize::Half,
-            _ => FontSize::Full,
+        FontSize(level.clamp(FONT_SIZE_RANGE.0, FONT_SIZE_RANGE.1))
+    }
+
+    pub fn level(self) -> u8 {
+        self.0
+    }
+
+    pub fn is_native(self) -> bool {
+        self.0 == 1
+    }
+
+    /// Block set and pixel scale for rasterized sizes; `None` for native.
+    pub fn raster(self) -> Option<(BlockSet, u16)> {
+        match self.0 {
+            1 => None,
+            2 => Some((BlockSet::Sextant, 1)),
+            3 => Some((BlockSet::Half, 1)),
+            4 => Some((BlockSet::Sextant, 2)),
+            _ => Some((BlockSet::Half, 2)),
         }
     }
 
     /// (columns, rows) one glyph occupies.
     pub fn cell_dims(self) -> (u16, u16) {
-        match self {
-            FontSize::Normal => (1, 1),
-            FontSize::Quadrant => (4, 4),
-            FontSize::Half => (8, 4),
-            FontSize::Full => (8, 8),
+        match self.raster() {
+            None => (1, 1),
+            Some((set, scale)) => {
+                let (pw, ph) = set.pixels_per_cell();
+                (4 * scale / pw, 6 * scale / ph)
+            }
         }
     }
 }
@@ -166,7 +193,7 @@ impl Default for Config {
             mode: Mode::Time(30),
             punctuation: false,
             numbers: false,
-            font_size: 1,
+            font_size: DEFAULT_FONT_SIZE,
             words_per_line: 13,
             zen: false,
             results: ResultsConfig::default(),
@@ -295,6 +322,16 @@ mod tests {
     use super::*;
 
     #[test]
+    fn font_size_ladder_is_gentle() {
+        let rows: Vec<u16> = (1..=5)
+            .map(|l| FontSize::from_level(l).cell_dims().1)
+            .collect();
+        assert_eq!(rows, vec![1, 2, 3, 4, 6]);
+        assert_eq!(FontSize::from_level(2).cell_dims(), (2, 2));
+        assert_eq!(FontSize::from_level(5).cell_dims(), (8, 6));
+    }
+
+    #[test]
     fn empty_file_is_default() {
         assert_eq!(Config::parse("").unwrap(), Config::default());
     }
@@ -331,9 +368,10 @@ mod tests {
         assert_eq!(c.mode, Mode::Time(15));
         assert!(c.set("bogus", "1").is_err());
         c.set("wpl", "10").unwrap();
+        c.set("fontsize", "1").unwrap();
         assert_eq!(c.typing_width(), 60);
         c.set("fontsize", "3").unwrap();
-        assert_eq!(c.typing_width(), 480);
+        assert_eq!(c.typing_width(), 240);
         assert!(c.set("fontsize", "9").is_err());
         assert!(c.set("wpl", "2").is_err());
         assert!(c.set("numbers", "maybe").is_err());

@@ -3,6 +3,7 @@
 
 pub mod bigtext;
 pub mod command_line;
+pub mod font;
 pub mod help;
 pub mod results;
 pub mod slider;
