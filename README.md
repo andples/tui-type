@@ -24,6 +24,7 @@ Needs a terminal with true-color support.
 | `:` | open the command line (when a test isn't running) |
 | `tab` | restart with new words |
 | `ctrl+w` / `ctrl+backspace` | delete the current word |
+| `ctrl+=` / `ctrl+-` | zoom in / out |
 | `ctrl+c` | quit |
 
 Backspace moves back into the previous word only if it was left with an
@@ -45,6 +46,8 @@ Press `esc`, start typing, and the palette fuzzy-filters as you go.
 | `punctuation [on\|off]` | `punc`, `p` | toggle punctuation |
 | `numbers [on\|off]` | `num`, `n` | toggle numbers |
 | `results <section> [on\|off]` | `res` | show/hide `chart`, `breakdown`, `consistency`, `raw` |
+| `zoom [in\|out\|0-4]` | `z` | layout scale: column width and visible lines (50×2 … 120×5) |
+| `zen [on\|off]` | | words only — hides the brand, timer and mode line |
 | `set <key> <value>` | | any config key, e.g. `set results.chart off` |
 | `restart` | `r` | new test |
 | `stats` | `s` | history |

@@ -8,7 +8,7 @@ use super::generator::WordGenerator;
 use super::mode::Mode;
 
 /// How many words to keep queued ahead of the caret in Time mode.
-const LOOKAHEAD: usize = 60;
+const LOOKAHEAD: usize = 120;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Status {

@@ -21,15 +21,17 @@ pub fn render(frame: &mut Frame, app: &App) {
     let area = frame.area();
     frame.render_widget(Block::default().style(p.base()), area);
 
-    // Brand mark, top-left of the content column.
-    let col = content_column(area);
-    frame.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled("t", p.main_bold()),
-            Span::styled("typ", p.sub()),
-        ])),
-        Rect::new(col.x, area.y, col.width, 1),
-    );
+    // Brand mark, top-left of the content column (hidden in zen mode).
+    let col = content_column(area, app.config.zoom_level().0);
+    if !(app.config.zen && app.screen == Screen::Typing) {
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![
+                Span::styled("t", p.main_bold()),
+                Span::styled("typ", p.sub()),
+            ])),
+            Rect::new(col.x, area.y, col.width, 1),
+        );
+    }
 
     // Reserve the bottom row for the command line / notice.
     let body = Rect::new(area.x, area.y, area.width, area.height.saturating_sub(1));

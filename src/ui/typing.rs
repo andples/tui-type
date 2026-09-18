@@ -12,8 +12,6 @@ use super::style::{Palette, content_column, vcenter};
 use crate::app::App;
 use crate::test::{Mode, Status, Word};
 
-const VISIBLE_LINES: usize = 3;
-
 /// Which words go on which line for a given width. Words never wrap
 /// mid-word; extra typed characters widen a word.
 fn layout_lines(words: &[Word], width: usize) -> Vec<(usize, usize)> {
@@ -69,7 +67,9 @@ fn render_word<'a>(w: &Word, is_current: bool, p: &Palette) -> Vec<Span<'a>> {
 }
 
 pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
-    let col = content_column(area);
+    let (max_width, visible_lines) = app.config.zoom_level();
+    let visible_lines = visible_lines as usize;
+    let col = content_column(area, max_width);
     let width = col.width as usize;
     let words = app.engine.words();
     let current = app.engine.current_index();
@@ -83,7 +83,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
     let visible: Vec<Line> = lines
         .iter()
         .skip(first)
-        .take(VISIBLE_LINES)
+        .take(visible_lines)
         .map(|(s, e)| {
             let spans: Vec<Span> = words[*s..*e]
                 .iter()
@@ -94,11 +94,13 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
         })
         .collect();
 
-    // header (1) + gap (1) + words (3) + gap (1) + mode line (1)
-    let block = vcenter(col, 7);
+    // header (1) + gap (1) + words (n) + gap (1) + mode line (1)
+    let lines_h = visible_lines as u16;
+    let block = vcenter(col, lines_h + 4);
     let header = Rect::new(block.x, block.y, block.width, 1);
-    let words_area = Rect::new(block.x, block.y + 2, block.width, VISIBLE_LINES as u16);
-    let footer = Rect::new(block.x, block.y + 6, block.width, 1);
+    let words_area = Rect::new(block.x, block.y + 2, block.width, lines_h);
+    let footer = Rect::new(block.x, block.y + 3 + lines_h, block.width, 1);
+    let zen = app.config.zen;
 
     let status = app.engine.status();
     let counter = match app.engine.mode() {
@@ -121,11 +123,13 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
     } else {
         p.sub()
     };
-    frame.render_widget(Paragraph::new(counter).style(header_style), header);
+    if !zen {
+        frame.render_widget(Paragraph::new(counter).style(header_style), header);
+    }
     frame.render_widget(Paragraph::new(visible), words_area);
 
     // The mode line fades out while typing so nothing distracts from the words.
-    if status != Status::Running {
+    if status != Status::Running && !zen {
         frame.render_widget(Paragraph::new(mode_line(app)).style(p.sub()), footer);
     }
 }

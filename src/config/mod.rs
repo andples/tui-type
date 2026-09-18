@@ -85,7 +85,25 @@ pub struct Config {
     pub mode: Mode,
     pub punctuation: bool,
     pub numbers: bool,
+    /// Layout scale, index into `ZOOM_LEVELS`.
+    pub zoom: u8,
+    /// Words only: hide brand, timer and mode line while typing.
+    pub zen: bool,
     pub results: ResultsConfig,
+}
+
+/// (content column width, visible word lines) per zoom level.
+pub const ZOOM_LEVELS: [(u16, u16); 5] = [(50, 2), (65, 3), (80, 3), (100, 4), (120, 5)];
+pub const DEFAULT_ZOOM: u8 = 2;
+
+impl Config {
+    pub fn zoom_level(&self) -> (u16, u16) {
+        ZOOM_LEVELS[(self.zoom as usize).min(ZOOM_LEVELS.len() - 1)]
+    }
+
+    pub fn set_zoom(&mut self, level: u8) {
+        self.zoom = level.min(ZOOM_LEVELS.len() as u8 - 1);
+    }
 }
 
 impl Default for Config {
@@ -96,6 +114,8 @@ impl Default for Config {
             mode: Mode::Time(30),
             punctuation: false,
             numbers: false,
+            zoom: DEFAULT_ZOOM,
+            zen: false,
             results: ResultsConfig::default(),
         }
     }
@@ -148,6 +168,16 @@ impl Config {
             "language" | "lang" => self.language = value.to_string(),
             "punctuation" => self.punctuation = parse_bool(value)?,
             "numbers" => self.numbers = parse_bool(value)?,
+            "zen" => self.zen = parse_bool(value)?,
+            "zoom" => {
+                let level: u8 = value
+                    .parse()
+                    .map_err(|_| format!("bad zoom level `{value}`"))?;
+                if level as usize >= ZOOM_LEVELS.len() {
+                    return Err(format!("zoom level must be 0-{}", ZOOM_LEVELS.len() - 1));
+                }
+                self.zoom = level;
+            }
             "time" => {
                 self.mode = Mode::Time(
                     value

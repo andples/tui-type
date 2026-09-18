@@ -9,7 +9,7 @@ use super::style::{Palette, content_column};
 use crate::app::App;
 
 pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
-    let col = content_column(area);
+    let col = content_column(area, app.config.zoom_level().0);
     let bottom = Rect::new(col.x, area.bottom().saturating_sub(1), col.width, 1);
     let cl = &app.cmdline;
 

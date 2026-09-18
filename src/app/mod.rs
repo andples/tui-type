@@ -9,7 +9,7 @@ use anyhow::{Context, Result};
 use crossterm::event::{self, Event};
 use ratatui::DefaultTerminal;
 
-use crate::command::{self, Command, CommandLine, Completions};
+use crate::command::{self, Command, CommandLine, Completions, ZoomArg};
 use crate::config::{Config, Paths};
 use crate::language::LanguageRegistry;
 use crate::stats::{LocalJsonlStore, StatsStore, Summary, TestRecord, personal_best};
@@ -215,6 +215,8 @@ impl App {
                 }
             }
             Action::Redraw => {}
+            Action::ZoomIn => self.execute(Command::Zoom(ZoomArg::In)),
+            Action::ZoomOut => self.execute(Command::Zoom(ZoomArg::Out)),
             Action::Quit => self.should_quit = true,
 
             Action::TypeChar(c) => {
@@ -359,6 +361,23 @@ impl App {
                 self.notify(format!("numbers {}", on_off(self.config.numbers)));
                 changed_test = true;
             }
+            Command::Zoom(arg) => {
+                let level = match arg {
+                    ZoomArg::In => self.config.zoom.saturating_add(1),
+                    ZoomArg::Out => self.config.zoom.saturating_sub(1),
+                    ZoomArg::Level(l) => l,
+                };
+                self.config.set_zoom(level);
+                let (w, lines) = self.config.zoom_level();
+                self.notify(format!(
+                    "zoom {}  ({w} cols, {lines} lines)",
+                    self.config.zoom
+                ));
+            }
+            Command::Zen(v) => {
+                self.config.zen = v.unwrap_or(!self.config.zen);
+                self.notify(format!("zen {}", on_off(self.config.zen)));
+            }
             Command::Restart => self.restart(),
             Command::Stats => self.dispatch(Action::ShowStats),
             Command::Help => self.dispatch(Action::ShowHelp),
@@ -377,7 +396,8 @@ impl App {
                 if self.themes.get(&self.config.theme).is_none() {
                     self.notify(format!("unknown theme `{}`", self.config.theme));
                 }
-                changed_test = !matches!(key.as_str(), "theme") && !key.starts_with("results.");
+                changed_test = !matches!(key.as_str(), "theme" | "zoom" | "zen")
+                    && !key.starts_with("results.");
             }
         }
         if changed_test {

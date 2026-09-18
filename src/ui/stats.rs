@@ -11,7 +11,7 @@ use crate::app::App;
 use crate::test::Mode;
 
 pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
-    let col = content_column(area);
+    let col = content_column(area, app.config.zoom_level().0);
     let s = &app.summary;
     let records = app.stats.all();
 

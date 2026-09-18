@@ -28,6 +28,12 @@ pub fn map_key(key: KeyEvent, ctx: InputContext) -> Action {
     if ctrl && key.code == KeyCode::Char('l') {
         return Action::Redraw;
     }
+    if ctrl && matches!(key.code, KeyCode::Char('=') | KeyCode::Char('+')) {
+        return Action::ZoomIn;
+    }
+    if ctrl && matches!(key.code, KeyCode::Char('-') | KeyCode::Char('_')) {
+        return Action::ZoomOut;
+    }
 
     if ctx.command_line_open {
         return map_command_line(key, ctrl, alt);

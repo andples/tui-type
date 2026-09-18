@@ -36,6 +36,8 @@ pub enum Action {
     // Housekeeping
     Tick,
     Redraw,
+    ZoomIn,
+    ZoomOut,
     Quit,
     Nop,
 }

@@ -5,8 +5,6 @@ use ratatui::style::{Color, Modifier, Style};
 
 use crate::theme::Theme;
 
-/// Widest the content column ever gets, in cells.
-pub const MAX_CONTENT_WIDTH: u16 = 80;
 /// Minimum side gutter.
 pub const GUTTER: u16 = 4;
 
@@ -70,12 +68,12 @@ impl Palette {
     }
 }
 
-/// The centered content column inside `area`.
-pub fn content_column(area: Rect) -> Rect {
+/// The centered content column inside `area`, at most `max_width` wide.
+pub fn content_column(area: Rect, max_width: u16) -> Rect {
     let width = area
         .width
         .saturating_sub(GUTTER * 2)
-        .clamp(10, MAX_CONTENT_WIDTH);
+        .clamp(10, max_width.max(10));
     let x = area.x + (area.width.saturating_sub(width)) / 2;
     Rect::new(x, area.y, width, area.height)
 }

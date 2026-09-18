@@ -18,6 +18,8 @@ pub enum Command {
     /// `None` toggles.
     Punctuation(Option<bool>),
     Numbers(Option<bool>),
+    Zoom(ZoomArg),
+    Zen(Option<bool>),
     Restart,
     Stats,
     Help,
@@ -32,6 +34,13 @@ pub enum Command {
     },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ZoomArg {
+    In,
+    Out,
+    Level(u8),
+}
+
 /// What the palette should offer for a command's argument.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArgKind {
@@ -42,6 +51,7 @@ pub enum ArgKind {
     WordPresets,
     OnOff,
     ResultSections,
+    ZoomArgs,
     /// Free-form; no completion.
     Free,
 }
@@ -116,6 +126,22 @@ pub const COMMANDS: &[CommandSpec] = &[
         aliases: &["num", "n"],
         usage: "[on|off]",
         help: "toggle numbers",
+        arg: ArgKind::OnOff,
+        requires_arg: false,
+    },
+    CommandSpec {
+        name: "zoom",
+        aliases: &["z"],
+        usage: "[in|out|0-4]",
+        help: "scale the layout",
+        arg: ArgKind::ZoomArgs,
+        requires_arg: false,
+    },
+    CommandSpec {
+        name: "zen",
+        aliases: &[],
+        usage: "[on|off]",
+        help: "words only, no chrome",
         arg: ArgKind::OnOff,
         requires_arg: false,
     },
@@ -214,6 +240,17 @@ pub fn parse(line: &str) -> Result<Command, String> {
         "theme" => Command::Theme(need(spec.usage)?.to_string()),
         "punctuation" => Command::Punctuation(opt_on_off(rest)?),
         "numbers" => Command::Numbers(opt_on_off(rest)?),
+        "zoom" => Command::Zoom(match rest {
+            "" | "in" | "+" => ZoomArg::In,
+            "out" | "-" => ZoomArg::Out,
+            n => ZoomArg::Level(
+                n.parse::<u8>()
+                    .ok()
+                    .filter(|l| (*l as usize) < crate::config::ZOOM_LEVELS.len())
+                    .ok_or_else(|| format!("usage: zoom {}", spec.usage))?,
+            ),
+        }),
+        "zen" => Command::Zen(opt_on_off(rest)?),
         "restart" => Command::Restart,
         "stats" => Command::Stats,
         "help" => Command::Help,
@@ -272,6 +309,11 @@ pub fn arg_candidates(kind: ArgKind, themes: &[String], languages: &[String]) ->
             .iter()
             .map(|s| s.to_string())
             .collect(),
+        ArgKind::ZoomArgs => ["in", "out"]
+            .into_iter()
+            .map(String::from)
+            .chain((0..crate::config::ZOOM_LEVELS.len()).map(|l| l.to_string()))
+            .collect(),
     }
 }
 
@@ -292,6 +334,11 @@ mod tests {
         assert_eq!(parse("punc"), Ok(Command::Punctuation(None)));
         assert_eq!(parse("numbers off"), Ok(Command::Numbers(Some(false))));
         assert_eq!(parse("q"), Ok(Command::Quit));
+        assert_eq!(parse("zoom"), Ok(Command::Zoom(ZoomArg::In)));
+        assert_eq!(parse("z out"), Ok(Command::Zoom(ZoomArg::Out)));
+        assert_eq!(parse("zoom 4"), Ok(Command::Zoom(ZoomArg::Level(4))));
+        assert!(parse("zoom 9").is_err());
+        assert_eq!(parse("zen"), Ok(Command::Zen(None)));
         assert_eq!(
             parse("results chart off"),
             Ok(Command::Results {
