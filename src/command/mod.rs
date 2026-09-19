@@ -5,7 +5,7 @@ pub mod palette;
 
 pub use palette::{CommandLine, Completions, Suggestion};
 
-use crate::config::{FONT_SIZE_RANGE, ResultsConfig, WORDS_PER_LINE_RANGE, parse_range};
+use crate::config::{FONT_SIZE_RANGE, Graphics, ResultsConfig, WORDS_PER_LINE_RANGE, parse_range};
 use crate::test::mode::Mode;
 
 /// Parsed, validated command ready for the app to execute.
@@ -22,6 +22,9 @@ pub enum Command {
     FontSize(Option<u8>),
     /// `None` opens the slider.
     WordsPerLine(Option<u8>),
+    /// Font family, file name or path; empty for the system monospace.
+    Font(String),
+    Graphics(Graphics),
     Zen(Option<bool>),
     Restart,
     Stats,
@@ -43,6 +46,8 @@ pub enum ArgKind {
     None,
     Themes,
     Languages,
+    Fonts,
+    GraphicsModes,
     TimePresets,
     WordPresets,
     OnOff,
@@ -63,7 +68,11 @@ impl ArgKind {
     pub fn accepts_free_text(self) -> bool {
         matches!(
             self,
-            ArgKind::TimePresets | ArgKind::WordPresets | ArgKind::Free | ArgKind::Slider { .. }
+            ArgKind::TimePresets
+                | ArgKind::WordPresets
+                | ArgKind::Fonts
+                | ArgKind::Free
+                | ArgKind::Slider { .. }
         )
     }
 }
@@ -132,14 +141,30 @@ pub const COMMANDS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "fontsize",
-        aliases: &["fs", "font"],
-        usage: "[1-4]",
+        aliases: &["fs"],
+        usage: "[1-5]",
         help: "text size (enter opens a slider)",
         arg: ArgKind::Slider {
             min: FONT_SIZE_RANGE.0,
             max: FONT_SIZE_RANGE.1,
         },
         requires_arg: false,
+    },
+    CommandSpec {
+        name: "font",
+        aliases: &["ff"],
+        usage: "[family|file]",
+        help: "font for sizes 2+ (empty = system monospace)",
+        arg: ArgKind::Fonts,
+        requires_arg: false,
+    },
+    CommandSpec {
+        name: "graphics",
+        aliases: &["gfx"],
+        usage: "<auto|kitty|off>",
+        help: "real fonts via kitty graphics, or block glyphs",
+        arg: ArgKind::GraphicsModes,
+        requires_arg: true,
     },
     CommandSpec {
         name: "wordsperline",
@@ -257,6 +282,8 @@ pub fn parse(line: &str) -> Result<Command, String> {
         "numbers" => Command::Numbers(opt_on_off(rest)?),
         "fontsize" => Command::FontSize(opt_range(rest, FONT_SIZE_RANGE)?),
         "wordsperline" => Command::WordsPerLine(opt_range(rest, WORDS_PER_LINE_RANGE)?),
+        "font" => Command::Font(rest.to_string()),
+        "graphics" => Command::Graphics(Graphics::parse(need(spec.usage)?)?),
         "zen" => Command::Zen(opt_on_off(rest)?),
         "restart" => Command::Restart,
         "stats" => Command::Stats,
@@ -312,11 +339,13 @@ fn opt_on_off(rest: &str) -> Result<Option<bool>, String> {
 }
 
 /// Candidate argument values for a command, given the live registries.
-pub fn arg_candidates(kind: ArgKind, themes: &[String], languages: &[String]) -> Vec<String> {
+pub fn arg_candidates(kind: ArgKind, comps: &Completions) -> Vec<String> {
     match kind {
         ArgKind::None | ArgKind::Free => vec![],
-        ArgKind::Themes => themes.to_vec(),
-        ArgKind::Languages => languages.to_vec(),
+        ArgKind::Themes => comps.themes.clone(),
+        ArgKind::Languages => comps.languages.clone(),
+        ArgKind::Fonts => comps.fonts.clone(),
+        ArgKind::GraphicsModes => Graphics::NAMES.iter().map(|s| s.to_string()).collect(),
         ArgKind::TimePresets => Mode::TIME_PRESETS.iter().map(u16::to_string).collect(),
         ArgKind::WordPresets => Mode::WORD_PRESETS.iter().map(u16::to_string).collect(),
         ArgKind::OnOff => vec!["on".into(), "off".into()],
@@ -352,6 +381,14 @@ mod tests {
         assert_eq!(parse("wpl"), Ok(Command::WordsPerLine(None)));
         assert_eq!(parse("width 20"), Ok(Command::WordsPerLine(Some(20))));
         assert!(parse("wpl 2").is_err());
+        assert_eq!(parse("font"), Ok(Command::Font(String::new())));
+        assert_eq!(
+            parse("font JetBrains Mono"),
+            Ok(Command::Font("JetBrains Mono".into()))
+        );
+        assert_eq!(parse("gfx off"), Ok(Command::Graphics(Graphics::Off)));
+        assert!(parse("graphics").is_err());
+        assert!(parse("graphics sixel").is_err());
         assert_eq!(parse("zen"), Ok(Command::Zen(None)));
         assert_eq!(
             parse("results chart off"),

@@ -5,27 +5,33 @@ use std::time::Instant;
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::style::Style;
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
 use super::bigtext;
 use super::style::{Palette, content_column, vcenter};
 use crate::app::App;
+use crate::gfx::{Glyph, ImageLine, Rgb};
 use crate::test::{Mode, Status, Word};
 
 const VISIBLE_LINES: usize = 3;
 
-/// Which words go on which line for a given width. Words never wrap
-/// mid-word; extra typed characters widen a word.
-fn layout_lines(words: &[Word], width: usize) -> Vec<(usize, usize)> {
+/// Which words go on which line when a line holds `max` units, a space is
+/// `space` units and `width_of` measures a word. Words never wrap mid-word.
+fn layout_lines(
+    words: &[Word],
+    max: f32,
+    space: f32,
+    width_of: impl Fn(&Word) -> f32,
+) -> Vec<(usize, usize)> {
     let mut lines = Vec::new();
     let mut start = 0;
-    let mut used = 0;
+    let mut used = 0.0;
     for (i, w) in words.iter().enumerate() {
-        let len = w.target.len().max(w.typed.len());
-        let needed = if used == 0 { len } else { used + 1 + len };
-        if needed > width && used > 0 {
+        let len = width_of(w);
+        let needed = if i == start { len } else { used + space + len };
+        if needed > max && i > start {
             lines.push((start, i));
             start = i;
             used = len;
@@ -39,6 +45,29 @@ fn layout_lines(words: &[Word], width: usize) -> Vec<(usize, usize)> {
 
 /// One character cell of the word box: what to draw and how.
 type Cell = (char, Style);
+
+/// The characters a word shows: its target, then any extra typed ones.
+fn shown_chars(w: &Word) -> impl Iterator<Item = char> + '_ {
+    let n = w.target.len().max(w.typed.len());
+    (0..n).filter_map(|j| w.target.get(j).or(w.typed.get(j)).copied())
+}
+
+fn rgb(c: Color, fallback: Rgb) -> Rgb {
+    match c {
+        Color::Rgb(r, g, b) => [r, g, b],
+        _ => fallback,
+    }
+}
+
+fn to_glyph((ch, st): Cell, p: &Palette) -> Glyph {
+    let fg = rgb(p.fg, [255; 3]);
+    Glyph {
+        ch,
+        fg: rgb(st.fg.unwrap_or(p.fg), fg),
+        bg: st.bg.map(|c| rgb(c, fg)),
+        underline: st.add_modifier.contains(Modifier::UNDERLINED),
+    }
+}
 
 fn word_cells(w: &Word, is_current: bool, p: &Palette) -> Vec<Cell> {
     let mut cells = Vec::with_capacity(w.target.len() + 2);
@@ -73,17 +102,32 @@ fn word_cells(w: &Word, is_current: bool, p: &Palette) -> Vec<Cell> {
     cells
 }
 
-pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
+/// Draws the typing screen. Returns the lines to show as real-font images
+/// (empty unless the terminal supports them and the font size is > 1).
+pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) -> Vec<ImageLine> {
     let font = app.config.font_size();
+    let metrics = app.gfx.metrics(font);
     let (gw, gh) = font.cell_dims();
-    let col = content_column(area, app.config.typing_width());
-    // Width in glyphs, and the row stride per line (a gap row for big fonts).
-    let width = (col.width / gw).max(1) as usize;
+    let col = content_column(area, app.typing_width());
+    // Row stride per line: a gap row for big fonts.
     let stride = if gh > 1 { gh + 1 } else { 1 };
     let words = app.engine.words();
     let current = app.engine.current_index();
 
-    let lines = layout_lines(words, width);
+    let lines = match metrics {
+        Some(m) => {
+            let px = m.geom.px;
+            layout_lines(
+                words,
+                col.width as f32 * m.cell_w as f32,
+                app.gfx.advance(' ', px),
+                |w| shown_chars(w).map(|c| app.gfx.advance(c, px)).sum(),
+            )
+        }
+        None => layout_lines(words, (col.width / gw).max(1) as f32, 1.0, |w| {
+            w.target.len().max(w.typed.len()) as f32
+        }),
+    };
     let current_line = lines
         .iter()
         .position(|(s, e)| current >= *s && current < *e)
@@ -135,7 +179,19 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
         frame.render_widget(Paragraph::new(counter).style(header_style), header);
     }
 
-    if font.is_native() {
+    let mut images = Vec::new();
+    if metrics.is_some() {
+        for (row, cells) in visible.into_iter().enumerate() {
+            let y = words_area.y + row as u16 * stride;
+            if y + gh > words_area.bottom() {
+                break;
+            }
+            images.push(ImageLine {
+                area: Rect::new(words_area.x, y, words_area.width, gh),
+                glyphs: cells.into_iter().map(|c| to_glyph(c, p)).collect(),
+            });
+        }
+    } else if font.is_native() {
         let text: Vec<Line> = visible
             .into_iter()
             .map(|cells| {
@@ -163,6 +219,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
     if status != Status::Running && !zen {
         frame.render_widget(Paragraph::new(mode_line(app)).style(p.sub()), footer);
     }
+    images
 }
 
 pub fn mode_line(app: &App) -> String {
@@ -189,16 +246,33 @@ mod tests {
         }
     }
 
+    fn chars(w: &Word) -> f32 {
+        w.target.len() as f32
+    }
+
     #[test]
     fn wraps_on_word_boundaries() {
         let words = vec![w("aaaa"), w("bbbb"), w("cccc"), w("dd")];
         // "aaaa bbbb" = 9 fits in 10; "cccc" would make 14 → new line
-        assert_eq!(layout_lines(&words, 10), vec![(0, 2), (2, 4)]);
+        assert_eq!(layout_lines(&words, 10.0, 1.0, chars), vec![(0, 2), (2, 4)]);
     }
 
     #[test]
     fn long_word_gets_own_line() {
         let words = vec![w("a"), w("bbbbbbbbbbbbbbbb"), w("c")];
-        assert_eq!(layout_lines(&words, 8), vec![(0, 1), (1, 2), (2, 3)]);
+        assert_eq!(
+            layout_lines(&words, 8.0, 1.0, chars),
+            vec![(0, 1), (1, 2), (2, 3)]
+        );
+    }
+
+    #[test]
+    fn wraps_by_measured_width() {
+        // Pixel layout: 10px per char, 4px spaces, 100px lines.
+        let words = vec![w("aaaa"), w("bbbb"), w("cc")];
+        let px = |w: &Word| w.target.len() as f32 * 10.0;
+        assert_eq!(layout_lines(&words, 100.0, 4.0, px), vec![(0, 2), (2, 3)]);
+        assert_eq!(layout_lines(&words, 84.0, 4.0, px), vec![(0, 2), (2, 3)]);
+        assert_eq!(layout_lines(&words, 83.0, 4.0, px), vec![(0, 1), (1, 3)]);
     }
 }

@@ -14,6 +14,7 @@ const MAX_SUGGESTIONS: usize = 8;
 pub struct Completions {
     pub themes: Vec<String>,
     pub languages: Vec<String>,
+    pub fonts: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -220,7 +221,7 @@ impl CommandLine {
                 };
                 self.stage = Stage::Arg(spec.arg);
                 let name = spec.name;
-                let items = arg_candidates(spec.arg, &comps.themes, &comps.languages)
+                let items = arg_candidates(spec.arg, comps)
                     .into_iter()
                     .map(|v| Suggestion {
                         completion: format!("{name} {v}"),
@@ -275,6 +276,7 @@ mod tests {
         Completions {
             themes: vec!["default".into(), "gruvbox".into(), "nord".into()],
             languages: vec!["english".into(), "english_1k".into()],
+            fonts: vec![],
         }
     }
 

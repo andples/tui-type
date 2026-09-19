@@ -8,6 +8,12 @@ use ratatui::widgets::Paragraph;
 use super::style::{Palette, content_column};
 use crate::app::App;
 
+/// First row the command line and its suggestions occupy.
+pub fn popup_top(app: &App, area: Rect) -> u16 {
+    let bottom = area.bottom().saturating_sub(1);
+    bottom - app.cmdline.suggestions.len().min(bottom as usize) as u16
+}
+
 pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
     let col = content_column(area, app.screen_width());
     let bottom = Rect::new(col.x, area.bottom().saturating_sub(1), col.width, 1);

@@ -3,6 +3,7 @@
 pub mod action;
 pub mod input;
 
+use std::io::Write;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
@@ -10,8 +11,9 @@ use crossterm::event::{self, Event};
 use ratatui::DefaultTerminal;
 
 use crate::command::{self, Command, CommandLine, Completions};
-use crate::config::{Config, Paths};
+use crate::config::{Config, Graphics, Paths};
 use crate::config::{FONT_SIZE_RANGE, WORDS_PER_LINE_RANGE};
+use crate::gfx::{self, Gfx};
 use crate::language::LanguageRegistry;
 use crate::stats::{LocalJsonlStore, StatsStore, Summary, TestRecord, personal_best};
 use crate::test::{Metrics, Mode, Modifiers, RandomGenerator, Status, TestEngine};
@@ -97,6 +99,7 @@ pub struct App {
     pub notice: Option<(String, Instant)>,
     pub scroll: usize,
     pub should_quit: bool,
+    pub gfx: Gfx,
     /// Screen to return to from stats/help.
     previous_screen: Screen,
     dirty: bool,
@@ -127,9 +130,14 @@ impl App {
             ));
         }
 
+        let mut gfx = Gfx::disabled();
+        if let Err(e) = gfx.configure(&config, &paths.fonts_dir) {
+            warnings.push(e);
+        }
         let completions = Completions {
             themes: themes.names().map(str::to_string).collect(),
             languages: languages.names().map(str::to_string).collect(),
+            fonts: gfx::fonts::list(&paths.fonts_dir),
         };
         let engine = Self::build_engine(&config, &languages);
         let summary = Summary::from_records(store.all());
@@ -150,6 +158,7 @@ impl App {
             notice: None,
             scroll: 0,
             should_quit: false,
+            gfx,
             previous_screen: Screen::Typing,
             dirty: true,
         };
@@ -185,8 +194,22 @@ impl App {
     /// Max width of the content column for the screen being shown.
     pub fn screen_width(&self) -> u16 {
         match self.screen {
-            Screen::Typing => self.config.typing_width(),
+            Screen::Typing => self.typing_width(),
             _ => self.config.content_width(),
+        }
+    }
+
+    /// Width of the word box in columns; with a real font it follows the
+    /// font's average character width.
+    pub fn typing_width(&self) -> u16 {
+        match self.gfx.metrics(self.config.font_size()) {
+            Some(m) => {
+                let chars =
+                    self.config.words_per_line as f32 * crate::config::CHARS_PER_WORD as f32;
+                let px = chars * self.gfx.mean_advance(m.geom.px);
+                (px / m.cell_w as f32).ceil() as u16
+            }
+            None => self.config.typing_width(),
         }
     }
 
@@ -204,9 +227,15 @@ impl App {
     }
 
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
+        let result = self.event_loop(terminal);
+        self.gfx.clear(terminal.backend_mut())?;
+        result
+    }
+
+    fn event_loop(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
         while !self.should_quit {
             if self.dirty {
-                terminal.draw(|f| ui::render(f, self))?;
+                self.draw(terminal)?;
                 self.dirty = false;
             }
             let timeout = self.poll_timeout();
@@ -217,13 +246,35 @@ impl App {
             if ready {
                 let action = match event::read()? {
                     Event::Key(k) => input::map_key(k, self.input_context()),
-                    Event::Resize(_, _) => Action::Redraw,
+                    Event::Resize(_, _) => {
+                        // The terminal clears on resize, taking images with it.
+                        self.gfx.refresh_cell_size();
+                        self.gfx.invalidate();
+                        Action::Redraw
+                    }
                     _ => Action::Nop,
                 };
                 self.dispatch(action);
             } else {
                 self.dispatch(Action::Tick);
             }
+        }
+        Ok(())
+    }
+
+    /// Text first, then images over it, painted as one synchronized update.
+    fn draw(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
+        let sync = self.gfx.supported();
+        if sync {
+            terminal.backend_mut().write_all(gfx::kitty::SYNC_BEGIN)?;
+        }
+        let mut images = Vec::new();
+        terminal.draw(|f| images = ui::render(f, self))?;
+        self.gfx.present(&images, terminal.backend_mut())?;
+        if sync {
+            let out = terminal.backend_mut();
+            out.write_all(gfx::kitty::SYNC_END)?;
+            out.flush()?;
         }
         Ok(())
     }
@@ -478,6 +529,35 @@ impl App {
                 self.config.set_words_per_line(n);
                 self.notify(format!("words per line {}", self.config.words_per_line));
             }
+            Command::Font(spec) => {
+                let old = std::mem::replace(&mut self.config.font, spec);
+                if let Err(e) = self.apply_graphics() {
+                    self.config.font = old;
+                    let _ = self.apply_graphics();
+                    self.notify(e);
+                    return;
+                }
+                if !self.gfx.supported() {
+                    self.notify("font saved; this terminal shows block glyphs (see :graphics)");
+                } else {
+                    let name = if self.config.font.is_empty() {
+                        "system monospace"
+                    } else {
+                        &self.config.font
+                    };
+                    self.notify(format!("font {name}"));
+                }
+            }
+            Command::Graphics(mode) => {
+                self.config.graphics = mode;
+                match self.apply_graphics() {
+                    Err(e) => self.notify(e),
+                    Ok(()) if mode != Graphics::Off && !self.gfx.supported() => self.notify(
+                        "graphics auto: terminal not recognised, use `graphics kitty` to force",
+                    ),
+                    Ok(()) => self.notify(format!("graphics {}", mode.label())),
+                }
+            }
             Command::Zen(v) => {
                 self.config.zen = v.unwrap_or(!self.config.zen);
                 self.notify(format!("zen {}", on_off(self.config.zen)));
@@ -500,9 +580,21 @@ impl App {
                 if self.themes.get(&self.config.theme).is_none() {
                     self.notify(format!("unknown theme `{}`", self.config.theme));
                 }
+                if matches!(key.as_str(), "font" | "graphics")
+                    && let Err(e) = self.apply_graphics()
+                {
+                    self.notify(e);
+                }
                 changed_test = !matches!(
                     key.as_str(),
-                    "theme" | "zen" | "font_size" | "fontsize" | "words_per_line" | "wpl"
+                    "theme"
+                        | "zen"
+                        | "font_size"
+                        | "fontsize"
+                        | "words_per_line"
+                        | "wpl"
+                        | "font"
+                        | "graphics"
                 ) && !key.starts_with("results.");
             }
         }
@@ -510,6 +602,10 @@ impl App {
             self.restart();
         }
         self.save_config();
+    }
+
+    fn apply_graphics(&mut self) -> Result<(), String> {
+        self.gfx.configure(&self.config, &self.paths.fonts_dir)
     }
 
     fn save_config(&mut self) {
