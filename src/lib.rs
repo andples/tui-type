@@ -6,6 +6,7 @@
 pub mod app;
 pub mod command;
 pub mod config;
+pub mod gfx;
 pub mod language;
 pub mod stats;
 pub mod test;

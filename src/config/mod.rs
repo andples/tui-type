@@ -91,7 +91,45 @@ pub struct Config {
     pub words_per_line: u8,
     /// Words only: hide brand, timer and mode line while typing.
     pub zen: bool,
+    /// Font for enlarged text when drawn as images: a family name, a file in
+    /// the config `fonts/` dir, or a path. Empty uses the system monospace.
+    pub font: String,
+    pub graphics: Graphics,
     pub results: ResultsConfig,
+}
+
+/// How font sizes above 1 are drawn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Graphics {
+    /// Real font images when the terminal is known to support them.
+    #[default]
+    Auto,
+    /// Always use the kitty graphics protocol.
+    Kitty,
+    /// Always use block characters.
+    Off,
+}
+
+impl Graphics {
+    pub const NAMES: [&'static str; 3] = ["auto", "kitty", "off"];
+
+    pub fn parse(s: &str) -> Result<Self, String> {
+        match s {
+            "auto" => Ok(Graphics::Auto),
+            "kitty" | "on" => Ok(Graphics::Kitty),
+            "off" | "blocks" => Ok(Graphics::Off),
+            _ => Err(format!("expected auto, kitty or off, got `{s}`")),
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Graphics::Auto => "auto",
+            Graphics::Kitty => "kitty",
+            Graphics::Off => "off",
+        }
+    }
 }
 
 pub const FONT_SIZE_RANGE: (u8, u8) = (1, 5);
@@ -196,6 +234,8 @@ impl Default for Config {
             font_size: DEFAULT_FONT_SIZE,
             words_per_line: 13,
             zen: false,
+            font: String::new(),
+            graphics: Graphics::Auto,
             results: ResultsConfig::default(),
         }
     }
@@ -249,6 +289,8 @@ impl Config {
             "punctuation" => self.punctuation = parse_bool(value)?,
             "numbers" => self.numbers = parse_bool(value)?,
             "zen" => self.zen = parse_bool(value)?,
+            "font" => self.font = value.to_string(),
+            "graphics" => self.graphics = Graphics::parse(value)?,
             "font_size" | "fontsize" => {
                 self.set_font_size(parse_range(value, FONT_SIZE_RANGE)?);
             }
@@ -294,6 +336,7 @@ pub struct Paths {
     pub config_file: PathBuf,
     pub themes_dir: PathBuf,
     pub languages_dir: PathBuf,
+    pub fonts_dir: PathBuf,
     pub history_file: PathBuf,
 }
 
@@ -312,6 +355,7 @@ impl Paths {
             config_file: config_dir.join("config.toml"),
             themes_dir: config_dir.join("themes"),
             languages_dir: config_dir.join("languages"),
+            fonts_dir: config_dir.join("fonts"),
             history_file: data_dir.join("history.jsonl"),
         }
     }
@@ -375,5 +419,8 @@ mod tests {
         assert!(c.set("fontsize", "9").is_err());
         assert!(c.set("wpl", "2").is_err());
         assert!(c.set("numbers", "maybe").is_err());
+        c.set("graphics", "off").unwrap();
+        assert_eq!(c.graphics, Graphics::Off);
+        assert!(c.set("graphics", "sixel").is_err());
     }
 }
