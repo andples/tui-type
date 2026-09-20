@@ -48,6 +48,23 @@ if [ -n "$(git -C "$TAP_DIR" status --porcelain)" ]; then
     exit 1
 fi
 
+check_up_to_date() {
+    local dir="$1" label="$2"
+    git -C "$dir" fetch origin -q
+    local branch behind
+    branch="$(git -C "$dir" rev-parse --abbrev-ref HEAD)"
+    behind="$(git -C "$dir" rev-list --count "HEAD..origin/$branch" 2>/dev/null || echo 0)"
+    if [ "$behind" != "0" ]; then
+        echo "error: $label ($dir) is $behind commit(s) behind origin/$branch" >&2
+        echo "       run: git -C \"$dir\" pull --rebase origin $branch" >&2
+        exit 1
+    fi
+}
+
+echo "==> checking $ROOT and $TAP_DIR are up to date with origin"
+check_up_to_date "$ROOT" "tui-type"
+check_up_to_date "$TAP_DIR" "homebrew-ttyp"
+
 CURRENT_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' "$CARGO_TOML" | head -1)"
 [ -n "$CURRENT_VERSION" ] || { echo "error: could not read version from $CARGO_TOML" >&2; exit 1; }
 
@@ -125,6 +142,7 @@ sed -i \
 echo "==> committing and pushing tap update"
 git -C "$TAP_DIR" add Formula/ttyp.rb
 git -C "$TAP_DIR" commit -m "ttyp $NEW_VERSION"
+check_up_to_date "$TAP_DIR" "homebrew-ttyp"
 git -C "$TAP_DIR" push origin HEAD
 
 echo "==> done: $TAG released and homebrew-ttyp updated"
