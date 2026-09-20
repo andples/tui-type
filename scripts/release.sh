@@ -17,14 +17,17 @@ FORMULA="$TAP_DIR/Formula/ttyp.rb"
 GITHUB_REPO="andples/tui-type"
 
 usage() {
-    echo "Usage: $0 <minor|major>" >&2
+    echo "Usage: $0 <minor|major> [release notes]" >&2
     echo "  minor   bump X.Y.Z -> X.(Y+1).0   (the \".1\" bump)" >&2
     echo "  major   bump X.Y.Z -> (X+1).0.0   (the \"1.0\" bump)" >&2
+    echo "  [release notes]  optional text used as the GitHub release body;" >&2
+    echo "                   omit it to auto-generate notes from commits" >&2
     exit 1
 }
 
-[ $# -eq 1 ] || usage
+[ $# -ge 1 ] && [ $# -le 2 ] || usage
 BUMP="$1"
+NOTES="${2:-}"
 case "$BUMP" in
     minor|major) ;;
     *) usage ;;
@@ -56,7 +59,21 @@ else
 fi
 TAG="v$NEW_VERSION"
 
-echo "==> $CURRENT_VERSION -> $NEW_VERSION ($TAG)"
+echo "About to release:"
+echo "  repo:        $GITHUB_REPO"
+echo "  version:     $CURRENT_VERSION -> $NEW_VERSION"
+echo "  tag:         $TAG"
+echo "  tap dir:     $TAP_DIR"
+if [ -n "$NOTES" ]; then
+    echo "  notes:       $NOTES"
+else
+    echo "  notes:       (auto-generated from commits)"
+fi
+read -r -p "Proceed? [y/N] " CONFIRM
+case "$CONFIRM" in
+    y|Y|yes|YES) ;;
+    *) echo "aborted" >&2; exit 1 ;;
+esac
 
 echo "==> updating Cargo.toml"
 sed -i "0,/^version = \".*\"/s//version = \"$NEW_VERSION\"/" "$CARGO_TOML"
@@ -79,10 +96,17 @@ git -C "$ROOT" push origin HEAD
 git -C "$ROOT" push origin "$TAG"
 
 echo "==> creating GitHub release"
-gh release create "$TAG" \
-    --repo "$GITHUB_REPO" \
-    --title "$TAG" \
-    --generate-notes
+if [ -n "$NOTES" ]; then
+    gh release create "$TAG" \
+        --repo "$GITHUB_REPO" \
+        --title "$TAG" \
+        --notes "$NOTES"
+else
+    gh release create "$TAG" \
+        --repo "$GITHUB_REPO" \
+        --title "$TAG" \
+        --generate-notes
+fi
 
 TARBALL_URL="https://github.com/$GITHUB_REPO/archive/refs/tags/$TAG.tar.gz"
 echo "==> downloading tarball to compute sha256"
