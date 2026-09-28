@@ -6,6 +6,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
 use super::style::{Palette, content_column};
+use super::widgets::hints;
 use crate::app::App;
 use crate::command::COMMANDS;
 
@@ -76,8 +77,5 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
         Paragraph::new(shown),
         Rect::new(col.x, col.y + 1, col.width, col.height.saturating_sub(3)),
     );
-    frame.render_widget(
-        Paragraph::new("esc  back").style(p.sub()),
-        Rect::new(col.x, area.bottom().saturating_sub(2), col.width, 1),
-    );
+    hints::render(frame, area, col, p, "esc  back");
 }

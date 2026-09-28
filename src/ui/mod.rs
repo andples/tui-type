@@ -11,6 +11,7 @@ pub mod slider;
 pub mod stats;
 pub mod style;
 pub mod typing;
+pub mod widgets;
 
 use ratatui::Frame;
 use ratatui::layout::Rect;

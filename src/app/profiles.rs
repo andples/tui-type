@@ -189,7 +189,10 @@ impl App {
         } = &mut self.profile_menu
         {
             *confirm_delete = false;
-            *selected = (*selected).min(self.profiles.len().saturating_sub(1));
+            // Stay on a profile rather than landing on the "new" row.
+            let len = self.profiles.len();
+            selected.set_len(len + 1);
+            selected.select(selected.selected.min(len.saturating_sub(1)));
         }
         self.notify(format!("profile {name} deleted"));
         self.save_config();

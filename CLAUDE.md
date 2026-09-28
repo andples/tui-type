@@ -30,6 +30,7 @@ then `tmux send-keys -t t -l 'text'` and `tmux capture-pane -t t -p`.
 - `src/stats/` — `StatsStore` trait, `LocalJsonlStore`, `Summary`.
 - `src/app/` — `App`, `Action` enum, key→action mapping, event loop.
 - `src/ui/` — rendering only; one file per screen. `bigtext.rs` rasterizes the 4×6 pixel font (`font.rs`) into block characters for `fontsize` 2–16 when graphics are off or unsupported; `slider.rs` is the bottom-line numeric picker.
+- `src/ui/widgets/` — list-screen building blocks: `Selection` (cursor + scroll window, no rendering), `SelectTable` (themed ratatui `Table` with column specs, cell roles, `…` truncation, `›` marker, pinned row), `panes` (side-by-side or tabs by width), `hints` (bottom hint line).
 - `src/gfx/` — real-font text for `fontsize` 2–16 via the kitty graphics protocol. The `graphics` setting is config-file only (no command, not in profiles): `kitty` (default; `auto` is read as kitty) uses images when `detect` recognises the terminal, else blocks; `off` forces blocks. `raster.rs` draws one RGBA image per distinct glyph (char + colours) with fontdue; `kitty.rs` encodes upload/place/delete escapes; `fonts.rs` resolves the `font` setting (path, config `fonts/` dir, bundled font, fontconfig family). `typing::render` returns `ImageLine`s; `App::draw` hands them to `Gfx::present` after ratatui draws, inside a synchronized update. `present` diffs placements by pixel position, so a keystroke only moves a few placements; images are purged when size/font/cell size change.
 
 Images can't be seen in tmux. To check graphics output, run ttyp under a pty that reports pixel sizes (`TIOCSWINSZ` with xpixel/ypixel, `TERM=xterm-ghostty`), then replay the `ESC _G` commands: `a=t` uploads (base64 → zlib → RGBA), `a=p` placements at the preceding cursor position plus `X`/`Y` pixels, `a=d` deletes.
@@ -39,6 +40,7 @@ Images can't be seen in tmux. To check graphics output, run ttyp under a pty tha
 - Every state change goes through `App::dispatch(Action)`.
 - Engine methods that depend on time take an `Instant` (`*_at`) so tests are deterministic.
 - Config changes are saved immediately via `App::save_config`.
+- Building a list screen: keep a `widgets::Selection` in the screen's state and move it from `App::dispatch` (`move_by`, `page`, `home`, `end`); in `src/ui/<screen>.rs` build `Column`s and `Row`s of `Cell`s with a `Role`, render them with `SelectTable::new(&columns, rows, &selection)` (`.pinned(i, row)` keeps a row on screen, `.focused(false)` hides the marker), use `panes::split` for side-by-side tables and `hints::render` for the key line. The profile list (`src/ui/profiles.rs`) is the reference.
 - Adding a command: add a `CommandSpec` to `COMMANDS`, a `Command` variant, a `parse` arm, and an `App::execute` arm.
 - Adding a setting: add the field to `Config` and `ProfileSettings`, and a line to `settings!` in `src/profile/mod.rs` (plus `Editor::cycle` for its ←/→ behaviour).
 - Font sizes: `FontSize` wraps a block set + scale; `fontsize` levels 1–16 are a fixed ladder (`from_level`), while fullscreen (`FontSize::fit`, called from `App::typing_frame`) searches every set/scale.

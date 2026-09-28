@@ -7,6 +7,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
 use super::style::{Palette, content_column};
+use super::widgets::hints;
 use crate::app::App;
 use crate::test::Mode;
 
@@ -82,11 +83,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
         Paragraph::new(lines),
         Rect::new(col.x, col.y + 1, col.width, col.height),
     );
-    let hint = "j/k  scroll   ·   esc  back";
-    frame.render_widget(
-        Paragraph::new(hint).style(p.sub()),
-        Rect::new(col.x, area.bottom().saturating_sub(2), col.width, 1),
-    );
+    hints::render(frame, area, col, p, "j/k  scroll   ·   esc  back");
 }
 
 fn kv_row<'a>(p: &Palette, items: &[(&str, String)]) -> Line<'a> {

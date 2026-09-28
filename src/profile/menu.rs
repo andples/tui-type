@@ -5,12 +5,13 @@ use super::{Profile, ProfileRegistry, ProfileSettings, SettingKey, is_name_char}
 use crate::command::Completions;
 use crate::config::{Config, FONT_SIZE_RANGE, LINES_RANGE, WORDS_PER_LINE_RANGE};
 use crate::test::mode::Mode;
+use crate::ui::widgets::Selection;
 
 pub enum ProfileMenu {
-    /// Row `selected` of the profiles, with one extra "new profile" row at
-    /// the end. `confirm_delete` asks before removing the selected profile.
+    /// Cursor over the profiles plus one extra "new profile" row at the
+    /// end. `confirm_delete` asks before removing the selected profile.
     List {
-        selected: usize,
+        selected: Selection,
         confirm_delete: bool,
     },
     Edit(Box<Editor>),
@@ -19,7 +20,7 @@ pub enum ProfileMenu {
 impl Default for ProfileMenu {
     fn default() -> Self {
         ProfileMenu::List {
-            selected: 0,
+            selected: Selection::wrapping(1),
             confirm_delete: false,
         }
     }
@@ -28,9 +29,10 @@ impl Default for ProfileMenu {
 impl ProfileMenu {
     /// The list, with `name` highlighted if it exists.
     pub fn list_at(registry: &ProfileRegistry, name: Option<&str>) -> Self {
-        let selected = name
-            .and_then(|n| registry.names().position(|p| p == n))
-            .unwrap_or(0);
+        let mut selected = Selection::wrapping(registry.len() + 1);
+        if let Some(i) = name.and_then(|n| registry.names().position(|p| p == n)) {
+            selected.select(i);
+        }
         ProfileMenu::List {
             selected,
             confirm_delete: false,
@@ -40,7 +42,7 @@ impl ProfileMenu {
     /// The profile under the cursor in the list; `None` on the "new" row.
     pub fn selected_profile<'a>(&self, registry: &'a ProfileRegistry) -> Option<&'a Profile> {
         match self {
-            ProfileMenu::List { selected, .. } => registry.iter().nth(*selected),
+            ProfileMenu::List { selected, .. } => registry.iter().nth(selected.selected),
             ProfileMenu::Edit(_) => None,
         }
     }
@@ -52,7 +54,8 @@ impl ProfileMenu {
                 confirm_delete,
             } => {
                 *confirm_delete = false;
-                *selected = wrap(*selected, delta, registry.len() + 1);
+                selected.set_len(registry.len() + 1);
+                selected.move_by(delta);
             }
             ProfileMenu::Edit(e) => e.row = wrap(e.row, delta, Editor::ROWS),
         }
@@ -238,7 +241,7 @@ mod tests {
         let reg = ProfileRegistry::default();
         let mut m = ProfileMenu::default();
         m.move_by(1, &reg);
-        assert!(matches!(m, ProfileMenu::List { selected: 0, .. }));
+        assert!(matches!(&m, ProfileMenu::List { selected, .. } if selected.selected == 0));
         assert!(m.selected_profile(&reg).is_none());
     }
 
