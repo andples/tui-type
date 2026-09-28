@@ -2,6 +2,7 @@
 
 pub mod action;
 pub mod input;
+mod profiles;
 
 use std::io::Write;
 use std::time::{Duration, Instant};
@@ -9,16 +10,19 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use crossterm::event::{self, Event};
 use ratatui::DefaultTerminal;
+use ratatui::layout::Rect;
 
 use crate::command::{self, Command, CommandLine, Completions};
-use crate::config::{Config, Graphics, Paths};
-use crate::config::{FONT_SIZE_RANGE, WORDS_PER_LINE_RANGE};
+use crate::config::{Config, Paths};
+use crate::config::{FONT_SIZE_RANGE, FontSize, LINES_RANGE, WORDS_PER_LINE_RANGE};
 use crate::gfx::{self, Gfx};
 use crate::language::LanguageRegistry;
+use crate::profile::{ProfileMenu, ProfileRegistry};
 use crate::stats::{LocalJsonlStore, StatsStore, Summary, TestRecord, personal_best};
 use crate::test::{Metrics, Mode, Modifiers, RandomGenerator, Status, TestEngine};
 use crate::theme::{Theme, ThemeRegistry};
 use crate::ui;
+use crate::ui::style::content_column;
 use action::Action;
 use input::InputContext;
 
@@ -33,6 +37,7 @@ pub enum Screen {
     Results,
     Stats,
     Help,
+    Profiles,
 }
 
 /// Which config value a slider edits.
@@ -40,6 +45,7 @@ pub enum Screen {
 pub enum SliderTarget {
     FontSize,
     WordsPerLine,
+    Lines,
 }
 
 impl SliderTarget {
@@ -47,6 +53,7 @@ impl SliderTarget {
         match self {
             SliderTarget::FontSize => "font size",
             SliderTarget::WordsPerLine => "words per line",
+            SliderTarget::Lines => "lines",
         }
     }
 
@@ -54,6 +61,7 @@ impl SliderTarget {
         match self {
             SliderTarget::FontSize => FONT_SIZE_RANGE,
             SliderTarget::WordsPerLine => WORDS_PER_LINE_RANGE,
+            SliderTarget::Lines => LINES_RANGE,
         }
     }
 }
@@ -87,6 +95,8 @@ pub struct App {
     pub paths: Paths,
     pub themes: ThemeRegistry,
     pub languages: LanguageRegistry,
+    pub profiles: ProfileRegistry,
+    pub profile_menu: ProfileMenu,
     pub engine: TestEngine,
     pub outcome: Option<Outcome>,
     pub stats: Box<dyn StatsStore>,
@@ -102,6 +112,8 @@ pub struct App {
     pub gfx: Gfx,
     /// Screen to return to from stats/help.
     previous_screen: Screen,
+    /// A notice was raised while handling the current action.
+    fresh_notice: bool,
     dirty: bool,
 }
 
@@ -110,11 +122,24 @@ impl App {
         let mut warnings = Vec::new();
         let mut config = Config::load(&paths.config_file)
             .with_context(|| format!("loading {}", paths.config_file.display()))?;
+        let themes = ThemeRegistry::load(&paths.themes_dir, |w| warnings.push(w));
+        let languages = LanguageRegistry::load(&paths.languages_dir, |w| warnings.push(w));
+        let profiles = ProfileRegistry::load(&paths.profiles_dir, |w| warnings.push(w));
+        // Profiles deleted or edited outside ttyp no longer describe the
+        // config; deselect them before anything else reads the list.
+        let dropped = profiles.reconcile(&mut config);
+        if !dropped.is_empty() {
+            warnings.push(format!(
+                "profile {} no longer matches the config, deselected",
+                dropped.join(", ")
+            ));
+            if let Err(e) = config.save(&paths.config_file) {
+                warnings.push(format!("could not save config: {e}"));
+            }
+        }
         if let Some(t) = theme_override {
             config.theme = t;
         }
-        let themes = ThemeRegistry::load(&paths.themes_dir, |w| warnings.push(w));
-        let languages = LanguageRegistry::load(&paths.languages_dir, |w| warnings.push(w));
         let (store, skipped) = LocalJsonlStore::open(&paths.history_file)
             .with_context(|| format!("loading {}", paths.history_file.display()))?;
         if skipped > 0 {
@@ -138,6 +163,7 @@ impl App {
             themes: themes.names().map(str::to_string).collect(),
             languages: languages.names().map(str::to_string).collect(),
             fonts: gfx::fonts::list(&paths.fonts_dir),
+            profiles: profiles.names().map(str::to_string).collect(),
         };
         let engine = Self::build_engine(&config, &languages);
         let summary = Summary::from_records(store.all());
@@ -146,6 +172,8 @@ impl App {
             paths,
             themes,
             languages,
+            profiles,
+            profile_menu: ProfileMenu::default(),
             engine,
             outcome: None,
             stats: Box::new(store),
@@ -160,6 +188,7 @@ impl App {
             should_quit: false,
             gfx,
             previous_screen: Screen::Typing,
+            fresh_notice: false,
             dirty: true,
         };
         if let Some(w) = warnings.first() {
@@ -182,6 +211,11 @@ impl App {
 
     /// The theme to render with: a live palette preview wins over config.
     pub fn theme(&self) -> &Theme {
+        if let (Screen::Profiles, ProfileMenu::Edit(e)) = (self.screen, &self.profile_menu)
+            && let Some(t) = e.preview_theme().and_then(|n| self.themes.get(n))
+        {
+            return t;
+        }
         if self.cmd_open
             && let Some(name) = self.cmdline.preview_theme()
             && let Some(t) = self.themes.get(name)
@@ -194,6 +228,9 @@ impl App {
     /// Max width of the content column for the screen being shown.
     pub fn screen_width(&self) -> u16 {
         match self.screen {
+            // Fullscreen spans the terminal; the notice line uses the
+            // regular gutter.
+            Screen::Typing if self.config.fullscreen => u16::MAX,
             Screen::Typing => self.typing_width(),
             _ => self.config.content_width(),
         }
@@ -202,20 +239,53 @@ impl App {
     /// Width of the word box in columns; with a real font it follows the
     /// font's average character width.
     pub fn typing_width(&self) -> u16 {
-        match self.gfx.metrics(self.config.font_size()) {
-            Some(m) => {
-                let chars =
-                    self.config.words_per_line as f32 * crate::config::CHARS_PER_WORD as f32;
-                let px = chars * self.gfx.mean_advance(m.geom.px);
-                (px / m.cell_w as f32).ceil() as u16
-            }
-            None => self.config.typing_width(),
+        let cols = self.config.line_chars() as f32 * self.glyph_cols(self.config.font_size());
+        cols.ceil() as u16
+    }
+
+    /// Average terminal columns one character of the typing text takes.
+    fn glyph_cols(&self, font: FontSize) -> f32 {
+        match self.gfx.metrics(font) {
+            Some(m) => self.gfx.mean_advance(m.geom.px) / m.cell_w as f32,
+            None => font.cell_dims().0 as f32,
         }
+    }
+
+    /// Font size, word-box column and line count for the typing screen in
+    /// `area` (the screen minus the bottom line). Fullscreen leaves one
+    /// column of margin each side, picks the largest size at which
+    /// `words_per_line` × `lines` words still fit, and fills the height
+    /// with as many lines as fit at that size.
+    pub fn typing_frame(&self, area: Rect) -> (FontSize, Rect, u8) {
+        if !self.config.fullscreen {
+            let font = self.config.font_size();
+            let col = content_column(area, self.typing_width());
+            return (font, col, self.config.lines);
+        }
+        let col = Rect::new(
+            area.x + 1,
+            area.y,
+            area.width.saturating_sub(2).max(1),
+            area.height,
+        );
+        let chars = self.config.line_chars() * self.config.lines as u16;
+        let (font, lines) = FontSize::fit(col.width, col.height, chars, |f| self.glyph_cols(f));
+        (font, col, lines)
     }
 
     pub fn notify(&mut self, msg: impl Into<String>) {
         self.notice = Some((msg.into(), Instant::now()));
+        self.fresh_notice = true;
         self.dirty = true;
+    }
+
+    /// Add to a notice raised by the same action rather than replacing it.
+    fn notify_more(&mut self, msg: impl Into<String>) {
+        let msg = msg.into();
+        match self.notice.as_ref().filter(|_| self.fresh_notice) {
+            Some((current, _)) => self.notify(format!("{current} · {msg}")),
+            None => self.notify(msg),
+        }
     }
 
     /// Current notice text, if it hasn't expired.
@@ -300,10 +370,12 @@ impl App {
             command_line_open: self.cmd_open,
             slider_open: self.slider.is_some(),
             test_status: self.engine.status(),
+            profile_menu: self.profile_input(),
         }
     }
 
     pub fn dispatch(&mut self, action: Action) {
+        self.fresh_notice = false;
         match action {
             Action::Nop => return,
             Action::Tick => {
@@ -391,6 +463,8 @@ impl App {
                 self.push_screen(Screen::Stats);
             }
             Action::ShowHelp => self.push_screen(Screen::Help),
+            Action::ShowProfiles => self.open_profiles(),
+            Action::Profile(a) => self.profile_action(a),
             Action::ScrollDown => self.scroll += 1,
             Action::ScrollUp => self.scroll = self.scroll.saturating_sub(1),
         }
@@ -410,6 +484,7 @@ impl App {
         let current = match target {
             SliderTarget::FontSize => self.config.font_size,
             SliderTarget::WordsPerLine => self.config.words_per_line,
+            SliderTarget::Lines => self.config.lines,
         };
         self.slider = Some(Slider {
             target,
@@ -431,6 +506,7 @@ impl App {
         match target {
             SliderTarget::FontSize => self.config.set_font_size(value),
             SliderTarget::WordsPerLine => self.config.set_words_per_line(value),
+            SliderTarget::Lines => self.config.set_lines(value),
         }
     }
 
@@ -445,6 +521,18 @@ impl App {
         self.screen = Screen::Typing;
         self.previous_screen = Screen::Typing;
         self.scroll = 0;
+    }
+
+    /// Start a fresh test after a test setting changed. From the profile
+    /// screen the new test waits underneath instead of taking over.
+    fn rebuild_test(&mut self) {
+        if self.screen == Screen::Profiles {
+            self.engine = Self::build_engine(&self.config, &self.languages);
+            self.outcome = None;
+            self.previous_screen = Screen::Typing;
+        } else {
+            self.restart();
+        }
     }
 
     fn finish_test(&mut self) {
@@ -519,7 +607,14 @@ impl App {
             }
             Command::FontSize(Some(n)) => {
                 self.config.set_font_size(n);
-                self.notify(format!("font size {}", self.config.font_size));
+                if self.config.fullscreen {
+                    self.notify(format!(
+                        "font size {} · fullscreen picks the size while on",
+                        self.config.font_size
+                    ));
+                } else {
+                    self.notify(format!("font size {}", self.config.font_size));
+                }
             }
             Command::WordsPerLine(None) => {
                 self.open_slider(SliderTarget::WordsPerLine);
@@ -538,7 +633,9 @@ impl App {
                     return;
                 }
                 if !self.gfx.supported() {
-                    self.notify("font saved; this terminal shows block glyphs (see :graphics)");
+                    self.notify(
+                        "font saved; this terminal has no kitty graphics, so it shows block glyphs",
+                    );
                 } else {
                     let name = if self.config.font.is_empty() {
                         "system monospace"
@@ -548,19 +645,29 @@ impl App {
                     self.notify(format!("font {name}"));
                 }
             }
-            Command::Graphics(mode) => {
-                self.config.graphics = mode;
-                match self.apply_graphics() {
-                    Err(e) => self.notify(e),
-                    Ok(()) if mode != Graphics::Off && !self.gfx.supported() => self.notify(
-                        "graphics auto: terminal not recognised, use `graphics kitty` to force",
-                    ),
-                    Ok(()) => self.notify(format!("graphics {}", mode.label())),
-                }
+            Command::Lines(None) => {
+                self.open_slider(SliderTarget::Lines);
+                return;
+            }
+            Command::Lines(Some(n)) => {
+                self.config.set_lines(n);
+                self.notify(format!("lines {}", self.config.lines));
+            }
+            Command::Fullscreen(v) => {
+                self.config.fullscreen = v.unwrap_or(!self.config.fullscreen);
+                self.notify(format!("fullscreen {}", on_off(self.config.fullscreen)));
             }
             Command::Zen(v) => {
                 self.config.zen = v.unwrap_or(!self.config.zen);
                 self.notify(format!("zen {}", on_off(self.config.zen)));
+            }
+            Command::Profile(None) => {
+                self.open_profiles();
+                return;
+            }
+            Command::Profile(Some(name)) => {
+                self.activate_profile(&name);
+                return;
             }
             Command::Restart => self.restart(),
             Command::Stats => self.dispatch(Action::ShowStats),
@@ -593,13 +700,16 @@ impl App {
                         | "fontsize"
                         | "words_per_line"
                         | "wpl"
+                        | "lines"
+                        | "fullscreen"
+                        | "full"
                         | "font"
                         | "graphics"
                 ) && !key.starts_with("results.");
             }
         }
         if changed_test {
-            self.restart();
+            self.rebuild_test();
         }
         self.save_config();
     }
@@ -608,7 +718,14 @@ impl App {
         self.gfx.configure(&self.config, &self.paths.fonts_dir)
     }
 
+    /// Persist the config. Active profiles whose settings were just changed
+    /// by hand are deselected first, so the list never claims a profile
+    /// that isn't in effect.
     fn save_config(&mut self) {
+        let dropped = self.profiles.reconcile(&mut self.config);
+        if !dropped.is_empty() {
+            self.notify_more(format!("profile {} off", dropped.join(", ")));
+        }
         if let Err(e) = self.config.save(&self.paths.config_file) {
             self.notify(format!("could not save config: {e}"));
         }

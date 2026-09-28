@@ -5,7 +5,9 @@ pub mod palette;
 
 pub use palette::{CommandLine, Completions, Suggestion};
 
-use crate::config::{FONT_SIZE_RANGE, Graphics, ResultsConfig, WORDS_PER_LINE_RANGE, parse_range};
+use crate::config::{
+    FONT_SIZE_RANGE, LINES_RANGE, ResultsConfig, WORDS_PER_LINE_RANGE, parse_range,
+};
 use crate::test::mode::Mode;
 
 /// Parsed, validated command ready for the app to execute.
@@ -22,10 +24,14 @@ pub enum Command {
     FontSize(Option<u8>),
     /// `None` opens the slider.
     WordsPerLine(Option<u8>),
+    /// `None` opens the slider.
+    Lines(Option<u8>),
+    Fullscreen(Option<bool>),
     /// Font family, file name or path; empty for the system monospace.
     Font(String),
-    Graphics(Graphics),
     Zen(Option<bool>),
+    /// `None` opens the profile menu; a name activates that profile.
+    Profile(Option<String>),
     Restart,
     Stats,
     Help,
@@ -47,7 +53,7 @@ pub enum ArgKind {
     Themes,
     Languages,
     Fonts,
-    GraphicsModes,
+    Profiles,
     TimePresets,
     WordPresets,
     OnOff,
@@ -142,7 +148,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     CommandSpec {
         name: "fontsize",
         aliases: &["fs"],
-        usage: "[1-5]",
+        usage: "[1-16]",
         help: "text size (enter opens a slider)",
         arg: ArgKind::Slider {
             min: FONT_SIZE_RANGE.0,
@@ -159,14 +165,6 @@ pub const COMMANDS: &[CommandSpec] = &[
         requires_arg: false,
     },
     CommandSpec {
-        name: "graphics",
-        aliases: &["gfx"],
-        usage: "<auto|kitty|off>",
-        help: "real fonts via kitty graphics, or block glyphs",
-        arg: ArgKind::GraphicsModes,
-        requires_arg: true,
-    },
-    CommandSpec {
         name: "wordsperline",
         aliases: &["wpl", "width"],
         usage: "[4-30]",
@@ -178,11 +176,38 @@ pub const COMMANDS: &[CommandSpec] = &[
         requires_arg: false,
     },
     CommandSpec {
+        name: "lines",
+        aliases: &["ln"],
+        usage: "[1-10]",
+        help: "lines of words shown (enter opens a slider)",
+        arg: ArgKind::Slider {
+            min: LINES_RANGE.0,
+            max: LINES_RANGE.1,
+        },
+        requires_arg: false,
+    },
+    CommandSpec {
+        name: "fullscreen",
+        aliases: &["full"],
+        usage: "[on|off]",
+        help: "largest text that fits, no chrome",
+        arg: ArgKind::OnOff,
+        requires_arg: false,
+    },
+    CommandSpec {
         name: "zen",
         aliases: &[],
         usage: "[on|off]",
         help: "words only, no chrome",
         arg: ArgKind::OnOff,
+        requires_arg: false,
+    },
+    CommandSpec {
+        name: "profile",
+        aliases: &["profiles", "pf"],
+        usage: "[name]",
+        help: "switch profiles (enter opens the menu)",
+        arg: ArgKind::Profiles,
         requires_arg: false,
     },
     CommandSpec {
@@ -283,8 +308,10 @@ pub fn parse(line: &str) -> Result<Command, String> {
         "fontsize" => Command::FontSize(opt_range(rest, FONT_SIZE_RANGE)?),
         "wordsperline" => Command::WordsPerLine(opt_range(rest, WORDS_PER_LINE_RANGE)?),
         "font" => Command::Font(rest.to_string()),
-        "graphics" => Command::Graphics(Graphics::parse(need(spec.usage)?)?),
         "zen" => Command::Zen(opt_on_off(rest)?),
+        "lines" => Command::Lines(opt_range(rest, LINES_RANGE)?),
+        "fullscreen" => Command::Fullscreen(opt_on_off(rest)?),
+        "profile" => Command::Profile(Some(rest.to_string()).filter(|r| !r.is_empty())),
         "restart" => Command::Restart,
         "stats" => Command::Stats,
         "help" => Command::Help,
@@ -345,7 +372,7 @@ pub fn arg_candidates(kind: ArgKind, comps: &Completions) -> Vec<String> {
         ArgKind::Themes => comps.themes.clone(),
         ArgKind::Languages => comps.languages.clone(),
         ArgKind::Fonts => comps.fonts.clone(),
-        ArgKind::GraphicsModes => Graphics::NAMES.iter().map(|s| s.to_string()).collect(),
+        ArgKind::Profiles => comps.profiles.clone(),
         ArgKind::TimePresets => Mode::TIME_PRESETS.iter().map(u16::to_string).collect(),
         ArgKind::WordPresets => Mode::WORD_PRESETS.iter().map(u16::to_string).collect(),
         ArgKind::OnOff => vec!["on".into(), "off".into()],
@@ -377,7 +404,12 @@ mod tests {
         assert_eq!(parse("q"), Ok(Command::Quit));
         assert_eq!(parse("fontsize"), Ok(Command::FontSize(None)));
         assert_eq!(parse("fs 3"), Ok(Command::FontSize(Some(3))));
-        assert!(parse("fs 9").is_err());
+        assert_eq!(parse("fs 12"), Ok(Command::FontSize(Some(12))));
+        assert!(parse("fs 17").is_err());
+        assert_eq!(parse("ln 5"), Ok(Command::Lines(Some(5))));
+        assert_eq!(parse("lines"), Ok(Command::Lines(None)));
+        assert!(parse("lines 11").is_err());
+        assert_eq!(parse("full"), Ok(Command::Fullscreen(None)));
         assert_eq!(parse("wpl"), Ok(Command::WordsPerLine(None)));
         assert_eq!(parse("width 20"), Ok(Command::WordsPerLine(Some(20))));
         assert!(parse("wpl 2").is_err());
@@ -386,10 +418,14 @@ mod tests {
             parse("font JetBrains Mono"),
             Ok(Command::Font("JetBrains Mono".into()))
         );
-        assert_eq!(parse("gfx off"), Ok(Command::Graphics(Graphics::Off)));
-        assert!(parse("graphics").is_err());
-        assert!(parse("graphics sixel").is_err());
+        // Graphics is config-file only.
+        assert!(parse("graphics off").is_err());
         assert_eq!(parse("zen"), Ok(Command::Zen(None)));
+        assert_eq!(parse("profile"), Ok(Command::Profile(None)));
+        assert_eq!(
+            parse("pf sprint"),
+            Ok(Command::Profile(Some("sprint".into())))
+        );
         assert_eq!(
             parse("results chart off"),
             Ok(Command::Results {

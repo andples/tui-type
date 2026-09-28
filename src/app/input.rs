@@ -3,7 +3,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use super::Screen;
-use super::action::Action;
+use super::action::{Action, ProfileAction};
 use crate::test::Status;
 
 /// Context needed to interpret a key.
@@ -13,6 +13,16 @@ pub struct InputContext {
     pub command_line_open: bool,
     pub slider_open: bool,
     pub test_status: Status,
+    pub profile_menu: ProfileInput,
+}
+
+/// Which part of the profile screen has the keyboard.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProfileInput {
+    List,
+    ConfirmDelete,
+    EditName,
+    EditSettings,
 }
 
 pub fn map_key(key: KeyEvent, ctx: InputContext) -> Action {
@@ -53,6 +63,7 @@ pub fn map_key(key: KeyEvent, ctx: InputContext) -> Action {
             KeyCode::Char('q') => Action::Quit,
             _ => Action::Nop,
         },
+        Screen::Profiles => map_profiles(key, ctx.profile_menu),
         Screen::Stats | Screen::Help => match key.code {
             KeyCode::Esc | KeyCode::Char('q') | KeyCode::Tab | KeyCode::Enter => Action::Back,
             KeyCode::Char(':') => Action::OpenCommandLine,
@@ -78,6 +89,54 @@ fn map_typing(key: KeyEvent, ctrl: bool, alt: bool, status: Status) -> Action {
         KeyCode::Char('?') if status != Status::Running => Action::ShowHelp,
         KeyCode::Char(c) if !ctrl && !alt => Action::TypeChar(c),
         _ => Action::Nop,
+    }
+}
+
+fn map_profiles(key: KeyEvent, mode: ProfileInput) -> Action {
+    use ProfileAction as P;
+    let p = |a| Action::Profile(a);
+    // Arrows move everywhere; the editor's name row takes letters as text.
+    match key.code {
+        KeyCode::Up | KeyCode::BackTab => return p(P::Up),
+        KeyCode::Down | KeyCode::Tab => return p(P::Down),
+        _ => {}
+    }
+    match mode {
+        ProfileInput::List => match key.code {
+            KeyCode::Char('k') => p(P::Up),
+            KeyCode::Char('j') => p(P::Down),
+            KeyCode::Enter | KeyCode::Char(' ') => p(P::Toggle),
+            KeyCode::Char('n') | KeyCode::Char('a') => p(P::New),
+            KeyCode::Char('e') => p(P::Edit),
+            KeyCode::Char('d') | KeyCode::Char('x') | KeyCode::Delete => p(P::Delete),
+            KeyCode::Esc | KeyCode::Char('q') => Action::Back,
+            KeyCode::Char(':') => Action::OpenCommandLine,
+            KeyCode::Char('?') => Action::ShowHelp,
+            _ => Action::Nop,
+        },
+        ProfileInput::ConfirmDelete => match key.code {
+            KeyCode::Char('y') => p(P::ConfirmDelete),
+            _ => p(P::CancelDelete),
+        },
+        ProfileInput::EditName => match key.code {
+            KeyCode::Enter => p(P::Save),
+            KeyCode::Esc => p(P::Cancel),
+            KeyCode::Backspace => p(P::Backspace),
+            KeyCode::Char(c) => p(P::Insert(c)),
+            _ => Action::Nop,
+        },
+        ProfileInput::EditSettings => match key.code {
+            KeyCode::Char('k') => p(P::Up),
+            KeyCode::Char('j') => p(P::Down),
+            KeyCode::Char(' ') | KeyCode::Char('x') => p(P::Check),
+            KeyCode::Left | KeyCode::Char('h') => p(P::Cycle(-1)),
+            KeyCode::Right | KeyCode::Char('l') => p(P::Cycle(1)),
+            KeyCode::Char('u') => p(P::Capture),
+            KeyCode::Char('A') => p(P::CaptureAll),
+            KeyCode::Enter => p(P::Save),
+            KeyCode::Esc | KeyCode::Char('q') => p(P::Cancel),
+            _ => Action::Nop,
+        },
     }
 }
 
@@ -141,6 +200,7 @@ mod tests {
             command_line_open: open,
             slider_open: false,
             test_status: status,
+            profile_menu: ProfileInput::List,
         }
     }
 
@@ -168,6 +228,17 @@ mod tests {
         ] {
             assert_eq!(map_key(k, c), Action::DeleteWord);
         }
+    }
+
+    #[test]
+    fn profile_name_row_takes_letters() {
+        let mut c = ctx(Screen::Profiles, false, Status::Idle);
+        let j = key(KeyCode::Char('j'), KeyModifiers::NONE);
+        assert_eq!(map_key(j, c), Action::Profile(ProfileAction::Down));
+        c.profile_menu = ProfileInput::EditName;
+        assert_eq!(map_key(j, c), Action::Profile(ProfileAction::Insert('j')));
+        c.profile_menu = ProfileInput::ConfirmDelete;
+        assert_eq!(map_key(j, c), Action::Profile(ProfileAction::CancelDelete));
     }
 
     #[test]

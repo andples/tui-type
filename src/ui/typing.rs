@@ -1,5 +1,6 @@
-//! The test screen: timer/counter, a three-line scrolling word box with a
-//! block caret, and a dim mode line.
+//! The test screen: timer/counter, a scrolling word box (`lines` tall) with
+//! a block caret, and a dim mode line. Fullscreen drops the counter and mode
+//! line and gives their rows to the words.
 
 use std::time::Instant;
 
@@ -10,12 +11,10 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
 use super::bigtext;
-use super::style::{Palette, content_column, vcenter};
+use super::style::{Palette, vcenter};
 use crate::app::App;
 use crate::gfx::{Glyph, ImageLine, Rgb};
 use crate::test::{Mode, Status, Word};
-
-const VISIBLE_LINES: usize = 3;
 
 /// Which words go on which line when a line holds `max` units, a space is
 /// `space` units and `width_of` measures a word. Words never wrap mid-word.
@@ -105,12 +104,11 @@ fn word_cells(w: &Word, is_current: bool, p: &Palette) -> Vec<Cell> {
 /// Draws the typing screen. Returns the lines to show as real-font images
 /// (empty unless the terminal supports them and the font size is > 1).
 pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) -> Vec<ImageLine> {
-    let font = app.config.font_size();
+    let (font, col, line_count) = app.typing_frame(area);
     let metrics = app.gfx.metrics(font);
     let (gw, gh) = font.cell_dims();
-    let col = content_column(area, app.typing_width());
-    // Row stride per line: a gap row for big fonts.
-    let stride = if gh > 1 { gh + 1 } else { 1 };
+    let stride = font.line_stride();
+    let visible_lines = line_count.max(1) as usize;
     let words = app.engine.words();
     let current = app.engine.current_index();
 
@@ -132,11 +130,16 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) -> Vec<Imag
         .iter()
         .position(|(s, e)| current >= *s && current < *e)
         .unwrap_or(0);
-    let first = current_line.saturating_sub(1);
+    // Keep one finished line above the caret when there's room for it.
+    let first = if visible_lines > 1 {
+        current_line.saturating_sub(1)
+    } else {
+        current_line
+    };
     let visible: Vec<Vec<Cell>> = lines
         .iter()
         .skip(first)
-        .take(VISIBLE_LINES)
+        .take(visible_lines)
         .map(|(s, e)| {
             words[*s..*e]
                 .iter()
@@ -146,13 +149,22 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) -> Vec<Imag
         })
         .collect();
 
-    // header (1) + gap (1) + words + gap (1) + mode line (1)
-    let words_h = VISIBLE_LINES as u16 * stride - (stride - gh);
-    let block = vcenter(col, words_h + 4);
-    let header = Rect::new(block.x, block.y, block.width, 1);
-    let words_area = Rect::new(block.x, block.y + 2, block.width, words_h);
-    let footer = Rect::new(block.x, block.y + 3 + words_h, block.width, 1);
-    let zen = app.config.zen;
+    let words_h = font.box_height(line_count);
+    let fullscreen = app.config.fullscreen;
+    let (header, words_area, footer) = if fullscreen {
+        let words_area = vcenter(col, words_h);
+        (Rect::default(), words_area, Rect::default())
+    } else {
+        // header (1) + gap (1) + words + gap (1) + mode line (1)
+        let block = vcenter(col, words_h + 4);
+        (
+            Rect::new(block.x, block.y, block.width, 1),
+            Rect::new(block.x, block.y + 2, block.width, words_h),
+            Rect::new(block.x, block.y + 3 + words_h, block.width, 1),
+        )
+    };
+    // Zen and fullscreen show the words only.
+    let zen = app.config.zen || fullscreen;
 
     let status = app.engine.status();
     let counter = match app.engine.mode() {

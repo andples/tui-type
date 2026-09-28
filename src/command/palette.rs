@@ -15,6 +15,7 @@ pub struct Completions {
     pub themes: Vec<String>,
     pub languages: Vec<String>,
     pub fonts: Vec<String>,
+    pub profiles: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -277,6 +278,7 @@ mod tests {
             themes: vec!["default".into(), "gruvbox".into(), "nord".into()],
             languages: vec!["english".into(), "english_1k".into()],
             fonts: vec![],
+            profiles: vec![],
         }
     }
 

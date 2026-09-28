@@ -67,7 +67,9 @@ pub struct Gfx {
     render_key: Option<RenderKey>,
     images: HashMap<Glyph, u32>,
     /// Live placements by absolute pixel position.
-    placed: HashMap<(u32, u32), Placed>,
+    placed: HashMap<(i64, u32), Placed>,
+    /// Pixel width of each uploaded image, for cropping at the left edge.
+    widths: HashMap<u32, u32>,
     next_image: u32,
     next_pid: u32,
 }
@@ -83,6 +85,7 @@ impl Gfx {
             render_key: None,
             images: HashMap::new(),
             placed: HashMap::new(),
+            widths: HashMap::new(),
             next_image: ID_BASE,
             next_pid: 1,
         }
@@ -166,6 +169,7 @@ impl Gfx {
                 self.next_image = self.next_image.wrapping_add(1).max(ID_BASE);
                 kitty::transmit(&mut buf, id, img.w, img.h, &img.rgba);
                 self.images.insert(g, id);
+                self.widths.insert(id, img.w);
             }
         }
 
@@ -194,7 +198,19 @@ impl Gfx {
             let pid = self.next_pid;
             self.next_pid = self.next_pid.wrapping_add(1).max(1);
             let (x, y) = *pos;
-            kitty::place(&mut buf, image, pid, x / cw, y / ch, x % cw, y % ch);
+            // A glyph's left padding can reach past the screen edge; show
+            // the part that's on screen rather than shifting it right.
+            let (x, crop) = if x < 0 {
+                let cut = x.unsigned_abs() as u32;
+                let w = self.widths.get(&image).copied().unwrap_or(0);
+                if cut >= w {
+                    continue;
+                }
+                (0, Some((cut, w - cut)))
+            } else {
+                (x as u32, None)
+            };
+            kitty::place(&mut buf, image, pid, x / cw, y / ch, x % cw, y % ch, crop);
             self.placed.insert(*pos, Placed { image, pid });
         }
         if moved_cursor {
@@ -213,7 +229,7 @@ impl Gfx {
 
     /// Where every visible glyph goes, in absolute pixels. Purges uploaded
     /// images if they were rendered for a different size or font.
-    fn layout(&mut self, lines: &[ImageLine], buf: &mut Vec<u8>) -> HashMap<(u32, u32), Glyph> {
+    fn layout(&mut self, lines: &[ImageLine], buf: &mut Vec<u8>) -> HashMap<(i64, u32), Glyph> {
         let mut want = HashMap::new();
         let (Some(face), Some((cw, ch)), Some(first)) = (&self.face, self.cell, lines.first())
         else {
@@ -235,10 +251,10 @@ impl Gfx {
             );
             let mut pen = 0.0f32;
             for g in &line.glyphs {
-                let x = x0 + pen.round() as u32;
+                let x = x0 as i64 + pen.round() as i64 - pad as i64;
                 pen += face.advance(g.ch, geom.px);
                 if !g.is_blank() {
-                    want.insert((x.saturating_sub(pad), y0), *g);
+                    want.insert((x, y0), *g);
                 }
             }
         }
@@ -255,6 +271,7 @@ impl Gfx {
             kitty::delete(buf, *id);
         }
         self.images.clear();
+        self.widths.clear();
         self.placed.clear();
     }
 
@@ -279,13 +296,13 @@ fn load(spec: &str, fonts_dir: &Path) -> Result<Face, String> {
     Face::from_files(&refs)
 }
 
-/// Terminals known to implement the kitty graphics protocol. Multiplexers
-/// swallow the escapes, so they count as unsupported unless forced.
+/// Terminals known to implement the kitty graphics protocol. Anything else,
+/// including multiplexers (which swallow the escapes), falls back to block
+/// glyphs.
 fn detect(mode: Graphics) -> bool {
     match mode {
         Graphics::Off => false,
-        Graphics::Kitty => true,
-        Graphics::Auto => {
+        Graphics::Kitty => {
             let var = |k: &str| std::env::var(k).unwrap_or_default();
             let term = var("TERM");
             if !var("TMUX").is_empty() || term.starts_with("screen") || term.starts_with("tmux") {
@@ -385,12 +402,26 @@ mod tests {
         g.present(&[line("x", usize::MAX)], &mut out).unwrap();
         let (&(x, y), _) = g.placed.iter().next().unwrap();
         let pad = g.face.as_ref().unwrap().geom(40).pad();
-        assert_eq!((x, y), (40 - pad, 40));
+        assert_eq!((x, y), (40 - pad as i64, 40));
         let s = String::from_utf8_lossy(&out);
         assert!(
             s.contains(&format!("\x1b[3;{}H", (40 - pad) / 10 + 1)),
             "{s:?}"
         );
         assert!(s.contains(&format!("X={},Y=0", (40 - pad) % 10)));
+    }
+
+    #[test]
+    fn glyphs_at_the_left_edge_are_cropped_not_shifted() {
+        let mut g = gfx();
+        let mut out = Vec::new();
+        let mut l = line("x", usize::MAX);
+        l.area.x = 0;
+        g.present(&[l], &mut out).unwrap();
+        let pad = g.face.as_ref().unwrap().geom(40).pad();
+        assert_eq!(g.placed.keys().next().unwrap().0, -(pad as i64));
+        let s = String::from_utf8_lossy(&out);
+        assert!(s.contains(&format!("x={pad},w=")), "{s:?}");
+        assert!(s.contains("\x1b[3;1H"), "{s:?}");
     }
 }

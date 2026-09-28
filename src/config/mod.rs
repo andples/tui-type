@@ -89,52 +89,56 @@ pub struct Config {
     pub font_size: u8,
     /// Width of the word box, in words (× 6 characters per word).
     pub words_per_line: u8,
+    /// How many lines of words the typing box shows.
+    pub lines: u8,
     /// Words only: hide brand, timer and mode line while typing.
     pub zen: bool,
+    /// Fill the terminal: pick the largest font size at which
+    /// `words_per_line` × `lines` words still fit, then show as many lines
+    /// as fill the height, with the chrome (brand, timer, mode line)
+    /// hidden. Overrides `font_size` and the shown line count.
+    pub fullscreen: bool,
     /// Font for enlarged text when drawn as images: a family name, a file in
     /// the config `fonts/` dir, or a path. Empty uses the system monospace.
     pub font: String,
     pub graphics: Graphics,
     pub results: ResultsConfig,
+    /// Active profiles (see `crate::profile`), in activation order. Each one
+    /// controls a distinct set of settings and matches the values above.
+    pub profiles: Vec<String>,
 }
 
-/// How font sizes above 1 are drawn.
+/// How font sizes above 1 are drawn. Only set in the config file; there is
+/// no command for it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Graphics {
-    /// Real font images when the terminal is known to support them.
+    /// Real font images via the kitty graphics protocol when the terminal
+    /// supports it; block characters otherwise.
     #[default]
-    Auto,
-    /// Always use the kitty graphics protocol.
+    #[serde(alias = "auto")]
     Kitty,
     /// Always use block characters.
     Off,
 }
 
 impl Graphics {
-    pub const NAMES: [&'static str; 3] = ["auto", "kitty", "off"];
-
     pub fn parse(s: &str) -> Result<Self, String> {
         match s {
-            "auto" => Ok(Graphics::Auto),
-            "kitty" | "on" => Ok(Graphics::Kitty),
+            "kitty" | "auto" | "on" => Ok(Graphics::Kitty),
             "off" | "blocks" => Ok(Graphics::Off),
-            _ => Err(format!("expected auto, kitty or off, got `{s}`")),
-        }
-    }
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Graphics::Auto => "auto",
-            Graphics::Kitty => "kitty",
-            Graphics::Off => "off",
+            _ => Err(format!("expected kitty or off, got `{s}`")),
         }
     }
 }
 
-pub const FONT_SIZE_RANGE: (u8, u8) = (1, 5);
+pub const FONT_SIZE_RANGE: (u8, u8) = (1, 16);
 pub const DEFAULT_FONT_SIZE: u8 = 2;
 pub const WORDS_PER_LINE_RANGE: (u8, u8) = (4, 30);
+pub const LINES_RANGE: (u8, u8) = (1, 10);
+pub const DEFAULT_LINES: u8 = 3;
+/// Most lines fullscreen fills the screen with.
+const LINES_MAX_FULLSCREEN: u16 = 60;
 /// The conventional word length used to turn words-per-line into columns.
 pub const CHARS_PER_WORD: u16 = 6;
 
@@ -158,32 +162,95 @@ impl BlockSet {
 
 /// How the typing text is drawn. Size 1 is the terminal's own font; the
 /// rest rasterize the 4×6 pixel font (`ui::font`) at increasing scales so
-/// each step is a gentle one: glyphs are 1, 2, 3, 4 and 6 rows tall.
+/// each step is a gentle one: glyphs are 1, 2, 3, 4 and 6 rows tall, then
+/// two rows taller per size (8, 10, … 28). Fullscreen isn't limited to
+/// the numbered sizes: it picks from every block set and scale.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct FontSize(u8);
+pub struct FontSize(Option<(BlockSet, u16)>);
+
+/// Tallest glyph any size draws, in rows (matches the top numbered size).
+const MAX_GLYPH_ROWS: u16 = 28;
 
 impl FontSize {
     pub fn from_level(level: u8) -> Self {
-        FontSize(level.clamp(FONT_SIZE_RANGE.0, FONT_SIZE_RANGE.1))
-    }
-
-    pub fn level(self) -> u8 {
-        self.0
-    }
-
-    pub fn is_native(self) -> bool {
-        self.0 == 1
-    }
-
-    /// Block set and pixel scale for rasterized sizes; `None` for native.
-    pub fn raster(self) -> Option<(BlockSet, u16)> {
-        match self.0 {
+        FontSize(match level.clamp(FONT_SIZE_RANGE.0, FONT_SIZE_RANGE.1) {
             1 => None,
             2 => Some((BlockSet::Sextant, 1)),
             3 => Some((BlockSet::Half, 1)),
             4 => Some((BlockSet::Sextant, 2)),
-            _ => Some((BlockSet::Half, 2)),
-        }
+            5 => Some((BlockSet::Half, 2)),
+            n => Some((BlockSet::Sextant, n as u16 - 2)),
+        })
+    }
+
+    pub fn is_native(self) -> bool {
+        self.0.is_none()
+    }
+
+    /// Block set and pixel scale for rasterized sizes; `None` for native.
+    pub fn raster(self) -> Option<(BlockSet, u16)> {
+        self.0
+    }
+
+    /// The terminal font plus every block set at every scale up to
+    /// `MAX_GLYPH_ROWS`, numbered or not.
+    fn all() -> impl Iterator<Item = FontSize> {
+        let scales = |set: BlockSet| {
+            (1..)
+                .map(move |s| FontSize(Some((set, s))))
+                .take_while(|f| f.cell_dims().1 <= MAX_GLYPH_ROWS)
+        };
+        std::iter::once(FontSize(None))
+            .chain(scales(BlockSet::Sextant))
+            .chain(scales(BlockSet::Half))
+    }
+
+    /// Rows between the tops of consecutive lines: a gap row for big fonts.
+    pub fn line_stride(self) -> u16 {
+        let (_, gh) = self.cell_dims();
+        if gh > 1 { gh + 1 } else { 1 }
+    }
+
+    /// Rows a box of `lines` lines needs.
+    pub fn box_height(self, lines: u8) -> u16 {
+        let (_, gh) = self.cell_dims();
+        let stride = self.line_stride();
+        lines.max(1) as u16 * stride - (stride - gh)
+    }
+
+    /// How many lines of this size fit in `rows`.
+    pub fn lines_in(self, rows: u16) -> u16 {
+        let (_, gh) = self.cell_dims();
+        let stride = self.line_stride();
+        (rows + stride - gh) / stride
+    }
+
+    /// Fullscreen sizing: the largest size (tallest, then widest) at which
+    /// `chars` characters of text fit in `cols` × `rows`, and how many lines
+    /// fill the height at that size. `glyph_cols` is how many columns a
+    /// character takes at a size. Falls back to the terminal font.
+    pub fn fit(
+        cols: u16,
+        rows: u16,
+        chars: u16,
+        glyph_cols: impl Fn(FontSize) -> f32,
+    ) -> (FontSize, u8) {
+        // Wrapping on word boundaries leaves roughly a word's worth of
+        // space at the end of each line.
+        const WRAP_SLACK: f32 = 5.0;
+        let lines = |f: FontSize| f.lines_in(rows).min(LINES_MAX_FULLSCREEN);
+        let capacity = |f: FontSize| {
+            let per_line = (cols as f32 / glyph_cols(f)).floor() - WRAP_SLACK;
+            per_line.max(0.0) * lines(f) as f32
+        };
+        let font = Self::all()
+            .filter(|f| lines(*f) >= 1 && capacity(*f) >= chars as f32)
+            .max_by_key(|f| {
+                let (w, h) = f.cell_dims();
+                (h, w)
+            })
+            .unwrap_or(FontSize(None));
+        (font, lines(font).max(1) as u8)
     }
 
     /// (columns, rows) one glyph occupies.
@@ -211,6 +278,15 @@ impl Config {
         self.words_per_line = n.clamp(WORDS_PER_LINE_RANGE.0, WORDS_PER_LINE_RANGE.1);
     }
 
+    pub fn set_lines(&mut self, n: u8) {
+        self.lines = n.clamp(LINES_RANGE.0, LINES_RANGE.1);
+    }
+
+    /// Characters a line should hold: the word-count target × 6.
+    pub fn line_chars(&self) -> u16 {
+        self.words_per_line as u16 * CHARS_PER_WORD
+    }
+
     /// Width of the typing box in terminal columns.
     pub fn typing_width(&self) -> u16 {
         let (gw, _) = self.font_size().cell_dims();
@@ -233,10 +309,13 @@ impl Default for Config {
             numbers: false,
             font_size: DEFAULT_FONT_SIZE,
             words_per_line: 13,
+            lines: DEFAULT_LINES,
             zen: false,
+            fullscreen: false,
             font: String::new(),
-            graphics: Graphics::Auto,
+            graphics: Graphics::Kitty,
             results: ResultsConfig::default(),
+            profiles: Vec::new(),
         }
     }
 }
@@ -289,6 +368,8 @@ impl Config {
             "punctuation" => self.punctuation = parse_bool(value)?,
             "numbers" => self.numbers = parse_bool(value)?,
             "zen" => self.zen = parse_bool(value)?,
+            "fullscreen" | "full" => self.fullscreen = parse_bool(value)?,
+            "lines" => self.set_lines(parse_range(value, LINES_RANGE)?),
             "font" => self.font = value.to_string(),
             "graphics" => self.graphics = Graphics::parse(value)?,
             "font_size" | "fontsize" => {
@@ -337,6 +418,7 @@ pub struct Paths {
     pub themes_dir: PathBuf,
     pub languages_dir: PathBuf,
     pub fonts_dir: PathBuf,
+    pub profiles_dir: PathBuf,
     pub history_file: PathBuf,
 }
 
@@ -356,6 +438,7 @@ impl Paths {
             themes_dir: config_dir.join("themes"),
             languages_dir: config_dir.join("languages"),
             fonts_dir: config_dir.join("fonts"),
+            profiles_dir: config_dir.join("profiles"),
             history_file: data_dir.join("history.jsonl"),
         }
     }
@@ -371,8 +454,30 @@ mod tests {
             .map(|l| FontSize::from_level(l).cell_dims().1)
             .collect();
         assert_eq!(rows, vec![1, 2, 3, 4, 6]);
+        let big: Vec<u16> = (5..=FONT_SIZE_RANGE.1)
+            .map(|l| FontSize::from_level(l).cell_dims().1)
+            .collect();
+        assert!(big.windows(2).all(|w| w[1] > w[0]), "{big:?}");
+        assert_eq!(FontSize::from_level(16).cell_dims(), (28, 28));
         assert_eq!(FontSize::from_level(2).cell_dims(), (2, 2));
         assert_eq!(FontSize::from_level(5).cell_dims(), (8, 6));
+    }
+
+    #[test]
+    fn fullscreen_fit_fills_the_screen() {
+        let blocks = |f: FontSize| f.cell_dims().0 as f32;
+        // 160×44 with 13 words × 3 lines (234 chars): 6×6 glyphs hold only
+        // 21×6 = 126, 4×4 hold 34×8 = 272 — so 4×4 across 8 lines.
+        let (f, lines) = FontSize::fit(158, 43, 234, blocks);
+        assert_eq!((f.cell_dims(), lines), ((4, 4), 8));
+        assert!(f.box_height(lines) <= 43);
+        // Less text → bigger glyphs.
+        let (big, _) = FontSize::fit(158, 43, 60, blocks);
+        assert!(big.cell_dims().1 > 4);
+        // Nothing fits: terminal font, one line minimum.
+        let (f, lines) = FontSize::fit(20, 1, 500, blocks);
+        assert!(f.is_native());
+        assert_eq!(lines, 1);
     }
 
     #[test]
@@ -390,6 +495,20 @@ mod tests {
         assert!(!c.results.chart);
         assert!(c.results.raw);
         assert_eq!(c.language, "english");
+    }
+
+    #[test]
+    fn graphics_defaults_to_kitty_and_reads_old_auto() {
+        assert_eq!(Config::default().graphics, Graphics::Kitty);
+        let c = Config::parse("graphics = \"auto\"").unwrap();
+        assert_eq!(c.graphics, Graphics::Kitty);
+        let c = Config::parse("graphics = \"off\"").unwrap();
+        assert_eq!(c.graphics, Graphics::Off);
+        assert!(
+            toml::to_string(&Config::default())
+                .unwrap()
+                .contains("graphics = \"kitty\"")
+        );
     }
 
     #[test]
@@ -416,8 +535,13 @@ mod tests {
         assert_eq!(c.typing_width(), 60);
         c.set("fontsize", "3").unwrap();
         assert_eq!(c.typing_width(), 240);
-        assert!(c.set("fontsize", "9").is_err());
+        assert!(c.set("fontsize", "17").is_err());
         assert!(c.set("wpl", "2").is_err());
+        c.set("lines", "5").unwrap();
+        assert_eq!(c.lines, 5);
+        assert!(c.set("lines", "0").is_err());
+        c.set("fullscreen", "on").unwrap();
+        assert!(c.fullscreen);
         assert!(c.set("numbers", "maybe").is_err());
         c.set("graphics", "off").unwrap();
         assert_eq!(c.graphics, Graphics::Off);

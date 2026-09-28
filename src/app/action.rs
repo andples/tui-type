@@ -46,6 +46,39 @@ pub enum Action {
     SliderMax,
     SliderConfirm,
     SliderCancel,
+
+    // Profile menu
+    ShowProfiles,
+    Profile(ProfileAction),
+
     Quit,
     Nop,
+}
+
+/// Keys on the profile screen, in either the list or the editor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProfileAction {
+    Up,
+    Down,
+    /// List: switch the selected profile on or off (or create, on the last row).
+    Toggle,
+    New,
+    Edit,
+    /// List: ask to delete the selected profile.
+    Delete,
+    ConfirmDelete,
+    CancelDelete,
+    /// Editor: check or uncheck the focused setting.
+    Check,
+    /// Editor: step the focused setting's value back (-1) or forward (1).
+    Cycle(i8),
+    /// Editor: take the focused setting's live value.
+    Capture,
+    /// Editor: take every setting's live value.
+    CaptureAll,
+    Insert(char),
+    Backspace,
+    Save,
+    /// Editor: discard changes and return to the list.
+    Cancel,
 }

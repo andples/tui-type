@@ -5,6 +5,7 @@ pub mod bigtext;
 pub mod command_line;
 pub mod font;
 pub mod help;
+pub mod profiles;
 pub mod results;
 pub mod slider;
 pub mod stats;
@@ -26,9 +27,11 @@ pub fn render(frame: &mut Frame, app: &App) -> Vec<ImageLine> {
     let area = frame.area();
     frame.render_widget(Block::default().style(p.base()), area);
 
-    // Brand mark, top-left of the content column (hidden in zen mode).
+    // Brand mark, top-left of the content column (hidden in zen and
+    // fullscreen).
     let col = content_column(area, app.screen_width());
-    if !(app.config.zen && app.screen == Screen::Typing) {
+    let bare = app.config.zen || app.config.fullscreen;
+    if !(bare && app.screen == Screen::Typing) {
         frame.render_widget(
             Paragraph::new(Line::from(vec![
                 Span::styled("t", p.main_bold()),
@@ -46,6 +49,7 @@ pub fn render(frame: &mut Frame, app: &App) -> Vec<ImageLine> {
         Screen::Results => results::render(frame, app, body, &p),
         Screen::Stats => stats::render(frame, app, body, &p),
         Screen::Help => help::render(frame, app, body, &p),
+        Screen::Profiles => profiles::render(frame, app, body, &p),
     }
 
     if app.slider.is_some() {
