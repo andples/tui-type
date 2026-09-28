@@ -106,6 +106,14 @@ pub struct Config {
     /// Active profiles (see `crate::profile`), in activation order. Each one
     /// controls a distinct set of settings and matches the values above.
     pub profiles: Vec<String>,
+    /// Base URL of a ttyp server (`https://…`). Unset means fully offline:
+    /// no network at all. Not a profile setting.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub server: Option<String>,
+    /// Client id of the GitHub OAuth App used by `:login`. Not a secret,
+    /// but not baked into ttyp either. Not a profile setting.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub github_client_id: Option<String>,
 }
 
 /// How font sizes above 1 are drawn. Only set in the config file; there is
@@ -316,6 +324,8 @@ impl Default for Config {
             graphics: Graphics::Kitty,
             results: ResultsConfig::default(),
             profiles: Vec::new(),
+            server: None,
+            github_client_id: None,
         }
     }
 }
@@ -372,6 +382,10 @@ impl Config {
             "lines" => self.set_lines(parse_range(value, LINES_RANGE)?),
             "font" => self.font = value.to_string(),
             "graphics" => self.graphics = Graphics::parse(value)?,
+            "server" => self.server = Some(value.to_string()).filter(|v| !v.is_empty()),
+            "github_client_id" => {
+                self.github_client_id = Some(value.to_string()).filter(|v| !v.is_empty());
+            }
             "font_size" | "fontsize" => {
                 self.set_font_size(parse_range(value, FONT_SIZE_RANGE)?);
             }
@@ -420,6 +434,10 @@ pub struct Paths {
     pub fonts_dir: PathBuf,
     pub profiles_dir: PathBuf,
     pub history_file: PathBuf,
+    /// The ttyp server token from `:login` (mode 0600).
+    pub token_file: PathBuf,
+    /// Daily results that couldn't be submitted, retried on the next start.
+    pub queue_dir: PathBuf,
 }
 
 impl Paths {
@@ -440,6 +458,8 @@ impl Paths {
             fonts_dir: config_dir.join("fonts"),
             profiles_dir: config_dir.join("profiles"),
             history_file: data_dir.join("history.jsonl"),
+            token_file: data_dir.join("token"),
+            queue_dir: data_dir.join("queue"),
         }
     }
 }

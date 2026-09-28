@@ -30,6 +30,7 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 thiserror = "2.0.20"
 toml = "1.1.6"
+ureq = { version = "3", features = ["json"] }
 
 # Font rasterizing and zlib are far too slow unoptimized; keep dev builds
 # responsive by optimizing dependencies (built once, then cached).

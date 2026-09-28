@@ -35,6 +35,8 @@ pub enum Command {
     Restart,
     Stats,
     Help,
+    Login,
+    Logout,
     Quit,
     Results {
         section: String,
@@ -243,6 +245,22 @@ pub const COMMANDS: &[CommandSpec] = &[
         requires_arg: true,
     },
     CommandSpec {
+        name: "login",
+        aliases: &[],
+        usage: "",
+        help: "log in with github (needs server)",
+        arg: ArgKind::None,
+        requires_arg: false,
+    },
+    CommandSpec {
+        name: "logout",
+        aliases: &[],
+        usage: "",
+        help: "forget the server login",
+        arg: ArgKind::None,
+        requires_arg: false,
+    },
+    CommandSpec {
         name: "help",
         aliases: &["h", "?"],
         usage: "",
@@ -315,6 +333,8 @@ pub fn parse(line: &str) -> Result<Command, String> {
         "restart" => Command::Restart,
         "stats" => Command::Stats,
         "help" => Command::Help,
+        "login" => Command::Login,
+        "logout" => Command::Logout,
         "quit" => Command::Quit,
         "results" => {
             let mut a = rest.split_whitespace();

@@ -2,6 +2,7 @@
 
 pub mod action;
 pub mod input;
+mod online;
 mod profiles;
 
 use std::io::Write;
@@ -17,6 +18,7 @@ use crate::config::{Config, Paths};
 use crate::config::{FONT_SIZE_RANGE, FontSize, LINES_RANGE, WORDS_PER_LINE_RANGE};
 use crate::gfx::{self, Gfx};
 use crate::language::LanguageRegistry;
+use crate::online::Online;
 use crate::profile::{ProfileMenu, ProfileRegistry};
 use crate::stats::{LocalJsonlStore, StatsStore, Summary, TestRecord, personal_best};
 use crate::test::{Metrics, Mode, Modifiers, RandomGenerator, Status, TestEngine};
@@ -30,6 +32,8 @@ use input::InputContext;
 const NOTICE_TTL: Duration = Duration::from_millis(2500);
 /// Redraw cadence while a timed test is running.
 const TIMER_TICK: Duration = Duration::from_millis(100);
+/// How often the event loop checks for network replies while one is due.
+const REMOTE_POLL: Duration = Duration::from_millis(50);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Screen {
@@ -38,6 +42,7 @@ pub enum Screen {
     Stats,
     Help,
     Profiles,
+    Login,
 }
 
 /// Which config value a slider edits.
@@ -110,6 +115,10 @@ pub struct App {
     pub scroll: usize,
     pub should_quit: bool,
     pub gfx: Gfx,
+    /// Present only when `server` is configured.
+    pub online: Option<Online>,
+    /// The GitHub device code and URL to show while `:login` waits.
+    pub login_prompt: Option<(String, String)>,
     /// Screen to return to from stats/help.
     previous_screen: Screen,
     /// A notice was raised while handling the current action.
@@ -167,6 +176,7 @@ impl App {
         };
         let engine = Self::build_engine(&config, &languages);
         let summary = Summary::from_records(store.all());
+        let online = Self::connect(&config, &paths);
         let mut app = Self {
             config,
             paths,
@@ -187,6 +197,8 @@ impl App {
             scroll: 0,
             should_quit: false,
             gfx,
+            online,
+            login_prompt: None,
             previous_screen: Screen::Typing,
             fresh_notice: false,
             dirty: true,
@@ -304,6 +316,7 @@ impl App {
 
     fn event_loop(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
         while !self.should_quit {
+            self.drain_remote();
             if self.dirty {
                 self.draw(terminal)?;
                 self.dirty = false;
@@ -349,13 +362,17 @@ impl App {
         Ok(())
     }
 
-    /// Only wake up on a timer when something on screen is time-dependent.
+    /// Only wake up on a timer when something on screen is time-dependent
+    /// or a network reply is expected.
     fn poll_timeout(&self) -> Option<Duration> {
         let timed_running = self.engine.status() == Status::Running
             && matches!(self.engine.mode(), Mode::Time(_))
             && self.screen == Screen::Typing;
         if timed_running {
             return Some(TIMER_TICK);
+        }
+        if self.online.as_ref().is_some_and(Online::busy) {
+            return Some(REMOTE_POLL);
         }
         self.notice.as_ref().map(|(_, at)| {
             NOTICE_TTL
@@ -465,6 +482,10 @@ impl App {
             Action::ShowHelp => self.push_screen(Screen::Help),
             Action::ShowProfiles => self.open_profiles(),
             Action::Profile(a) => self.profile_action(a),
+            Action::Login => self.login(),
+            Action::CancelLogin => self.cancel_login(),
+            Action::Logout => self.logout(),
+            Action::Remote(ev) => self.remote_event(ev),
             Action::ScrollDown => self.scroll += 1,
             Action::ScrollUp => self.scroll = self.scroll.saturating_sub(1),
         }
@@ -672,6 +693,8 @@ impl App {
             Command::Restart => self.restart(),
             Command::Stats => self.dispatch(Action::ShowStats),
             Command::Help => self.dispatch(Action::ShowHelp),
+            Command::Login => self.dispatch(Action::Login),
+            Command::Logout => self.dispatch(Action::Logout),
             Command::Quit => self.should_quit = true,
             Command::Results { section, value } => {
                 let current = self.config.results.get(&section).unwrap_or(true);

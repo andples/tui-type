@@ -2,7 +2,9 @@
 //! (later) remote events all reduce to this enum and go through
 //! `App::dispatch`, which keeps the UI layer purely presentational.
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+use crate::online::RemoteEvent;
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Action {
     // Typing screen
     TypeChar(char),
@@ -50,6 +52,14 @@ pub enum Action {
     // Profile menu
     ShowProfiles,
     Profile(ProfileAction),
+
+    // Online (only when `server` is configured)
+    Login,
+    CancelLogin,
+    Logout,
+    /// A reply from a background network request (boxed: replies carry
+    /// whole leaderboards, and every other action is a few bytes).
+    Remote(Box<RemoteEvent>),
 
     Quit,
     Nop,

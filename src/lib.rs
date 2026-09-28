@@ -9,6 +9,7 @@ pub mod app;
 pub mod command;
 pub mod config;
 pub mod gfx;
+pub mod online;
 pub mod profile;
 pub mod stats;
 pub mod theme;

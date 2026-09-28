@@ -12,7 +12,8 @@ use serde::Deserialize;
 use sqlx::Row;
 use sqlx::sqlite::SqlitePool;
 use ttyp_core::api::{
-    Board, Daily, DailySummary, ErrorBody, Leaderboard, ResultDetail, SubmitRequest, SubmitResponse,
+    AuthRequest, AuthResponse, Board, Daily, DailySummary, ErrorBody, Leaderboard, ResultDetail,
+    SubmitRequest, SubmitResponse,
 };
 use ttyp_core::language::LanguageRegistry;
 use ttyp_core::test::{Rejected, replay};
@@ -28,11 +29,19 @@ const MAX_PAGE: u32 = 200;
 pub struct AppState {
     pub pool: SqlitePool,
     pub languages: Arc<LanguageRegistry>,
+    /// Base URL of the GitHub REST API (`TTYP_GITHUB_API`; tests mock it).
+    pub github_api: String,
 }
 
 impl AppState {
     pub fn new(pool: SqlitePool, languages: Arc<LanguageRegistry>) -> Self {
-        Self { pool, languages }
+        let github_api =
+            std::env::var("TTYP_GITHUB_API").unwrap_or_else(|_| "https://api.github.com".into());
+        Self {
+            pool,
+            languages,
+            github_api,
+        }
     }
 }
 
@@ -44,6 +53,8 @@ pub fn router(state: AppState) -> Router {
         .route("/results", post(submit))
         .route("/results/{id}", get(result_by_id))
         .route("/leaderboard/{daily_id}", get(leaderboard))
+        .route("/auth/github", post(auth_github))
+        .route("/auth/logout", post(auth_logout))
         .with_state(state)
 }
 
@@ -200,6 +211,40 @@ async fn submit(
         rank_first,
         rank_best,
     }))
+}
+
+/// Trade a GitHub access token for a ttyp token. The GitHub token is
+/// checked once against the GitHub API and never stored or logged.
+async fn auth_github(
+    State(state): State<AppState>,
+    Json(req): Json<AuthRequest>,
+) -> ApiResult<AuthResponse> {
+    if req.access_token.is_empty() {
+        return Err(ApiError::BadRequest("missing access_token".into()));
+    }
+    let api = state.github_api.clone();
+    let user = tokio::task::spawn_blocking(move || auth::github_user(&api, &req.access_token))
+        .await
+        .map_err(|e| ApiError::Internal(e.into()))??
+        .ok_or_else(|| ApiError::BadRequest("github rejected the token".into()))?;
+    let (user, token) = auth::issue(&state.pool, user.0, &user.1).await?;
+    tracing::info!("login: {}", user.login);
+    Ok(Json(AuthResponse {
+        token,
+        login: user.login,
+    }))
+}
+
+/// Revoke the presented token.
+async fn auth_logout(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> ApiResult<serde_json::Value> {
+    let token = auth::bearer(&headers).ok_or(ApiError::Unauthorized)?;
+    if !auth::revoke(&state.pool, token).await? {
+        return Err(ApiError::Unauthorized);
+    }
+    Ok(Json(serde_json::json!({})))
 }
 
 fn json<T: serde::Serialize>(v: &T) -> String {
@@ -380,6 +425,75 @@ mod tests {
             e.tick(t);
         }
         (Metrics::from_engine(&e), e.keylog().unwrap().to_vec())
+    }
+
+    /// A stand-in for api.github.com on a local port: one known token.
+    async fn mock_github() -> String {
+        async fn user(headers: HeaderMap) -> Response {
+            match headers
+                .get(header::AUTHORIZATION)
+                .and_then(|v| v.to_str().ok())
+            {
+                Some("Bearer gho_good") => {
+                    Json(serde_json::json!({"id": 583231, "login": "octocat", "name": "x"}))
+                        .into_response()
+                }
+                _ => (StatusCode::UNAUTHORIZED, "bad credentials").into_response(),
+            }
+        }
+        let app = Router::new().route("/user", axum::routing::get(user));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        format!("http://{addr}")
+    }
+
+    #[tokio::test]
+    async fn github_login_issues_and_revokes_tokens() {
+        let (_, mut state) = app().await;
+        state.github_api = mock_github().await;
+        let app = router(state.clone());
+
+        let bad = AuthRequest {
+            access_token: "gho_bad".into(),
+        };
+        let (status, body) = call(&app, post("/auth/github", None, &bad)).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+
+        let good = AuthRequest {
+            access_token: "gho_good".into(),
+        };
+        let (status, body) = call(&app, post("/auth/github", None, &good)).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        let auth: AuthResponse = serde_json::from_value(body).unwrap();
+        assert_eq!(auth.login, "octocat");
+        assert_eq!(auth.token.len(), 43);
+        // Only the hash is stored, and no GitHub token anywhere.
+        let stored: Vec<Vec<u8>> = sqlx::query_scalar("SELECT token_hash FROM api_tokens")
+            .fetch_all(&state.pool)
+            .await
+            .unwrap();
+        assert_eq!(stored, vec![auth::hash(&auth.token)]);
+
+        // The token authenticates, then logout kills it.
+        let (_, body) = call(&app, get("/dailies/today", None)).await;
+        let list: Vec<DailySummary> = serde_json::from_value(body).unwrap();
+        let req = SubmitRequest {
+            daily_id: list[0].id,
+            keylog: vec![],
+        };
+        let (status, _) = call(&app, post("/results", Some(&auth.token), &req)).await;
+        assert_eq!(
+            status,
+            StatusCode::OK,
+            "empty log is stored as invalid, not refused"
+        );
+        let (status, _) = call(&app, post("/auth/logout", Some(&auth.token), &())).await;
+        assert_eq!(status, StatusCode::OK);
+        let (status, _) = call(&app, post("/results", Some(&auth.token), &req)).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        let (status, _) = call(&app, post("/auth/logout", Some(&auth.token), &())).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
     }
 
     #[tokio::test]

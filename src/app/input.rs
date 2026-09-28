@@ -64,6 +64,11 @@ pub fn map_key(key: KeyEvent, ctx: InputContext) -> Action {
             _ => Action::Nop,
         },
         Screen::Profiles => map_profiles(key, ctx.profile_menu),
+        Screen::Login => match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => Action::CancelLogin,
+            KeyCode::Char(':') => Action::OpenCommandLine,
+            _ => Action::Nop,
+        },
         Screen::Stats | Screen::Help => match key.code {
             KeyCode::Esc | KeyCode::Char('q') | KeyCode::Tab | KeyCode::Enter => Action::Back,
             KeyCode::Char(':') => Action::OpenCommandLine,

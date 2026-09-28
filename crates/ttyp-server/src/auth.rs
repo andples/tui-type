@@ -1,7 +1,7 @@
 //! Bearer tokens: a random 32-byte token whose sha256 is stored in
 //! `api_tokens`. The GitHub exchange that issues them lives in `api`.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use axum::http::HeaderMap;
 use rand::RngExt;
 use sha2::{Digest, Sha256};
@@ -15,9 +15,6 @@ pub struct User {
 }
 
 /// Base64url of 32 random bytes (43 chars, no padding).
-// Issuing and revoking are wired to `/auth/github` and `/auth/logout` in the
-// next phase; only verification is routed so far.
-#[allow(dead_code)]
 pub fn new_token() -> String {
     const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
     let mut rng = rand::rng();
@@ -26,12 +23,55 @@ pub fn new_token() -> String {
         .collect()
 }
 
+/// The token presented in `Authorization: Bearer …`, if any.
+pub fn bearer(headers: &HeaderMap) -> Option<&str> {
+    headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+}
+
+/// Who a GitHub access token belongs to: `(id, login)` from
+/// `GET {api}/user`. The token is used for this one call and dropped.
+pub fn github_user(api: &str, access_token: &str) -> Result<Option<(i64, String)>> {
+    let url = format!("{}/user", api.trim_end_matches('/'));
+    let agent = ureq::Agent::config_builder()
+        .http_status_as_error(false)
+        .timeout_global(Some(std::time::Duration::from_secs(15)))
+        .build()
+        .new_agent();
+    let mut res = agent
+        .get(&url)
+        .header("Authorization", &format!("Bearer {access_token}"))
+        .header("Accept", "application/vnd.github+json")
+        .header(
+            "User-Agent",
+            concat!("ttyp-server/", env!("CARGO_PKG_VERSION")),
+        )
+        .call()
+        .context("calling github")?;
+    if res.status().as_u16() == 401 {
+        return Ok(None);
+    }
+    if res.status().as_u16() >= 400 {
+        anyhow::bail!("github answered {}", res.status());
+    }
+    #[derive(serde::Deserialize)]
+    struct GhUser {
+        id: i64,
+        login: String,
+    }
+    let u: GhUser = res.body_mut().read_json().context("reading github reply")?;
+    Ok(Some((u.id, u.login)))
+}
+
 pub fn hash(token: &str) -> Vec<u8> {
     Sha256::digest(token.as_bytes()).to_vec()
 }
 
 /// Create or refresh the user for a GitHub account and issue a token.
-#[allow(dead_code)]
 pub async fn issue(pool: &SqlitePool, github_id: i64, login: &str) -> Result<(User, String)> {
     let now = crate::db::now();
     sqlx::query(
@@ -66,13 +106,7 @@ pub async fn issue(pool: &SqlitePool, github_id: i64, login: &str) -> Result<(Us
 /// The user behind `Authorization: Bearer …`, if the header is present and
 /// the token is known. A malformed or unknown token is `Ok(None)`.
 pub async fn user_from_headers(pool: &SqlitePool, headers: &HeaderMap) -> Result<Option<User>> {
-    let Some(token) = headers
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "))
-        .map(str::trim)
-        .filter(|t| !t.is_empty())
-    else {
+    let Some(token) = bearer(headers) else {
         return Ok(None);
     };
     let hash = hash(token);
@@ -95,7 +129,6 @@ pub async fn user_from_headers(pool: &SqlitePool, headers: &HeaderMap) -> Result
     }))
 }
 
-#[allow(dead_code)]
 pub async fn revoke(pool: &SqlitePool, token: &str) -> Result<bool> {
     let done = sqlx::query("DELETE FROM api_tokens WHERE token_hash = ?1")
         .bind(hash(token))
