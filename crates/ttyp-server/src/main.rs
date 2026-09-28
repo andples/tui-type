@@ -1,7 +1,8 @@
 //! ttyp-server: generates the daily tests, scores submitted keylogs by
 //! replaying them and serves the leaderboards. Configured by environment:
 //! `TTYP_BIND` (default `127.0.0.1:8080`), `TTYP_DB` (default `ttyp.db`),
-//! `RUST_LOG`.
+//! `RUST_LOG`. `ttyp-server healthcheck` probes a running server (for the
+//! container healthcheck; the image has no curl).
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -19,6 +20,9 @@ mod leaderboard;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    if std::env::args().nth(1).as_deref() == Some("healthcheck") {
+        return healthcheck();
+    }
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
         .init();
@@ -43,6 +47,19 @@ async fn main() -> Result<()> {
     axum::serve(listener, api::router(state))
         .with_graceful_shutdown(shutdown_signal())
         .await?;
+    Ok(())
+}
+
+/// `GET /health` on this host's `TTYP_BIND` port; exits non-zero on failure.
+fn healthcheck() -> Result<()> {
+    let bind = std::env::var("TTYP_BIND").unwrap_or_else(|_| "127.0.0.1:8080".into());
+    let port = bind.rsplit(':').next().unwrap_or("8080");
+    let mut res = ureq::get(&format!("http://127.0.0.1:{port}/health"))
+        .call()
+        .context("health request")?;
+    let body = res.body_mut().read_to_string()?;
+    anyhow::ensure!(body.contains("\"ok\""), "unhealthy: {body}");
+    println!("{body}");
     Ok(())
 }
 

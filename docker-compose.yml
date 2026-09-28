@@ -1,0 +1,59 @@
+# ttyp online server: the API, a nightly backup sidecar and a Cloudflare
+# Tunnel that exposes it. Secrets and the public hostname live only in the
+# untracked .env (see .env.example); nothing here names them.
+services:
+  ttyp-server:
+    build:
+      context: .
+      dockerfile: crates/ttyp-server/Dockerfile
+    image: ttyp-server
+    restart: unless-stopped
+    environment:
+      TTYP_BIND: 0.0.0.0:${TTYP_PORT:-8080}
+      TTYP_DB: /data/ttyp.db
+      RUST_LOG: ${RUST_LOG:-info}
+    volumes:
+      - ttyp-data:/data
+    # Not published on the host: cloudflared reaches it on the compose
+    # network. For local debugging only, uncomment (loopback-bound):
+    # ports:
+    #   - "127.0.0.1:${TTYP_PORT:-8080}:${TTYP_PORT:-8080}"
+    healthcheck:
+      test: ["CMD", "ttyp-server", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  ttyp-backup:
+    image: ttyp-server
+    restart: unless-stopped
+    depends_on:
+      - ttyp-server
+    # Root only here: ./backups is a host directory the container's
+    # unprivileged user can't write to. The server itself stays unprivileged.
+    user: "0:0"
+    healthcheck:
+      disable: true
+    command: ["ttyp-backup"]
+    environment:
+      TTYP_DB: /data/ttyp.db
+      TTYP_BACKUP_DIR: /backups
+      TTYP_BACKUP_KEEP: ${TTYP_BACKUP_KEEP:-14}
+      TTYP_BACKUP_AT: "00:30"
+    volumes:
+      - ttyp-data:/data:ro
+      # A host directory, so backups outlive `docker volume rm`.
+      - ./backups:/backups
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    depends_on:
+      - ttyp-server
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env}
+
+volumes:
+  ttyp-data:

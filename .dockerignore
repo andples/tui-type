@@ -1,0 +1,8 @@
+target
+backups
+.env
+.env.*
+*.db
+*.db-wal
+*.db-shm
+.git

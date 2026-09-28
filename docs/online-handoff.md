@@ -1,9 +1,49 @@
 # Handoff: daily tests, server and leaderboards
 
-Status: **not started.** This brief is self-contained: read it, then
-`CLAUDE.md` and `README.md` at the repo root, and you have everything needed
-to build it. Decisions marked **decided** came from the project owner; don't
-re-litigate them. Anything marked *open* is yours to settle and note here.
+Status: **built on branch `feat/online`, phases 1–7 committed; two steps
+need the owner** (see *Handoff: what's left* below). This brief is
+self-contained: read it, then `CLAUDE.md` and `README.md` at the repo root.
+Decisions marked **decided** came from the project owner; don't re-litigate
+them. Anything marked *open* is yours to settle and note here.
+
+## Handoff: what's left (2026-09-29)
+
+Everything in the phases below is implemented, tested and verified in tmux
+/ with curl / with `docker compose`, except:
+
+1. **Cloudflare tunnel (§7).** `docker-compose.yml` has the `cloudflared`
+   service reading `TUNNEL_TOKEN` from the untracked `.env`. The tunnel
+   itself was not created: it needs the owner's Cloudflare API token and
+   the private notes in `~/Projects/ttyp-private/deploy-handoff.md`. To
+   finish: follow those notes (token only in the shell env), put the tunnel
+   token in `.env` (mode 0600), `docker compose up -d`, then the two
+   *Verify* commands there.
+2. **Live GitHub login (§4).** No OAuth App client id was available, so the
+   device flow was tested against a mocked GitHub only (unit tests + a
+   mocked `/user` endpoint in the server tests). To finish: create the
+   OAuth App with device flow enabled, set `github_client_id` (and
+   `server`) in a client config, run `:login`, then `:daily` and check the
+   results line and `:leaderboard`.
+
+Resolutions noted while building (no secrets):
+
+- Workspace layout: the binary stays the root package (§1 note).
+- Keylog timing: while recording, the engine snaps instants to whole
+  milliseconds and logs the finishing `tick` of a time-mode run, so the
+  server's replay reproduces the client's metrics bit for bit
+  (`ttyp-core/src/test/keylog.rs`, tested both ways).
+- `GET /dailies?date=YYYY-MM-DD` was added so the leaderboard can switch
+  days (§5 lists only `/dailies/today`). Other days are not backfilled.
+- Restarting (`tab`) during a daily leaves it; the daily's words can be
+  seen before a "first try" by fetching and quitting. Server-side
+  prevention (counting the first fetch) is out of scope; noted as open.
+- The backup sidecar runs as root so it can write the host-mounted
+  `./backups`; the server container stays unprivileged.
+- `results::render_chart` takes `(raw, wpm)` series; errors aren't drawn,
+  as before, so the offline results screen is unchanged.
+- The profile list's summary ellipsis now falls at the column edge (two
+  characters later than the old hand-computed width). Everything else in
+  the profile menu is pixel-identical to before the port (diffed in tmux).
 
 ## Goal
 
