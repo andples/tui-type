@@ -1,1 +1,13 @@
 /target
+
+# Deployment secrets and data (see docs/online-handoff.md §7)
+.env
+.env.*
+!.env.example
+backups/
+*.db
+*.db-wal
+*.db-shm
+cloudflared/
+*.cfargotunnel.json
+cert.pem
