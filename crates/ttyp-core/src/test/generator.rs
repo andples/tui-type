@@ -126,9 +126,38 @@ impl WordGenerator for RandomGenerator {
     }
 }
 
+/// Hands out a fixed list of words in order (a daily test), then nothing.
+pub struct FixedGenerator {
+    words: Vec<String>,
+    next: usize,
+}
+
+impl FixedGenerator {
+    pub fn new(words: Vec<String>) -> Self {
+        Self { words, next: 0 }
+    }
+}
+
+impl WordGenerator for FixedGenerator {
+    fn next_words(&mut self, n: usize) -> Vec<String> {
+        let end = (self.next + n).min(self.words.len());
+        let out = self.words[self.next..end].to_vec();
+        self.next = end;
+        out
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fixed_hands_out_in_order_then_runs_dry() {
+        let mut g = FixedGenerator::new(vec!["a".into(), "b".into(), "c".into()]);
+        assert_eq!(g.next_words(2), vec!["a", "b"]);
+        assert_eq!(g.next_words(5), vec!["c"]);
+        assert!(g.next_words(1).is_empty());
+    }
 
     fn words() -> Vec<String> {
         ["alpha", "beta", "gamma", "delta"]

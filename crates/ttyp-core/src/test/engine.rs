@@ -5,6 +5,7 @@
 use std::time::{Duration, Instant};
 
 use super::generator::WordGenerator;
+use super::keylog::{Key, KeyEvent};
 use super::mode::Mode;
 
 /// How many words to keep queued ahead of the caret in Time mode.
@@ -59,6 +60,10 @@ pub struct TestEngine {
     started_at: Option<Instant>,
     finished_at: Option<Instant>,
     keystrokes: Vec<Keystroke>,
+    /// Every key since the start, for server-side replay (dailies only).
+    /// While recording, instants are rounded down to whole milliseconds so
+    /// a replay of the log reproduces this run exactly.
+    keylog: Option<Vec<KeyEvent>>,
 }
 
 impl TestEngine {
@@ -81,6 +86,36 @@ impl TestEngine {
             started_at: None,
             finished_at: None,
             keystrokes: Vec::new(),
+            keylog: None,
+        }
+    }
+
+    /// Start recording every key with its millisecond offset. Call before
+    /// the first keystroke.
+    pub fn record_keys(&mut self) {
+        self.keylog = Some(Vec::new());
+    }
+
+    pub fn keylog(&self) -> Option<&[KeyEvent]> {
+        self.keylog.as_deref()
+    }
+
+    /// While recording, snap `now` to the millisecond grid the log uses.
+    fn quantize(&self, now: Instant) -> Instant {
+        match (&self.keylog, self.started_at) {
+            (Some(_), Some(start)) => {
+                start + Duration::from_millis(now.duration_since(start).as_millis() as u64)
+            }
+            _ => now,
+        }
+    }
+
+    fn log(&mut self, key: Key, now: Instant) {
+        if self.keylog.is_some() {
+            let ms = self.elapsed_at(now).as_millis() as u32;
+            if let Some(log) = &mut self.keylog {
+                log.push(KeyEvent { ms, key });
+            }
         }
     }
 
@@ -146,9 +181,11 @@ impl TestEngine {
         if self.status != Status::Running {
             return false;
         }
+        let now = self.quantize(now);
         if let Mode::Time(secs) = self.mode
             && self.elapsed_at(now) >= Duration::from_secs(secs as u64)
         {
+            self.log(Key::Tick, now);
             self.finish(now);
             return true;
         }
@@ -171,6 +208,8 @@ impl TestEngine {
             self.status = Status::Running;
             self.started_at = Some(now);
         }
+        let now = self.quantize(now);
+        self.log(Key::Char(c), now);
         // Time limit may have passed between ticks.
         if self.tick(now) {
             return;
@@ -230,6 +269,7 @@ impl TestEngine {
         if self.status == Status::Finished {
             return;
         }
+        self.log_untimed(Key::Backspace);
         if self.words[self.current].typed.pop().is_some() {
             return;
         }
@@ -244,10 +284,20 @@ impl TestEngine {
         if self.status == Status::Finished {
             return;
         }
+        self.log_untimed(Key::DeleteWord);
         if self.words[self.current].typed.is_empty() && self.can_go_back() {
             self.current -= 1;
         }
         self.words[self.current].typed.clear();
+    }
+
+    /// Backspace and delete-word carry no time of their own; they're logged
+    /// at the previous key's offset, which is all replay needs (order).
+    fn log_untimed(&mut self, key: Key) {
+        if let Some(log) = &mut self.keylog {
+            let ms = log.last().map_or(0, |e| e.ms);
+            log.push(KeyEvent { ms, key });
+        }
     }
 
     fn can_go_back(&self) -> bool {

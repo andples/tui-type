@@ -1,0 +1,28 @@
+[package]
+name = "ttyp-server"
+version = "0.1.0"
+edition = "2024"
+description = "ttyp online server: daily tests, replay scoring and leaderboards"
+license = "MIT"
+publish = false
+
+[dependencies]
+ttyp-core = { path = "../ttyp-core" }
+anyhow = "1.0.104"
+axum = "0.8"
+chrono = { version = "0.4.45", features = ["serde"] }
+rand = "0.10.2"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.151", features = ["float_roundtrip"] }
+sha2 = "0.10"
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "sqlite", "migrate", "macros", "derive", "chrono"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "time", "sync"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+
+[lints]
+workspace = true

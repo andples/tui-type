@@ -8,9 +8,11 @@
 
 use std::time::Duration;
 
+use serde::{Deserialize, Serialize};
+
 use super::engine::{Keystroke, TestEngine, Word};
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CharCounts {
     pub correct: usize,
     pub incorrect: usize,
