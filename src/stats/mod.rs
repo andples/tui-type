@@ -57,10 +57,14 @@ pub struct TestRecord {
     pub consistency: f64,
     pub chars: CharRecord,
     pub duration_s: f64,
+    /// The server's daily this run was for (schema 2; absent before).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub daily_id: Option<i64>,
 }
 
 impl TestRecord {
-    pub const SCHEMA: u8 = 1;
+    /// 1: initial. 2: optional `daily_id`.
+    pub const SCHEMA: u8 = 2;
 
     pub fn new(
         metrics: &Metrics,
@@ -82,6 +86,7 @@ impl TestRecord {
             consistency: metrics.consistency,
             chars: metrics.chars.into(),
             duration_s: metrics.duration.as_secs_f64(),
+            daily_id: None,
         }
     }
 }
@@ -238,7 +243,16 @@ mod tests {
                 missed: 0,
             },
             duration_s: 30.0,
+            daily_id: None,
         }
+    }
+
+    #[test]
+    fn schema_1_lines_still_parse() {
+        let line = r#"{"schema":1,"ts":"2026-01-01T00:00:00Z","mode":{"time":30},"language":"english","punctuation":false,"numbers":false,"wpm":80.0,"raw":85.0,"acc":97.0,"consistency":70.0,"chars":{"correct":1,"incorrect":0,"extra":0,"missed":0},"duration_s":30.0}"#;
+        let r: TestRecord = serde_json::from_str(line).unwrap();
+        assert_eq!(r.daily_id, None);
+        assert!(!serde_json::to_string(&r).unwrap().contains("daily_id"));
     }
 
     #[test]

@@ -35,6 +35,8 @@ pub enum Command {
     Restart,
     Stats,
     Help,
+    /// Today's online daily: `None` uses the current mode.
+    Daily(Option<Mode>),
     Login,
     Logout,
     Quit,
@@ -60,6 +62,8 @@ pub enum ArgKind {
     WordPresets,
     OnOff,
     ResultSections,
+    /// `time 30`, `words 25`, …: the modes dailies exist for.
+    DailyModes,
     /// Numeric setting in an inclusive range. Typing a number sets it
     /// directly; Enter with no number opens an interactive slider.
     Slider {
@@ -78,6 +82,7 @@ impl ArgKind {
             self,
             ArgKind::TimePresets
                 | ArgKind::WordPresets
+                | ArgKind::DailyModes
                 | ArgKind::Fonts
                 | ArgKind::Free
                 | ArgKind::Slider { .. }
@@ -245,6 +250,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         requires_arg: true,
     },
     CommandSpec {
+        name: "daily",
+        aliases: &["d"],
+        usage: "[mode]",
+        help: "today's online daily test",
+        arg: ArgKind::DailyModes,
+        requires_arg: false,
+    },
+    CommandSpec {
         name: "login",
         aliases: &[],
         usage: "",
@@ -333,6 +346,11 @@ pub fn parse(line: &str) -> Result<Command, String> {
         "restart" => Command::Restart,
         "stats" => Command::Stats,
         "help" => Command::Help,
+        "daily" => Command::Daily(if rest.is_empty() {
+            None
+        } else {
+            Some(parse_mode(rest)?)
+        }),
         "login" => Command::Login,
         "logout" => Command::Logout,
         "quit" => Command::Quit,
@@ -386,6 +404,23 @@ fn opt_on_off(rest: &str) -> Result<Option<bool>, String> {
 }
 
 /// Candidate argument values for a command, given the live registries.
+/// `time 30` or `words 25` (also `t30`, `w25`).
+fn parse_mode(s: &str) -> Result<Mode, String> {
+    let s = s.trim();
+    let (kind, value) = match s.split_once(char::is_whitespace) {
+        Some((k, v)) => (k, v.trim()),
+        None => s.split_at(s.find(|c: char| c.is_ascii_digit()).unwrap_or(s.len())),
+    };
+    let n = parse_num(value, "number")?;
+    match kind {
+        "time" | "t" => Ok(Mode::Time(n)),
+        "words" | "w" => Ok(Mode::Words(n)),
+        _ => Err(format!(
+            "expected `time <seconds>` or `words <count>`, got `{s}`"
+        )),
+    }
+}
+
 pub fn arg_candidates(kind: ArgKind, comps: &Completions) -> Vec<String> {
     match kind {
         ArgKind::None | ArgKind::Free => vec![],
@@ -399,6 +434,10 @@ pub fn arg_candidates(kind: ArgKind, comps: &Completions) -> Vec<String> {
         ArgKind::ResultSections => ResultsConfig::SECTIONS
             .iter()
             .map(|s| s.to_string())
+            .collect(),
+        ArgKind::DailyModes => ttyp_core::api::DAILY_MODES
+            .iter()
+            .map(Mode::label)
             .collect(),
         // The slider is the completion; the palette stays empty.
         ArgKind::Slider { .. } => vec![],
@@ -422,6 +461,13 @@ mod tests {
         assert_eq!(parse("punc"), Ok(Command::Punctuation(None)));
         assert_eq!(parse("numbers off"), Ok(Command::Numbers(Some(false))));
         assert_eq!(parse("q"), Ok(Command::Quit));
+        assert_eq!(parse("daily"), Ok(Command::Daily(None)));
+        assert_eq!(parse("d time 30"), Ok(Command::Daily(Some(Mode::Time(30)))));
+        assert_eq!(
+            parse("daily w25"),
+            Ok(Command::Daily(Some(Mode::Words(25))))
+        );
+        assert!(parse("daily fast").is_err());
         assert_eq!(parse("fontsize"), Ok(Command::FontSize(None)));
         assert_eq!(parse("fs 3"), Ok(Command::FontSize(Some(3))));
         assert_eq!(parse("fs 12"), Ok(Command::FontSize(Some(12))));

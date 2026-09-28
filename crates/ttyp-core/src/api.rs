@@ -7,6 +7,18 @@ use crate::test::keylog::KeyEvent;
 use crate::test::metrics::CharCounts;
 use crate::test::mode::Mode;
 
+/// The modes the server schedules dailies for (see the `daily_schedule`
+/// seed); the client offers these for `:daily <mode>`.
+pub const DAILY_MODES: [Mode; 7] = [
+    Mode::Time(15),
+    Mode::Time(30),
+    Mode::Time(60),
+    Mode::Words(10),
+    Mode::Words(25),
+    Mode::Words(50),
+    Mode::Words(100),
+];
+
 /// One of today's dailies, as listed by `GET /dailies/today`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DailySummary {

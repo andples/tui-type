@@ -27,6 +27,7 @@ use crate::ui;
 use crate::ui::style::content_column;
 use action::Action;
 use input::InputContext;
+use ttyp_core::api::{Daily, SubmitResponse};
 
 /// How long a transient notice stays on the bottom line.
 const NOTICE_TTL: Duration = Duration::from_millis(2500);
@@ -93,6 +94,21 @@ pub struct Outcome {
     pub metrics: Metrics,
     pub record: TestRecord,
     pub is_pb: bool,
+    /// Set when the run was a daily: how the submission is going.
+    pub daily: Option<DailyOutcome>,
+}
+
+pub struct DailyOutcome {
+    pub daily_id: i64,
+    pub status: DailyStatus,
+}
+
+pub enum DailyStatus {
+    Submitting,
+    Ranked(SubmitResponse),
+    /// Saved in the data dir, retried on the next start.
+    Queued,
+    Failed(String),
 }
 
 pub struct App {
@@ -119,6 +135,10 @@ pub struct App {
     pub online: Option<Online>,
     /// The GitHub device code and URL to show while `:login` waits.
     pub login_prompt: Option<(String, String)>,
+    /// The daily being typed, if the current test is one.
+    pub daily: Option<Daily>,
+    /// `:daily` waiting for today's list: (language, mode).
+    pending_daily: Option<(String, Mode)>,
     /// Screen to return to from stats/help.
     previous_screen: Screen,
     /// A notice was raised while handling the current action.
@@ -199,6 +219,8 @@ impl App {
             gfx,
             online,
             login_prompt: None,
+            daily: None,
+            pending_daily: None,
             previous_screen: Screen::Typing,
             fresh_notice: false,
             dirty: true,
@@ -206,6 +228,7 @@ impl App {
         if let Some(w) = warnings.first() {
             app.notify(w.clone());
         }
+        app.retry_queued_submissions();
         Ok(app)
     }
 
@@ -536,7 +559,9 @@ impl App {
         self.cmdline.clear();
     }
 
+    /// A fresh random test; leaves any daily in progress.
     fn restart(&mut self) {
+        self.daily = None;
         self.engine = Self::build_engine(&self.config, &self.languages);
         self.outcome = None;
         self.screen = Screen::Typing;
@@ -548,6 +573,7 @@ impl App {
     /// screen the new test waits underneath instead of taking over.
     fn rebuild_test(&mut self) {
         if self.screen == Screen::Profiles {
+            self.daily = None;
             self.engine = Self::build_engine(&self.config, &self.languages);
             self.outcome = None;
             self.previous_screen = Screen::Typing;
@@ -558,22 +584,34 @@ impl App {
 
     fn finish_test(&mut self) {
         let metrics = Metrics::from_engine(&self.engine);
-        let record = TestRecord::new(
+        let daily = self.daily.take();
+        let (language, punctuation, numbers) = match &daily {
+            Some(d) => (d.language.clone(), false, false),
+            None => (
+                self.config.language.clone(),
+                self.config.punctuation,
+                self.config.numbers,
+            ),
+        };
+        let mut record = TestRecord::new(
             &metrics,
             self.engine.mode(),
-            &self.config.language,
-            self.config.punctuation,
-            self.config.numbers,
+            &language,
+            punctuation,
+            numbers,
         );
+        record.daily_id = daily.as_ref().map(|d| d.id);
         let prev_best = personal_best(self.stats.all(), record.mode, &record.language);
         let is_pb = prev_best.is_none_or(|b| record.wpm > b) && record.wpm > 0.0;
         if let Err(e) = self.stats.append(&record) {
             self.notify(format!("could not save result: {e}"));
         }
+        let daily = daily.map(|d| self.submit_daily(&d));
         self.outcome = Some(Outcome {
             metrics,
             record,
             is_pb,
+            daily,
         });
         self.screen = Screen::Results;
     }
@@ -693,6 +731,10 @@ impl App {
             Command::Restart => self.restart(),
             Command::Stats => self.dispatch(Action::ShowStats),
             Command::Help => self.dispatch(Action::ShowHelp),
+            Command::Daily(mode) => {
+                self.open_daily(mode);
+                return;
+            }
             Command::Login => self.dispatch(Action::Login),
             Command::Logout => self.dispatch(Action::Logout),
             Command::Quit => self.should_quit = true,

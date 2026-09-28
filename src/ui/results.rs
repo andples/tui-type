@@ -9,7 +9,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Axis, Chart, Dataset, GraphType, Paragraph};
 
 use super::style::{Palette, content_column, vcenter};
-use crate::app::{App, Outcome};
+use crate::app::{App, DailyOutcome, DailyStatus, Outcome};
 
 pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
     let Some(outcome) = &app.outcome else {
@@ -18,9 +18,10 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
     let col = content_column(area, app.config.content_width());
     let cfg = &app.config.results;
 
-    // headline (2) + gap + detail (1) + gap + chart (n) + gap + hint (1)
+    // headline (2) + gap + detail (1) [+ daily (1)] + gap + chart (n) + gap + hint (1)
     let chart_h: u16 = if cfg.chart { 10 } else { 0 };
-    let total = 2 + 1 + 1 + if cfg.chart { 1 + chart_h } else { 0 } + 1 + 1;
+    let daily_h: u16 = u16::from(outcome.daily.is_some());
+    let total = 2 + 1 + 1 + daily_h + if cfg.chart { 1 + chart_h } else { 0 } + 1 + 1;
     let block = vcenter(col, total);
 
     let mut constraints = vec![
@@ -28,6 +29,9 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
         Constraint::Length(1),
         Constraint::Length(1),
     ];
+    if outcome.daily.is_some() {
+        constraints.push(Constraint::Length(1));
+    }
     if cfg.chart {
         constraints.push(Constraint::Length(1));
         constraints.push(Constraint::Length(chart_h));
@@ -38,8 +42,13 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
 
     render_headline(frame, outcome, rows[0], p);
     render_detail(frame, app, outcome, rows[2], p);
+    let mut next = 3;
+    if let Some(d) = &outcome.daily {
+        render_daily(frame, d, rows[next], p);
+        next += 1;
+    }
     if cfg.chart {
-        render_chart(frame, outcome, rows[4], p);
+        render_chart(frame, outcome, rows[next + 1], p);
     }
     let hint = "tab  next   ·   s  stats   ·   :  command";
     frame.render_widget(Paragraph::new(hint).style(p.sub()), rows[rows.len() - 1]);
@@ -91,6 +100,41 @@ fn render_detail(frame: &mut Frame, app: &App, o: &Outcome, area: Rect, p: &Pale
     }
     push(&mut spans, "", o.record.mode.label());
     push(&mut spans, "", o.record.language.clone());
+    frame.render_widget(Paragraph::new(Line::from(spans)), area);
+}
+
+/// `daily · first try · #12 first · #30 best`, or where the submission is at.
+fn render_daily(frame: &mut Frame, d: &DailyOutcome, area: Rect, p: &Palette) {
+    let mut spans = vec![Span::styled("daily", p.main())];
+    let mut part = |text: String, style| {
+        spans.push(Span::styled("  ·  ", p.sub()));
+        spans.push(Span::styled(text, style));
+    };
+    match &d.status {
+        DailyStatus::Submitting => part("submitting…".into(), p.sub()),
+        DailyStatus::Queued => part("offline, queued for next start".into(), p.sub()),
+        DailyStatus::Failed(e) => part(e.clone(), p.error()),
+        DailyStatus::Ranked(r) if !r.valid => part(
+            format!(
+                "rejected: {}",
+                r.rejected.as_deref().unwrap_or("invalid run")
+            ),
+            p.error(),
+        ),
+        DailyStatus::Ranked(r) => {
+            let attempt = match r.attempt {
+                1 => "first try".to_string(),
+                n => format!("attempt {n}"),
+            };
+            part(attempt, p.fg());
+            if let Some(n) = r.rank_first {
+                part(format!("#{n} first"), p.fg());
+            }
+            if let Some(n) = r.rank_best {
+                part(format!("#{n} best"), p.fg());
+            }
+        }
+    }
     frame.render_widget(Paragraph::new(Line::from(spans)), area);
 }
 

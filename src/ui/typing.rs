@@ -236,6 +236,15 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) -> Vec<Imag
 
 pub fn mode_line(app: &App) -> String {
     let c = &app.config;
+    if let Some(d) = &app.daily {
+        return [
+            "daily".to_string(),
+            d.mode.label(),
+            d.language.clone(),
+            d.date.clone(),
+        ]
+        .join("  ·  ");
+    }
     let lang = app.languages.get_or_default(&c.language);
     let mut parts = vec![c.mode.label(), lang.name.clone()];
     if c.punctuation {

@@ -5,6 +5,7 @@
 
 pub mod client;
 pub mod device;
+pub mod queue;
 pub mod token;
 pub mod worker;
 

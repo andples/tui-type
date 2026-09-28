@@ -2,6 +2,7 @@
 //! reports back as `RemoteEvent`s over a channel that the event loop
 //! drains; rendering never waits on the network.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -21,7 +22,13 @@ pub enum Request {
     Logout,
     DailiesToday,
     Daily(i64),
-    Submit(SubmitRequest),
+    Submit {
+        body: SubmitRequest,
+        /// UTC date of the daily, so a failed submission can be queued.
+        date: String,
+        /// The queue file this came from, if it's a retry.
+        queued: Option<PathBuf>,
+    },
     Leaderboard {
         daily_id: i64,
         board: Board,
@@ -47,7 +54,9 @@ pub enum RemoteEvent {
     Dailies(Result<Vec<DailySummary>, OnlineError>),
     Daily(Result<Daily, OnlineError>),
     Submitted {
-        daily_id: i64,
+        body: SubmitRequest,
+        date: String,
+        queued: Option<PathBuf>,
         result: Result<SubmitResponse, OnlineError>,
     },
     Leaderboard {
@@ -71,6 +80,8 @@ impl RemoteEvent {
 pub struct Online {
     pub client: Client,
     pub github_client_id: Option<String>,
+    /// Today's dailies, keyed by the UTC date they were fetched for.
+    pub dailies: Option<(String, Vec<DailySummary>)>,
     tx: Sender<RemoteEvent>,
     rx: Receiver<RemoteEvent>,
     /// Requests started and not yet answered.
@@ -84,6 +95,7 @@ impl Online {
         Self {
             client,
             github_client_id,
+            dailies: None,
             tx,
             rx,
             pending: 0,
@@ -144,11 +156,15 @@ impl Online {
                     let _ = tx.send(RemoteEvent::Daily(client.daily(id)));
                 });
             }
-            Request::Submit(body) => {
+            Request::Submit { body, date, queued } => {
                 thread::spawn(move || {
-                    let daily_id = body.daily_id;
                     let result = client.submit(&body);
-                    let _ = tx.send(RemoteEvent::Submitted { daily_id, result });
+                    let _ = tx.send(RemoteEvent::Submitted {
+                        body,
+                        date,
+                        queued,
+                        result,
+                    });
                 });
             }
             Request::Leaderboard {
