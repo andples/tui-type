@@ -115,6 +115,11 @@ impl Client {
         self.get("/dailies/today")
     }
 
+    /// The dailies of a UTC day (`YYYY-MM-DD`).
+    pub fn dailies_for(&self, date: &str) -> Result<Vec<DailySummary>, OnlineError> {
+        self.get(&format!("/dailies?date={date}"))
+    }
+
     pub fn daily(&self, id: i64) -> Result<Daily, OnlineError> {
         self.get(&format!("/dailies/{id}"))
     }

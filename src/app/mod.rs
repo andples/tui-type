@@ -1,6 +1,7 @@
 //! Application state and event loop.
 
 pub mod action;
+mod board;
 pub mod input;
 mod online;
 mod profiles;
@@ -18,7 +19,7 @@ use crate::config::{Config, Paths};
 use crate::config::{FONT_SIZE_RANGE, FontSize, LINES_RANGE, WORDS_PER_LINE_RANGE};
 use crate::gfx::{self, Gfx};
 use crate::language::LanguageRegistry;
-use crate::online::Online;
+use crate::online::{BoardView, Online};
 use crate::profile::{ProfileMenu, ProfileRegistry};
 use crate::stats::{LocalJsonlStore, StatsStore, Summary, TestRecord, personal_best};
 use crate::test::{Metrics, Mode, Modifiers, RandomGenerator, Status, TestEngine};
@@ -27,7 +28,7 @@ use crate::ui;
 use crate::ui::style::content_column;
 use action::Action;
 use input::InputContext;
-use ttyp_core::api::{Daily, SubmitResponse};
+use ttyp_core::api::{Daily, ResultDetail, SubmitResponse};
 
 /// How long a transient notice stays on the bottom line.
 const NOTICE_TTL: Duration = Duration::from_millis(2500);
@@ -44,6 +45,9 @@ pub enum Screen {
     Help,
     Profiles,
     Login,
+    Leaderboard,
+    /// One leaderboard run's chart, opened from the leaderboard.
+    Graph,
 }
 
 /// Which config value a slider edits.
@@ -139,6 +143,12 @@ pub struct App {
     pub daily: Option<Daily>,
     /// `:daily` waiting for today's list: (language, mode).
     pending_daily: Option<(String, Mode)>,
+    /// The leaderboard screen, while open.
+    pub board: Option<BoardView>,
+    /// The run shown on the graph screen.
+    pub graph: Option<ResultDetail>,
+    /// `enter` on a row: waiting for the run to arrive.
+    graph_loading: bool,
     /// Screen to return to from stats/help.
     previous_screen: Screen,
     /// A notice was raised while handling the current action.
@@ -221,6 +231,9 @@ impl App {
             login_prompt: None,
             daily: None,
             pending_daily: None,
+            board: None,
+            graph: None,
+            graph_loading: false,
             previous_screen: Screen::Typing,
             fresh_notice: false,
             dirty: true,
@@ -508,6 +521,8 @@ impl App {
             Action::Login => self.login(),
             Action::CancelLogin => self.cancel_login(),
             Action::Logout => self.logout(),
+            Action::ShowLeaderboard => self.open_leaderboard(),
+            Action::Board(a) => self.board_action(a),
             Action::Remote(ev) => self.remote_event(ev),
             Action::ScrollDown => self.scroll += 1,
             Action::ScrollUp => self.scroll = self.scroll.saturating_sub(1),
@@ -735,6 +750,7 @@ impl App {
                 self.open_daily(mode);
                 return;
             }
+            Command::Leaderboard => self.dispatch(Action::ShowLeaderboard),
             Command::Login => self.dispatch(Action::Login),
             Command::Logout => self.dispatch(Action::Logout),
             Command::Quit => self.should_quit = true,

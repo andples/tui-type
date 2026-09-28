@@ -120,7 +120,14 @@ impl App {
                 queued,
                 result,
             } => self.submitted(body, date, queued.as_deref(), result),
-            RemoteEvent::Leaderboard { .. } | RemoteEvent::ResultDetail(_) => {}
+            RemoteEvent::DailiesFor { date, result } => self.board_dailies(date, result),
+            RemoteEvent::Leaderboard {
+                daily_id,
+                board,
+                offset,
+                result,
+            } => self.board_page(daily_id, board, offset, result),
+            RemoteEvent::ResultDetail(result) => self.board_result(result),
         }
     }
 

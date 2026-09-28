@@ -4,7 +4,9 @@
 pub mod bigtext;
 pub mod command_line;
 pub mod font;
+pub mod graph;
 pub mod help;
+pub mod leaderboard;
 pub mod login;
 pub mod profiles;
 pub mod results;
@@ -53,6 +55,8 @@ pub fn render(frame: &mut Frame, app: &App) -> Vec<ImageLine> {
         Screen::Help => help::render(frame, app, body, &p),
         Screen::Profiles => profiles::render(frame, app, body, &p),
         Screen::Login => login::render(frame, app, body, &p),
+        Screen::Leaderboard => leaderboard::render(frame, app, body, &p),
+        Screen::Graph => graph::render(frame, app, body, &p),
     }
 
     if app.slider.is_some() {

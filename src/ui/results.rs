@@ -48,7 +48,14 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
         next += 1;
     }
     if cfg.chart {
-        render_chart(frame, outcome, rows[next + 1], p);
+        let m = &outcome.metrics;
+        render_chart(
+            frame,
+            &m.raw_per_second,
+            &m.wpm_per_second,
+            rows[next + 1],
+            p,
+        );
     }
     let hint = "tab  next   ·   s  stats   ·   :  command";
     frame.render_widget(Paragraph::new(hint).style(p.sub()), rows[rows.len() - 1]);
@@ -138,16 +145,15 @@ fn render_daily(frame: &mut Frame, d: &DailyOutcome, area: Rect, p: &Palette) {
     frame.render_widget(Paragraph::new(Line::from(spans)), area);
 }
 
-fn render_chart(frame: &mut Frame, o: &Outcome, area: Rect, p: &Palette) {
-    let m = &o.metrics;
-    let raw: Vec<(f64, f64)> = m
-        .raw_per_second
+/// Raw (subdued) and net wpm (accent) per second, shared with the
+/// leaderboard's graph view.
+pub fn render_chart(frame: &mut Frame, raw: &[f64], wpm: &[f64], area: Rect, p: &Palette) {
+    let raw: Vec<(f64, f64)> = raw
         .iter()
         .enumerate()
         .map(|(i, v)| ((i + 1) as f64, *v))
         .collect();
-    let wpm: Vec<(f64, f64)> = m
-        .wpm_per_second
+    let wpm: Vec<(f64, f64)> = wpm
         .iter()
         .enumerate()
         .map(|(i, v)| ((i + 1) as f64, *v))

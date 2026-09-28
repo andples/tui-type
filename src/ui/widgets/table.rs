@@ -208,11 +208,13 @@ impl<'a> SelectTable<'a> {
 
         if let Some((_, row)) = pinned {
             let last = Rect::new(area.x, area.bottom() - 1, area.width, 1);
+            // Same blank marker gutter as the list, so the columns line up.
             let table = Table::new(
                 [table_row(row, self.columns, &widths, p, false)],
                 constraints(&widths),
             )
             .column_spacing(SPACING)
+            .highlight_symbol("  ")
             .highlight_spacing(HighlightSpacing::Always);
             frame.render_stateful_widget(table, last, &mut TableState::new());
         }

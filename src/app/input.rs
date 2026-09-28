@@ -3,7 +3,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use super::Screen;
-use super::action::{Action, ProfileAction};
+use super::action::{Action, BoardAction, ProfileAction};
 use crate::test::Status;
 
 /// Context needed to interpret a key.
@@ -69,6 +69,14 @@ pub fn map_key(key: KeyEvent, ctx: InputContext) -> Action {
             KeyCode::Char(':') => Action::OpenCommandLine,
             _ => Action::Nop,
         },
+        Screen::Leaderboard => map_leaderboard(key, ctrl),
+        Screen::Graph => match key.code {
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter => {
+                Action::Board(BoardAction::CloseGraph)
+            }
+            KeyCode::Char(':') => Action::OpenCommandLine,
+            _ => Action::Nop,
+        },
         Screen::Stats | Screen::Help => match key.code {
             KeyCode::Esc | KeyCode::Char('q') | KeyCode::Tab | KeyCode::Enter => Action::Back,
             KeyCode::Char(':') => Action::OpenCommandLine,
@@ -93,6 +101,32 @@ fn map_typing(key: KeyEvent, ctrl: bool, alt: bool, status: Status) -> Action {
         KeyCode::Char(':') if status != Status::Running => Action::OpenCommandLine,
         KeyCode::Char('?') if status != Status::Running => Action::ShowHelp,
         KeyCode::Char(c) if !ctrl && !alt => Action::TypeChar(c),
+        _ => Action::Nop,
+    }
+}
+
+fn map_leaderboard(key: KeyEvent, ctrl: bool) -> Action {
+    use BoardAction as B;
+    let b = |a| Action::Board(a);
+    match key.code {
+        KeyCode::Up | KeyCode::Char('k') => b(B::Up),
+        KeyCode::Down | KeyCode::Char('j') => b(B::Down),
+        KeyCode::Char('g') | KeyCode::Home => b(B::Top),
+        KeyCode::Char('G') | KeyCode::End => b(B::Bottom),
+        KeyCode::PageUp => b(B::PageUp),
+        KeyCode::PageDown => b(B::PageDown),
+        KeyCode::Char('u') if ctrl => b(B::PageUp),
+        KeyCode::Char('d') if ctrl => b(B::PageDown),
+        KeyCode::Tab | KeyCode::BackTab => b(B::SwitchBoard),
+        KeyCode::Left => b(B::PrevMode),
+        KeyCode::Right => b(B::NextMode),
+        KeyCode::Char('l') => b(B::NextLanguage),
+        KeyCode::Char('[') => b(B::PrevDay),
+        KeyCode::Char(']') => b(B::NextDay),
+        KeyCode::Enter => b(B::Open),
+        KeyCode::Esc | KeyCode::Char('q') => Action::Back,
+        KeyCode::Char(':') => Action::OpenCommandLine,
+        KeyCode::Char('?') => Action::ShowHelp,
         _ => Action::Nop,
     }
 }

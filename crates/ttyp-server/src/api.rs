@@ -48,6 +48,7 @@ impl AppState {
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health))
+        .route("/dailies", get(dailies_on))
         .route("/dailies/today", get(dailies_today))
         .route("/dailies/{id}", get(daily_by_id))
         .route("/results", post(submit))
@@ -112,6 +113,30 @@ async fn dailies_today(State(state): State<AppState>) -> ApiResult<Vec<DailySumm
     let today = daily::today();
     daily::ensure(&state.pool, &state.languages, today).await?;
     Ok(Json(daily::list(&state.pool, today).await?))
+}
+
+#[derive(Debug, Deserialize)]
+struct DailiesQuery {
+    /// UTC date `YYYY-MM-DD`; defaults to today.
+    date: Option<String>,
+}
+
+/// The dailies of one day. Only today is backfilled; other days are
+/// whatever was generated then.
+async fn dailies_on(
+    State(state): State<AppState>,
+    Query(q): Query<DailiesQuery>,
+) -> ApiResult<Vec<DailySummary>> {
+    let today = daily::today();
+    let date = match q.date {
+        None => today,
+        Some(d) => chrono::NaiveDate::parse_from_str(&d, "%Y-%m-%d")
+            .map_err(|_| ApiError::BadRequest("date must be YYYY-MM-DD".into()))?,
+    };
+    if date == today {
+        daily::ensure(&state.pool, &state.languages, today).await?;
+    }
+    Ok(Json(daily::list(&state.pool, date).await?))
 }
 
 async fn daily_by_id(State(state): State<AppState>, Path(id): Path<i64>) -> ApiResult<Daily> {
@@ -514,6 +539,15 @@ mod tests {
         assert_eq!(status, StatusCode::NOT_FOUND);
         let (_, body) = call(&app, get("/health", None)).await;
         assert_eq!(body["dailies_today"], 14);
+        // By date: today lists the same; another day is empty; junk is 400.
+        let today = daily::today().to_string();
+        let (status, body) = call(&app, get(&format!("/dailies?date={today}"), None)).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body.as_array().map(Vec::len), Some(14));
+        let (_, body) = call(&app, get("/dailies?date=2000-01-01", None)).await;
+        assert_eq!(body.as_array().map(Vec::len), Some(0));
+        let (status, _) = call(&app, get("/dailies?date=yesterday", None)).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]

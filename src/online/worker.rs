@@ -21,6 +21,8 @@ pub enum Request {
     Login,
     Logout,
     DailiesToday,
+    /// The dailies of another UTC day (leaderboard day switching).
+    DailiesFor(String),
     Daily(i64),
     Submit {
         body: SubmitRequest,
@@ -52,6 +54,10 @@ pub enum RemoteEvent {
     LoginFailed(String),
     LoggedOut,
     Dailies(Result<Vec<DailySummary>, OnlineError>),
+    DailiesFor {
+        date: String,
+        result: Result<Vec<DailySummary>, OnlineError>,
+    },
     Daily(Result<Daily, OnlineError>),
     Submitted {
         body: SubmitRequest,
@@ -149,6 +155,12 @@ impl Online {
             Request::DailiesToday => {
                 thread::spawn(move || {
                     let _ = tx.send(RemoteEvent::Dailies(client.dailies_today()));
+                });
+            }
+            Request::DailiesFor(date) => {
+                thread::spawn(move || {
+                    let result = client.dailies_for(&date);
+                    let _ = tx.send(RemoteEvent::DailiesFor { date, result });
                 });
             }
             Request::Daily(id) => {

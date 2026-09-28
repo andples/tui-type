@@ -16,6 +16,13 @@ pub struct Selection {
     viewport: Cell<usize>,
 }
 
+impl Default for Selection {
+    /// An empty, clamped cursor.
+    fn default() -> Self {
+        Selection::clamped(0)
+    }
+}
+
 impl Selection {
     /// A cursor that wraps at both ends (menus).
     pub fn wrapping(len: usize) -> Self {

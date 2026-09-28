@@ -57,12 +57,36 @@ pub enum Action {
     Login,
     CancelLogin,
     Logout,
+    ShowLeaderboard,
+    Board(BoardAction),
     /// A reply from a background network request (boxed: replies carry
     /// whole leaderboards, and every other action is a few bytes).
     Remote(Box<RemoteEvent>),
 
     Quit,
     Nop,
+}
+
+/// Keys on the leaderboard screen and its graph view.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BoardAction {
+    Up,
+    Down,
+    Top,
+    Bottom,
+    PageUp,
+    PageDown,
+    /// Focus the other board (side by side) or show it (tabs).
+    SwitchBoard,
+    NextMode,
+    PrevMode,
+    NextLanguage,
+    PrevDay,
+    NextDay,
+    /// Open the selected run's graph.
+    Open,
+    /// Back from the graph to the leaderboard, same row selected.
+    CloseGraph,
 }
 
 /// Keys on the profile screen, in either the list or the editor.

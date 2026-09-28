@@ -55,6 +55,9 @@ Press `esc`, start typing, and the palette fuzzy-filters as you go.
 | `set <key> <value>` | | any config key, e.g. `set results.chart off` |
 | `restart` | `r` | new test |
 | `stats` | `s` | history |
+| `daily [mode]` | `d` | today's online daily test (needs `server`, see below) |
+| `leaderboard` | `lb` | the daily leaderboards |
+| `login` / `logout` | | log in with GitHub for the dailies |
 | `help` | `h`, `?` | keys and commands |
 | `quit` | `q` | exit |
 
@@ -126,6 +129,38 @@ limited to the numbered sizes, so it can land between them. Lower
 `wordsperline` or `lines` for bigger text; `fontsize` is ignored while it's
 on.
 
+## Online dailies
+
+ttyp is offline and makes no network requests unless you point it at a
+ttyp server. With one configured you get the same random tests as everyone
+else each day, scored and ranked server-side:
+
+```toml
+# ~/.config/ttyp/config.toml
+server = "https://ttyp.example.org"   # the server's URL (ask whoever runs it)
+github_client_id = "Iv1.…"            # its GitHub OAuth App id, for :login
+```
+
+- `:login` shows a code to enter at github.com/login/device; ttyp then keeps
+  a server token in `~/.local/share/ttyp/token` (mode 0600). Your GitHub
+  token is used once and never stored. `:logout` forgets it.
+- `:daily` opens today's daily for your language and mode (`:daily time 30`,
+  `:daily words 25`; the palette lists what exists). Every day at 00:00 UTC
+  the server generates 14 dailies: `english` and `english_1k` × words 10,
+  25, 50, 100 and time 15, 30, 60, with no punctuation or numbers.
+- Finishing a daily sends your keystrokes; the server replays them through
+  the same engine and ranks the run on two boards, *first try* (your first
+  attempt only) and *best*. The results screen shows both ranks. If the
+  server can't be reached the result is queued and sent on the next start,
+  as long as the daily's UTC day hasn't ended.
+- `:leaderboard` shows both boards side by side (or behind `tab` on narrow
+  terminals): `↑↓`/`jk` move, `g`/`G` top/bottom, `←→` mode, `l` language,
+  `[` `]` day, `enter` opens that run's wpm graph, `esc` goes back. Your own
+  row stays visible at the bottom when it scrolls off.
+
+Daily runs also land in your local history, marked with the daily's id.
+Only daily results ever leave your machine.
+
 ## Files
 
 | | path |
@@ -135,6 +170,8 @@ on.
 | user languages | `~/.config/ttyp/languages/*.toml` |
 | profiles | `~/.config/ttyp/profiles/*.toml` |
 | history | `~/.local/share/ttyp/history.jsonl` |
+| server token | `~/.local/share/ttyp/token` |
+| unsent daily results | `~/.local/share/ttyp/queue/` |
 
 `--config-dir` and `--data-dir` override these; `--theme` picks a theme for
 one session without saving it.
@@ -204,12 +241,14 @@ Same definitions as monkeytype:
 ## Development
 
 ```sh
-cargo test
-cargo clippy --all-targets -- -D warnings
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
 cargo run
 ```
 
-Core logic (`src/test`, `src/command`, `src/config`, `src/stats`,
-`src/theme`, `src/language`) is terminal-free and unit-tested; `src/ui`
-only renders it. `WordGenerator` and `StatsStore` are the seams for future
-learning modes and remote sync.
+The repo is a workspace: the `ttyp` binary at the root, `crates/ttyp-core`
+(engine, generator, metrics, languages and the API types, shared with the
+server) and `crates/ttyp-server` (the online server; see its README for
+running it). Core logic (`ttyp-core`, `src/command`, `src/config`,
+`src/stats`, `src/theme`, `src/online`) is terminal-free and unit-tested;
+`src/ui` only renders it.

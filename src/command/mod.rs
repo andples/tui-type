@@ -37,6 +37,7 @@ pub enum Command {
     Help,
     /// Today's online daily: `None` uses the current mode.
     Daily(Option<Mode>),
+    Leaderboard,
     Login,
     Logout,
     Quit,
@@ -258,6 +259,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         requires_arg: false,
     },
     CommandSpec {
+        name: "leaderboard",
+        aliases: &["lb"],
+        usage: "",
+        help: "daily leaderboards",
+        arg: ArgKind::None,
+        requires_arg: false,
+    },
+    CommandSpec {
         name: "login",
         aliases: &[],
         usage: "",
@@ -351,6 +360,7 @@ pub fn parse(line: &str) -> Result<Command, String> {
         } else {
             Some(parse_mode(rest)?)
         }),
+        "leaderboard" => Command::Leaderboard,
         "login" => Command::Login,
         "logout" => Command::Logout,
         "quit" => Command::Quit,
@@ -462,6 +472,7 @@ mod tests {
         assert_eq!(parse("numbers off"), Ok(Command::Numbers(Some(false))));
         assert_eq!(parse("q"), Ok(Command::Quit));
         assert_eq!(parse("daily"), Ok(Command::Daily(None)));
+        assert_eq!(parse("lb"), Ok(Command::Leaderboard));
         assert_eq!(parse("d time 30"), Ok(Command::Daily(Some(Mode::Time(30)))));
         assert_eq!(
             parse("daily w25"),
