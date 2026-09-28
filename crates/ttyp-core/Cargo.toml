@@ -1,0 +1,15 @@
+[package]
+name = "ttyp-core"
+version = "0.1.0"
+edition = "2024"
+description = "UI-free core of ttyp: typing-test engine, word generation, languages and API types"
+license = "MIT"
+
+[dependencies]
+rand = "0.10.2"
+serde = { version = "1.0.229", features = ["derive"] }
+thiserror = "2.0.20"
+toml = "1.1.6"
+
+[lints]
+workspace = true

@@ -1868,10 +1868,20 @@ dependencies = [
  "flate2",
  "fontdue",
  "nucleo-matcher",
- "rand 0.10.2",
  "ratatui",
  "serde",
  "serde_json",
+ "thiserror 2.0.20",
+ "toml",
+ "ttyp-core",
+]
+
+[[package]]
+name = "ttyp-core"
+version = "0.1.0"
+dependencies = [
+ "rand 0.10.2",
+ "serde",
  "thiserror 2.0.20",
  "toml",
 ]

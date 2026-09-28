@@ -45,6 +45,16 @@ Turn the repo into a Cargo workspace:
 | `crates/ttyp` | today's binary: app, ui, gfx, config, profile, stats, command. Depends on `ttyp-core`. |
 | `crates/ttyp-server` | axum + tokio + sqlx (SQLite). Depends on `ttyp-core`. |
 
+*Resolved in phase 1:* the `ttyp` binary stays as the **root package** (with
+`[workspace] members = ["crates/*"]`) instead of moving to `crates/ttyp`. The
+Homebrew formula runs `cargo install --path .`, the AUR `PKGBUILD` builds
+`target/release/ttyp` and `scripts/release.sh` bumps the root `Cargo.toml`;
+all of those break with a virtual workspace root and none of them can be fixed
+from this repo. `src/lib.rs` re-exports `ttyp_core::{language, test}` so the
+client's `crate::test::…` paths are unchanged. `default-members` is the client
+and core, so packaging builds don't compile the server; use `--workspace` for
+checks.
+
 Do the move first as its own commit with **no behaviour change**: `cargo
 test`, `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check`
 must all pass before anything else lands. Keep the binary name `ttyp` and the
