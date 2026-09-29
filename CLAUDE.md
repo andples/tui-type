@@ -62,12 +62,18 @@ the public hostname is in `src/config/mod.rs` by the owner's decision.
 1. **Green on `main`.** Feature work lands on a branch, then fast-forward `main`
    (`git merge --ff-only`). Before pushing anything run the secret checks at the bottom
    of the private deploy notes (`git diff --cached | grep …`, `git log -p | grep …`).
-2. **Version, tag, GitHub release, Homebrew tap:** `scripts/release.sh minor|major`
+2. **Version, tag, GitHub release, Homebrew tap:** `scripts/release.sh patch|minor|major`
    (needs `gh` logged in and `../homebrew-ttyp` cloned and clean). It bumps the root
    `Cargo.toml` (only the `ttyp` version; bump `crates/ttyp-core` by hand and the
    `ttyp-core = { version = … }` lines in both dependents when core changes), runs the
-   tests, tags `vX.Y.Z`, creates the release and pushes the tap formula with the new
-   tarball sha. Users get it with `brew update && brew upgrade ttyp`.
+   tests, tags `vX.Y.Z` and creates the release. The tag push runs
+   `.github/workflows/release.yml`, which builds static binaries for macOS arm64/x86_64
+   and Linux musl arm64/x86_64 and attaches them with `.sha256` files; the script waits
+   for that run, then regenerates `Formula/ttyp.rb` in the tap from those checksums (so
+   installs download a binary, no Rust) and pushes it. `--HEAD` still builds from source.
+   Run the workflow by hand (`gh workflow run release.yml`) to check the builds without
+   publishing. Users get it with `brew update && brew upgrade ttyp`; Homebrew 6+ first
+   needs `brew trust andples/ttyp`.
 3. **crates.io:** `cargo publish -p ttyp-core`, then `cargo publish -p ttyp` (cargo waits
    for the index in between). Needs `cargo login` with a token that has publish scopes
    and a verified email on the account. `ttyp-server` is `publish = false`. Package

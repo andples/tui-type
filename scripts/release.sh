@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# Bump ttyp's version, tag + release it on GitHub, and update the
-# homebrew-ttyp tap formula to match.
+# Bump ttyp's version, tag + release it on GitHub, wait for the release
+# workflow to attach prebuilt binaries, and point the homebrew-ttyp tap
+# formula at them.
 #
 # Usage:
+#   scripts/release.sh patch   # 0.1.0 -> 0.1.1
 #   scripts/release.sh minor   # 0.1.0 -> 0.2.0
 #   scripts/release.sh major   # 0.1.0 -> 1.0.0
 #
-# Requires: cargo, git, gh (authenticated), sha256sum, curl.
+# Requires: cargo, git, gh (authenticated).
 
 set -euo pipefail
 
@@ -17,7 +19,8 @@ FORMULA="$TAP_DIR/Formula/ttyp.rb"
 GITHUB_REPO="andples/tui-type"
 
 usage() {
-    echo "Usage: $0 <minor|major> [release notes]" >&2
+    echo "Usage: $0 <patch|minor|major> [release notes]" >&2
+    echo "  patch   bump X.Y.Z -> X.Y.(Z+1)" >&2
     echo "  minor   bump X.Y.Z -> X.(Y+1).0   (the \".1\" bump)" >&2
     echo "  major   bump X.Y.Z -> (X+1).0.0   (the \"1.0\" bump)" >&2
     echo "  [release notes]  optional text used as the GitHub release body;" >&2
@@ -29,7 +32,7 @@ usage() {
 BUMP="$1"
 NOTES="${2:-}"
 case "$BUMP" in
-    minor|major) ;;
+    patch|minor|major) ;;
     *) usage ;;
 esac
 
@@ -69,7 +72,9 @@ CURRENT_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' "$CARGO_TOML" | head -1)"
 [ -n "$CURRENT_VERSION" ] || { echo "error: could not read version from $CARGO_TOML" >&2; exit 1; }
 
 IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
-if [ "$BUMP" = "minor" ]; then
+if [ "$BUMP" = "patch" ]; then
+    NEW_VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
+elif [ "$BUMP" = "minor" ]; then
     NEW_VERSION="$MAJOR.$((MINOR + 1)).0"
 else
     NEW_VERSION="$((MAJOR + 1)).0.0"
@@ -125,19 +130,87 @@ else
         --generate-notes
 fi
 
-TARBALL_URL="https://github.com/$GITHUB_REPO/archive/refs/tags/$TAG.tar.gz"
-echo "==> downloading tarball to compute sha256"
-TMP_TARBALL="$(mktemp)"
-trap 'rm -f "$TMP_TARBALL"' EXIT
-curl -sL "$TARBALL_URL" -o "$TMP_TARBALL"
-SHA256="$(sha256sum "$TMP_TARBALL" | cut -d' ' -f1)"
-echo "    sha256: $SHA256"
+# The tag push started .github/workflows/release.yml; wait for it to
+# attach a binary per target.
+TARGETS="aarch64-apple-darwin x86_64-apple-darwin aarch64-unknown-linux-musl x86_64-unknown-linux-musl"
+echo "==> waiting for the release workflow to build binaries"
+RUN_ID=""
+for _ in $(seq 30); do
+    RUN_ID="$(gh run list --repo "$GITHUB_REPO" --workflow release.yml --commit "$(git -C "$ROOT" rev-parse "$TAG^{commit}")" \
+        --json databaseId -q '.[0].databaseId' 2>/dev/null || true)"
+    [ -n "$RUN_ID" ] && break
+    sleep 5
+done
+[ -n "$RUN_ID" ] || { echo "error: no release workflow run for $TAG" >&2; exit 1; }
+gh run watch "$RUN_ID" --repo "$GITHUB_REPO" --exit-status >/dev/null || {
+    echo "error: release workflow failed: https://github.com/$GITHUB_REPO/actions/runs/$RUN_ID" >&2
+    exit 1
+}
 
-echo "==> updating formula at $FORMULA"
-sed -i \
-    -e "s|archive/refs/tags/v[0-9][0-9.]*\.tar\.gz|archive/refs/tags/$TAG.tar.gz|" \
-    -e "s/^  sha256 \".*\"/  sha256 \"$SHA256\"/" \
-    "$FORMULA"
+echo "==> reading checksums"
+SUMS_DIR="$(mktemp -d)"
+trap 'rm -rf "$SUMS_DIR"' EXIT
+gh release download "$TAG" --repo "$GITHUB_REPO" --pattern '*.sha256' --dir "$SUMS_DIR"
+sha_for() {
+    local f="$SUMS_DIR/ttyp-$1.tar.gz.sha256"
+    [ -s "$f" ] || { echo "error: missing checksum for $1" >&2; exit 1; }
+    cut -d' ' -f1 "$f"
+}
+for t in $TARGETS; do
+    echo "    $t: $(sha_for "$t")"
+done
+
+BASE="https://github.com/$GITHUB_REPO/releases/download/$TAG"
+echo "==> writing formula at $FORMULA"
+cat > "$FORMULA" <<FORMULA_EOF
+class Ttyp < Formula
+  desc "Monkeytype-style TUI typing test"
+  homepage "https://github.com/$GITHUB_REPO"
+  version "$NEW_VERSION"
+  license "MIT"
+
+  # Prebuilt by .github/workflows/release.yml in $GITHUB_REPO; written by
+  # scripts/release.sh, don't edit by hand.
+  on_macos do
+    on_arm do
+      url "$BASE/ttyp-aarch64-apple-darwin.tar.gz"
+      sha256 "$(sha_for aarch64-apple-darwin)"
+    end
+    on_intel do
+      url "$BASE/ttyp-x86_64-apple-darwin.tar.gz"
+      sha256 "$(sha_for x86_64-apple-darwin)"
+    end
+  end
+
+  on_linux do
+    on_arm do
+      url "$BASE/ttyp-aarch64-unknown-linux-musl.tar.gz"
+      sha256 "$(sha_for aarch64-unknown-linux-musl)"
+    end
+    on_intel do
+      url "$BASE/ttyp-x86_64-unknown-linux-musl.tar.gz"
+      sha256 "$(sha_for x86_64-unknown-linux-musl)"
+    end
+  end
+
+  head do
+    url "https://github.com/$GITHUB_REPO.git", branch: "main"
+    depends_on "rust" => :build
+  end
+
+  def install
+    if build.head?
+      system "cargo", "install", *std_cargo_args
+    else
+      bin.install "ttyp"
+    end
+  end
+
+  test do
+    assert_match version.to_s, shell_output("#{bin}/ttyp --version")
+  end
+end
+FORMULA_EOF
 
 echo "==> committing and pushing tap update"
 git -C "$TAP_DIR" add Formula/ttyp.rb
