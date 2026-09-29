@@ -173,6 +173,10 @@ Only daily results ever leave your machine.
 | server token | `~/.local/share/ttyp/token` |
 | unsent daily results | `~/.local/share/ttyp/queue/` |
 
+Those are the Linux paths. On macOS both the config and data dirs are
+`~/Library/Application Support/ttyp/` (so `config.toml`, `profiles/`,
+`history.jsonl` and `token` all live there).
+
 `--config-dir` and `--data-dir` override these; `--theme` picks a theme for
 one session without saving it.
 
