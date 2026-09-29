@@ -17,9 +17,17 @@ impl App {
             return;
         };
         let today = chrono::Utc::now().date_naive().to_string();
-        let (language, mode) = match &self.daily {
-            Some(d) => (d.language.clone(), d.mode),
-            None => (self.config.language.clone(), self.config.mode),
+        // The daily being typed, or the one whose results are on screen,
+        // else the config's language and mode.
+        let daily_result = self
+            .outcome
+            .as_ref()
+            .filter(|o| o.daily.is_some())
+            .map(|o| (o.record.language.clone(), o.record.mode));
+        let (language, mode) = match (&self.daily, daily_result) {
+            (Some(d), _) => (d.language.clone(), d.mode),
+            (None, Some(r)) => r,
+            (None, None) => (self.config.language.clone(), self.config.mode),
         };
         let mut view = BoardView::new(today.clone(), language, mode);
         if let Some((date, list)) = &online.dailies
