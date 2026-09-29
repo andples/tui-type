@@ -230,26 +230,26 @@ impl Source {
                 if e.kind() == std::io::ErrorKind::NotFound {
                     NOT_FOUND.to_string()
                 } else {
-                    format!("{}: {e}", path.display())
+                    "couldn't read the catalogue".to_string()
                 }
             });
         };
         let url = format!("{}/{rel}", self.base);
         let mut resp = agent.get(&url).call().map_err(|e| match e {
             ureq::Error::StatusCode(404) => NOT_FOUND.to_string(),
-            e => format!("catalogue unreachable: {e}"),
+            _ => "couldn't reach the catalogue".to_string(),
         })?;
         resp.body_mut()
             .with_config()
             .limit(MAX_BYTES)
             .read_to_string()
-            .map_err(|e| format!("catalogue: {e}"))
+            .map_err(|_| "couldn't read the catalogue".to_string())
     }
 
     pub fn index(&self) -> Result<Index, String> {
         let text = self.get("index.toml").map_err(|e| {
             if e == NOT_FOUND {
-                format!("no catalogue at {}", self.base)
+                "no catalogue found".to_string()
             } else {
                 e
             }
