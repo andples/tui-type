@@ -141,6 +141,11 @@ server = "https://ttyp.example.org"   # the server's URL (ask whoever runs it)
 github_client_id = "Iv1.…"            # its GitHub OAuth App id, for :login
 ```
 
+Put both lines at the top of the file, above `[mode]` and `[results]`:
+anything after a `[section]` header belongs to that section in TOML and
+is ignored. (`:set server https://…` and `:set github_client_id …` avoid
+the question.)
+
 - `:login` shows a code to enter at github.com/login/device; ttyp then keeps
   a server token in `~/.local/share/ttyp/token` (mode 0600). Your GitHub
   token is used once and never stored. `:logout` forgets it.
@@ -160,6 +165,13 @@ github_client_id = "Iv1.…"            # its GitHub OAuth App id, for :login
 
 Daily runs also land in your local history, marked with the daily's id.
 Only daily results ever leave your machine.
+
+A build can carry these two values as defaults, so people you hand the
+binary to don't have to type them: set `TTYP_DEFAULT_SERVER` and
+`TTYP_DEFAULT_GITHUB_CLIENT_ID` in the environment when building
+(`TTYP_DEFAULT_SERVER=https://… cargo install --path . --locked`). Such a
+build writes them into the config on first run, where you can change them;
+a plain build stays offline. The repo itself never names a server.
 
 ## Files
 

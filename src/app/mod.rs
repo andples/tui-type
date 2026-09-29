@@ -159,8 +159,16 @@ pub struct App {
 impl App {
     pub fn new(paths: Paths, theme_override: Option<String>) -> Result<Self> {
         let mut warnings = Vec::new();
-        let mut config = Config::load(&paths.config_file)
+        let (mut config, names_server) = Config::load_with_text(&paths.config_file)
             .with_context(|| format!("loading {}", paths.config_file.display()))?;
+        // A build with a baked-in server writes it into the config on first
+        // run, so it's visible and editable rather than invisible.
+        if !names_server
+            && config.server.is_some()
+            && let Err(e) = config.save(&paths.config_file)
+        {
+            warnings.push(format!("could not save config: {e}"));
+        }
         let themes = ThemeRegistry::load(&paths.themes_dir, |w| warnings.push(w));
         let languages = LanguageRegistry::load(&paths.languages_dir, |w| warnings.push(w));
         let profiles = ProfileRegistry::load(&paths.profiles_dir, |w| warnings.push(w));
@@ -773,6 +781,14 @@ impl App {
                 {
                     self.notify(e);
                 }
+                // Reconnect so `:set server …` works without a restart.
+                if matches!(key.as_str(), "server" | "github_client_id") {
+                    self.online = Self::connect(&self.config, &self.paths);
+                    self.notify(match &self.online {
+                        Some(_) => "online: server set",
+                        None => "offline: server unset",
+                    });
+                }
                 changed_test = !matches!(
                     key.as_str(),
                     "theme"
@@ -786,6 +802,8 @@ impl App {
                         | "full"
                         | "font"
                         | "graphics"
+                        | "server"
+                        | "github_client_id"
                 ) && !key.starts_with("results.");
             }
         }

@@ -140,6 +140,13 @@ impl Graphics {
     }
 }
 
+/// Online defaults baked in at build time (`TTYP_DEFAULT_SERVER` and
+/// `TTYP_DEFAULT_GITHUB_CLIENT_ID` in the build environment), so a
+/// distributed binary can point at a server without the repo naming one.
+/// Absent in a plain build: ttyp stays offline until the user sets `server`.
+pub const BUILT_IN_SERVER: Option<&str> = option_env!("TTYP_DEFAULT_SERVER");
+pub const BUILT_IN_GITHUB_CLIENT_ID: Option<&str> = option_env!("TTYP_DEFAULT_GITHUB_CLIENT_ID");
+
 pub const FONT_SIZE_RANGE: (u8, u8) = (1, 16);
 pub const DEFAULT_FONT_SIZE: u8 = 2;
 pub const WORDS_PER_LINE_RANGE: (u8, u8) = (4, 30);
@@ -324,8 +331,8 @@ impl Default for Config {
             graphics: Graphics::Kitty,
             results: ResultsConfig::default(),
             profiles: Vec::new(),
-            server: None,
-            github_client_id: None,
+            server: BUILT_IN_SERVER.map(str::to_string),
+            github_client_id: BUILT_IN_GITHUB_CLIENT_ID.map(str::to_string),
         }
     }
 }
@@ -333,12 +340,20 @@ impl Default for Config {
 impl Config {
     /// Load from `path`; a missing file yields the defaults.
     pub fn load(path: &Path) -> Result<Self, ConfigError> {
+        Self::load_with_text(path).map(|(c, _)| c)
+    }
+
+    /// `load`, plus whether the file exists and already names `server`
+    /// (so built-in defaults can be written into it once).
+    pub fn load_with_text(path: &Path) -> Result<(Self, bool), ConfigError> {
         match fs::read_to_string(path) {
-            Ok(text) => Self::parse(&text).map_err(|source| ConfigError::Parse {
-                path: path.to_path_buf(),
-                source,
-            }),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
+            Ok(text) => Self::parse(&text)
+                .map(|c| (c, text.contains("server")))
+                .map_err(|source| ConfigError::Parse {
+                    path: path.to_path_buf(),
+                    source,
+                }),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok((Self::default(), false)),
             Err(source) => Err(ConfigError::Read {
                 path: path.to_path_buf(),
                 source,
