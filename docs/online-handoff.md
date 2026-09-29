@@ -1,29 +1,41 @@
 # Handoff: daily tests, server and leaderboards
 
-Status: **built on branch `feat/online`, phases 1–7 committed; two steps
-need the owner** (see *Handoff: what's left* below). This brief is
+Status: **shipped.** Merged to `main`, released as v1.0.0 and v1.1.0
+(GitHub release, Homebrew tap `andples/ttyp`, crates.io `ttyp` +
+`ttyp-core`), server live behind the Cloudflare tunnel. This brief is
 self-contained: read it, then `CLAUDE.md` and `README.md` at the repo root.
 Decisions marked **decided** came from the project owner; don't re-litigate
 them. Anything marked *open* is yours to settle and note here.
 
-## Handoff: what's left (2026-09-29)
+## Handoff (2026-09-30)
 
-Everything in the phases below is implemented, tested and verified in tmux
-/ with curl / with `docker compose`, except:
+Everything in the phases below is implemented, tested and live. Verified
+end to end with the owner's GitHub account: `:login`, `:daily`, ranking,
+`:leaderboard`, public `/health` through the tunnel.
 
-1. **Cloudflare tunnel (§7).** `docker-compose.yml` has the `cloudflared`
-   service reading `TUNNEL_TOKEN` from the untracked `.env`. The tunnel
-   itself was not created: it needs the owner's Cloudflare API token and
-   the private notes in `~/Projects/ttyp-private/deploy-handoff.md`. To
-   finish: follow those notes (token only in the shell env), put the tunnel
-   token in `.env` (mode 0600), `docker compose up -d`, then the two
-   *Verify* commands there.
-2. **Live GitHub login (§4).** No OAuth App client id was available, so the
-   device flow was tested against a mocked GitHub only (unit tests + a
-   mocked `/user` endpoint in the server tests). To finish: create the
-   OAuth App with device flow enabled, set `github_client_id` (and
-   `server`) in a client config, run `:login`, then `:daily` and check the
-   results line and `:leaderboard`.
+Open items, none blocking:
+
+- **Restart loophole.** Fetching a daily and quitting shows its words before
+  a "first try". Fix would be server-side (count the first fetch as attempt
+  0 or record fetch time); not built.
+- **Responsiveness audit** (done 2026-09-29, findings in that session's
+  report, not applied): kitty startup 100 ms is 75 ms of fontdue parsing the
+  system Nerd Font (default to the bundled font or switch to ttf-parser);
+  `fc-list` spawned on every start (make lazy); timer ticks 10×/s while only
+  the second counter changes (tick on second boundaries, exact finish time);
+  resize re-uploads every glyph image; no event coalescing under key
+  repeat. Separate branch if picked up.
+- **Distribution.** AUR registration was down; `cargo install ttyp` and the
+  Homebrew tap (works on Linux too) are the paths. Prebuilt binaries on
+  GitHub Releases (musl + aarch64) would unlock `cargo binstall` / `ubi`.
+- **Backup sidecar runs as root** to write the host-mounted `./backups`;
+  the server container is unprivileged. Off-machine copy of `./backups` is
+  recommended, not built.
+- **Public profiles (§8)**: schema ready, nothing built.
+
+Operating: `docker compose ps` on the owner's machine; `docker compose logs
+-f ttyp-server`; restore steps in `crates/ttyp-server/README.md`; release
+steps in `CLAUDE.md`.
 
 Resolutions noted while building (no secrets):
 
