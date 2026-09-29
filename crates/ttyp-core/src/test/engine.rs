@@ -182,14 +182,20 @@ impl TestEngine {
             return false;
         }
         let now = self.quantize(now);
-        if let Mode::Time(secs) = self.mode
-            && self.elapsed_at(now) >= Duration::from_secs(secs as u64)
-        {
-            self.log(Key::Tick, now);
-            self.finish(now);
-            return true;
+        let Mode::Time(secs) = self.mode else {
+            return false;
+        };
+        let limit = Duration::from_secs(secs as u64);
+        if self.elapsed_at(now) < limit {
+            return false;
         }
-        false
+        self.log(Key::Tick, now);
+        // Stop the clock at the limit itself. Ticks come every ~100 ms, and
+        // the overshoot would otherwise become a sliver of an extra second
+        // in the per-second chart (16 points for a 15 s test).
+        let end = self.started_at.map_or(now, |s| s + limit);
+        self.finish(end);
+        true
     }
 
     pub fn type_char(&mut self, c: char) {
@@ -423,6 +429,17 @@ mod tests {
         let n = e.keystrokes().len();
         e.type_char('a');
         assert_eq!(e.keystrokes().len(), n);
+    }
+
+    #[test]
+    fn late_tick_stops_the_clock_at_the_limit() {
+        let mut e = engine(Mode::Time(15));
+        let t0 = Instant::now();
+        type_str(&mut e, "ab ", t0);
+        assert!(e.tick(t0 + Duration::from_millis(15_080)));
+        assert_eq!(e.elapsed(), Duration::from_secs(15));
+        let m = crate::test::Metrics::from_engine(&e);
+        assert_eq!(m.raw_per_second.len(), 15, "no sliver of a 16th second");
     }
 
     #[test]

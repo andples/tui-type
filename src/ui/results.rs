@@ -10,6 +10,7 @@ use ratatui::widgets::{Axis, Chart, Dataset, GraphType, Paragraph};
 
 use super::style::{Palette, content_column, vcenter};
 use crate::app::{App, DailyOutcome, DailyStatus, Outcome};
+use crate::test::Mode;
 
 pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
     let Some(outcome) = &app.outcome else {
@@ -53,6 +54,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
             frame,
             &m.raw_per_second,
             &m.wpm_per_second,
+            outcome.record.mode,
             rows[next + 1],
             p,
         );
@@ -147,7 +149,25 @@ fn render_daily(frame: &mut Frame, d: &DailyOutcome, area: Rect, p: &Palette) {
 
 /// Raw (subdued) and net wpm (accent) per second, shared with the
 /// leaderboard's graph view.
-pub fn render_chart(frame: &mut Frame, raw: &[f64], wpm: &[f64], area: Rect, p: &Palette) {
+/// Per-second raw and wpm lines. Point `i` is the second ending at `i + 1`,
+/// on an axis from 0 to the run's length. A timed run shows exactly its
+/// seconds (runs saved before the engine stopped the clock at the limit
+/// carry a sliver of an extra one).
+pub fn render_chart(
+    frame: &mut Frame,
+    raw: &[f64],
+    wpm: &[f64],
+    mode: Mode,
+    area: Rect,
+    p: &Palette,
+) {
+    let (raw, wpm) = match mode {
+        Mode::Time(s) => {
+            let n = s as usize;
+            (&raw[..raw.len().min(n)], &wpm[..wpm.len().min(n)])
+        }
+        Mode::Words(_) => (raw, wpm),
+    };
     let raw: Vec<(f64, f64)> = raw
         .iter()
         .enumerate()
@@ -181,7 +201,7 @@ pub fn render_chart(frame: &mut Frame, raw: &[f64], wpm: &[f64], area: Rect, p: 
             .style(p.main())
             .data(&wpm),
     ];
-    let x_labels: Vec<Span> = [1.0, secs]
+    let x_labels: Vec<Span> = [0.0, secs]
         .iter()
         .map(|s| Span::styled(format!("{s:.0}s"), p.sub()))
         .collect();
@@ -192,7 +212,7 @@ pub fn render_chart(frame: &mut Frame, raw: &[f64], wpm: &[f64], area: Rect, p: 
     let chart = Chart::new(datasets)
         .x_axis(
             Axis::default()
-                .bounds([1.0, secs.max(2.0)])
+                .bounds([0.0, secs])
                 .labels(x_labels)
                 .style(p.sub()),
         )

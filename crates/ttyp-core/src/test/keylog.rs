@@ -105,7 +105,10 @@ pub fn replay(words: &[String], mode: Mode, log: &[KeyEvent]) -> Result<Metrics,
     let metrics = Metrics::from_engine(&engine);
     if let Mode::Time(secs) = mode {
         let limit = Duration::from_secs(secs as u64);
-        if metrics.duration < limit || metrics.duration > limit + TIME_SLACK {
+        // The engine stops the clock at the limit, so check when the log
+        // says the run really ended too.
+        let ended = Duration::from_millis(log.last().map_or(0, |e| e.ms) as u64);
+        if metrics.duration < limit || ended > limit + TIME_SLACK {
             return Err(Rejected::WrongDuration);
         }
     }

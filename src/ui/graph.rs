@@ -73,6 +73,13 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
     ]);
     frame.render_widget(Paragraph::new(detail), rows[4]);
 
-    render_chart(frame, &d.raw_per_second, &d.wpm_per_second, rows[6], p);
+    render_chart(
+        frame,
+        &d.raw_per_second,
+        &d.wpm_per_second,
+        d.daily.mode,
+        rows[6],
+        p,
+    );
     hints::render(frame, area, col, p, "esc back");
 }
