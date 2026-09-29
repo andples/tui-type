@@ -131,20 +131,21 @@ on.
 
 ## Online dailies
 
-ttyp is offline and makes no network requests unless you point it at a
-ttyp server. With one configured you get the same random tests as everyone
-else each day, scored and ranked server-side:
+Every day at 00:00 UTC the ttyp server generates the same random tests
+for everyone, scores your runs and ranks them. ttyp comes pointed at the
+public server, so `:login` and `:daily` work out of the box; the only
+network traffic is what those commands do. The two settings behind it,
+written into your config on first run:
 
 ```toml
-# ~/.config/ttyp/config.toml
-server = "https://ttyp.example.org"   # the server's URL (ask whoever runs it)
-github_client_id = "Iv1.…"            # its GitHub OAuth App id, for :login
+# ~/.config/ttyp/config.toml (top of the file, above [mode] and [results])
+server = "https://api-ttyp.andrewplescan.com"
+github_client_id = "Ov23li4yNGanDPbJkMSV"
 ```
 
-Put both lines at the top of the file, above `[mode]` and `[results]`:
-anything after a `[section]` header belongs to that section in TOML and
-is ignored. (`:set server https://…` and `:set github_client_id …` avoid
-the question.)
+Point `server` at your own instance to use a different one (see
+`crates/ttyp-server/README.md`), or set `server = ""` for a fully offline
+ttyp. `:set server …` changes it live.
 
 - `:login` shows a code to enter at github.com/login/device; ttyp then keeps
   a server token in `~/.local/share/ttyp/token` (mode 0600). Your GitHub
@@ -166,12 +167,10 @@ the question.)
 Daily runs also land in your local history, marked with the daily's id.
 Only daily results ever leave your machine.
 
-A build can carry these two values as defaults, so people you hand the
-binary to don't have to type them: set `TTYP_DEFAULT_SERVER` and
-`TTYP_DEFAULT_GITHUB_CLIENT_ID` in the environment when building
-(`TTYP_DEFAULT_SERVER=https://… cargo install --path . --locked`). Such a
-build writes them into the config on first run, where you can change them;
-a plain build stays offline. The repo itself never names a server.
+A build for a different server can override both defaults: set
+`TTYP_DEFAULT_SERVER` and `TTYP_DEFAULT_GITHUB_CLIENT_ID` in the
+environment when building (`TTYP_DEFAULT_SERVER=https://… cargo install
+--path . --locked`).
 
 ## Files
 

@@ -161,8 +161,11 @@ impl App {
         let mut warnings = Vec::new();
         let (mut config, names_server) = Config::load_with_text(&paths.config_file)
             .with_context(|| format!("loading {}", paths.config_file.display()))?;
-        // A build with a baked-in server writes it into the config on first
-        // run, so it's visible and editable rather than invisible.
+        // `server = ""` is the way to opt out of the built-in server.
+        config.server = config.server.take().filter(|s| !s.trim().is_empty());
+        config.github_client_id = config.github_client_id.take().filter(|s| !s.is_empty());
+        // The built-in server is written into the config on first run, so
+        // it's visible and editable rather than invisible.
         if !names_server
             && config.server.is_some()
             && let Err(e) = config.save(&paths.config_file)

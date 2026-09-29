@@ -71,7 +71,7 @@ online features are **opt-in**.
 | Scoring | the **server replays** the keystroke log through the shared engine; numbers from the client are never trusted |
 | Extensibility | per-language/per-mode scheduling and on-request dailies must work later **without schema changes** (§3) |
 | Hosting | **Self-hosted locally with Docker, with daily backups**, exposed through a **Cloudflare Tunnel** (§7). |
-| Secrets | The public hostname, Cloudflare credentials and tunnel token are handed to you **privately** by the owner. They must **never** appear in any tracked file, commit, PR, issue, log line or code default (§7). |
+| Secrets | Cloudflare credentials and the tunnel token must **never** appear in any tracked file, commit, PR, issue, log line or code default (§7). *Changed 2026-09-29:* the public hostname and the GitHub OAuth client id are **not** secret any more; they're the built-in defaults in `src/config/mod.rs` so installs work out of the box. |
 | Public profiles | **don't implement.** Leave the column and notes (§8). |
 | Releases | don't bump the version, tag, or run `scripts/release.sh`. The owner releases. |
 

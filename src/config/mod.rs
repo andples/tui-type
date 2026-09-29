@@ -106,12 +106,13 @@ pub struct Config {
     /// Active profiles (see `crate::profile`), in activation order. Each one
     /// controls a distinct set of settings and matches the values above.
     pub profiles: Vec<String>,
-    /// Base URL of a ttyp server (`https://…`). Unset means fully offline:
-    /// no network at all. Not a profile setting.
+    /// Base URL of the ttyp server (`https://…`), `BUILT_IN_SERVER` by
+    /// default. Empty means fully offline: no network at all. Not a profile
+    /// setting.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub server: Option<String>,
-    /// Client id of the GitHub OAuth App used by `:login`. Not a secret,
-    /// but not baked into ttyp either. Not a profile setting.
+    /// Client id of the GitHub OAuth App used by `:login` (not a secret).
+    /// Not a profile setting.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub github_client_id: Option<String>,
 }
@@ -140,12 +141,19 @@ impl Graphics {
     }
 }
 
-/// Online defaults baked in at build time (`TTYP_DEFAULT_SERVER` and
-/// `TTYP_DEFAULT_GITHUB_CLIENT_ID` in the build environment), so a
-/// distributed binary can point at a server without the repo naming one.
-/// Absent in a plain build: ttyp stays offline until the user sets `server`.
-pub const BUILT_IN_SERVER: Option<&str> = option_env!("TTYP_DEFAULT_SERVER");
-pub const BUILT_IN_GITHUB_CLIENT_ID: Option<&str> = option_env!("TTYP_DEFAULT_GITHUB_CLIENT_ID");
+/// The public ttyp server and the GitHub OAuth App (device flow) every
+/// build points at, so `:login` and `:daily` work out of the box. Override
+/// per build with `TTYP_DEFAULT_SERVER` / `TTYP_DEFAULT_GITHUB_CLIENT_ID`
+/// in the build environment; users override in their config. Set `server`
+/// to an empty string in the config (or `:set server ""`) to go offline.
+pub const BUILT_IN_SERVER: &str = match option_env!("TTYP_DEFAULT_SERVER") {
+    Some(s) => s,
+    None => "https://api-ttyp.andrewplescan.com",
+};
+pub const BUILT_IN_GITHUB_CLIENT_ID: &str = match option_env!("TTYP_DEFAULT_GITHUB_CLIENT_ID") {
+    Some(s) => s,
+    None => "Ov23li4yNGanDPbJkMSV",
+};
 
 pub const FONT_SIZE_RANGE: (u8, u8) = (1, 16);
 pub const DEFAULT_FONT_SIZE: u8 = 2;
@@ -331,8 +339,8 @@ impl Default for Config {
             graphics: Graphics::Kitty,
             results: ResultsConfig::default(),
             profiles: Vec::new(),
-            server: BUILT_IN_SERVER.map(str::to_string),
-            github_client_id: BUILT_IN_GITHUB_CLIENT_ID.map(str::to_string),
+            server: Some(BUILT_IN_SERVER.to_string()),
+            github_client_id: Some(BUILT_IN_GITHUB_CLIENT_ID.to_string()),
         }
     }
 }
@@ -482,6 +490,20 @@ impl Paths {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn online_defaults_are_set() {
+        let c = Config::default();
+        assert!(
+            c.server
+                .as_deref()
+                .is_some_and(|s| s.starts_with("https://"))
+        );
+        assert!(c.github_client_id.is_some());
+        let mut c = Config::default();
+        c.set("server", "").unwrap();
+        assert_eq!(c.server, None, "empty server means offline");
+    }
 
     #[test]
     fn font_size_ladder_is_gentle() {
