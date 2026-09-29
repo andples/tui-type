@@ -51,3 +51,38 @@ Images can't be seen in tmux. To check graphics output, run ttyp under a pty tha
 - Numeric settings use `ArgKind::Slider`: `Command::X(None)` opens the slider (`App::open_slider`), `Some(n)` sets directly.
 - Adding a built-in theme: add the TOML under `assets/themes/` and its `include_str!` to the `BUILTIN` list. Languages: same, under `crates/ttyp-core/assets/languages/`.
 - Adding a bundled font: put `<slug>-latin.ttf`, `<slug>-latin-ext.ttf` and `<slug>.LICENSE` in `assets/fonts/` (Fontsource: `cdn.jsdelivr.net/fontsource/fonts/<slug>@latest/<subset>-400-normal.ttf`) and a `bundled!` line to `BUNDLED`.
+
+## Releasing and deploying
+
+How 1.0.0 shipped; repeat in this order. Nothing below names the public hostname or a
+credential: those live only in `~/Projects/ttyp-private/` and in untracked files.
+
+1. **Green on `main`.** Feature work lands on a branch, then fast-forward `main`
+   (`git merge --ff-only`). Before pushing anything run the secret checks at the bottom
+   of the private deploy notes (`git diff --cached | grep …`, `git log -p | grep …`).
+2. **Version, tag, GitHub release, Homebrew tap:** `scripts/release.sh minor|major`
+   (needs `gh` logged in and `../homebrew-ttyp` cloned and clean). It bumps the root
+   `Cargo.toml` (only the `ttyp` version; bump `crates/ttyp-core` by hand and the
+   `ttyp-core = { version = … }` lines in both dependents when core changes), runs the
+   tests, tags `vX.Y.Z`, creates the release and pushes the tap formula with the new
+   tarball sha. Users get it with `brew update && brew upgrade ttyp`.
+3. **crates.io:** `cargo publish -p ttyp-core`, then `cargo publish -p ttyp` (cargo waits
+   for the index in between). Needs `cargo login` with a token that has publish scopes
+   and a verified email on the account. `ttyp-server` is `publish = false`. Package
+   contents are pinned by the `include` lists in each `Cargo.toml`.
+4. **Server image and stack** (owner's machine): `docker compose up -d --build` from the
+   repo root builds `crates/ttyp-server/Dockerfile` and starts `ttyp-server`,
+   `ttyp-backup` and `cloudflared`. `.env` (mode 0600, git-ignored) holds
+   `TUNNEL_TOKEN`; `.env.example` shows the shape. The tunnel, its ingress and DNS
+   record were created once with the API calls in the private deploy notes and don't
+   need redoing for a rebuild. Check with `docker compose ps` (server healthy) and the
+   public `/health` URL from the private notes. Backups, restore and logs:
+   `crates/ttyp-server/README.md`.
+5. **Client builds that know the server:** set `TTYP_DEFAULT_SERVER` and
+   `TTYP_DEFAULT_GITHUB_CLIENT_ID` in the environment of `cargo install --path . --locked`
+   (values from the private notes / the GitHub OAuth App). Homebrew and crates.io builds
+   are plain: users set `server` in their config as the README describes.
+
+Compatibility to keep across releases: the wire format in `ttyp-core/src/api.rs` and the
+keylog (`Key` serde shape), the `daily_schedule`/`results` schema (migrations only add),
+and `TestRecord::SCHEMA` (old history lines must keep parsing).
