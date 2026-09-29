@@ -31,6 +31,78 @@ display = "Spanish"
 words = 258
 
 [[themes]]
+name = "8008"
+
+[themes.colors]
+bg = "#333a45"
+fg = "#e9ecf0"
+sub = "#939eae"
+main = "#f44c7f"
+correct = "#e9ecf0"
+error = "#da3333"
+error_extra = "#a03539"
+
+[[themes]]
+name = "80s-after-dark"
+
+[themes.colors]
+bg = "#1b1d36"
+fg = "#e1e7ec"
+sub = "#99d6ea"
+main = "#fca6d1"
+correct = "#e1e7ec"
+error = "#fffb85"
+error_extra = "#afad69"
+
+[[themes]]
+name = "aurora"
+
+[themes.colors]
+bg = "#011926"
+fg = "#ffffff"
+sub = "#245c69"
+main = "#00e980"
+correct = "#ffffff"
+error = "#b94da1"
+error_extra = "#793b76"
+
+[[themes]]
+name = "bento"
+
+[themes.colors]
+bg = "#2d394d"
+fg = "#fffaf8"
+sub = "#4a768d"
+main = "#ff7a90"
+correct = "#fffaf8"
+error = "#ee2a3a"
+error_extra = "#aa2f41"
+
+[[themes]]
+name = "botanical"
+
+[themes.colors]
+bg = "#7b9c98"
+fg = "#eaf1f3"
+sub = "#495755"
+main = "#eaf1f3"
+correct = "#eaf1f3"
+error = "#f6c9b4"
+error_extra = "#cbb9aa"
+
+[[themes]]
+name = "carbon"
+
+[themes.colors]
+bg = "#313131"
+fg = "#f5e6c8"
+sub = "#616161"
+main = "#f66e0d"
+correct = "#f5e6c8"
+error = "#e72d2d"
+error_extra = "#a72e2e"
+
+[[themes]]
 name = "catppuccin-latte"
 
 [themes.colors]
@@ -53,6 +125,54 @@ main = "#cba6f7"
 correct = "#cdd6f4"
 error = "#f38ba8"
 error_extra = "#eba0ac"
+
+[[themes]]
+name = "chaos-theory"
+
+[themes.colors]
+bg = "#141221"
+fg = "#dde5ed"
+sub = "#676e8a"
+main = "#fd77d7"
+correct = "#dde5ed"
+error = "#fd77d7"
+error_extra = "#ab5497"
+
+[[themes]]
+name = "cherry-blossom"
+
+[themes.colors]
+bg = "#323437"
+fg = "#d1d0c5"
+sub = "#787d82"
+main = "#d65ccc"
+correct = "#d1d0c5"
+error = "#ca4754"
+error_extra = "#95404a"
+
+[[themes]]
+name = "comfy"
+
+[themes.colors]
+bg = "#4a5b6e"
+fg = "#f5efee"
+sub = "#9ec1cc"
+main = "#f8cdc6"
+correct = "#f5efee"
+error = "#c9465e"
+error_extra = "#9d4d64"
+
+[[themes]]
+name = "dark-magic-girl"
+
+[themes.colors]
+bg = "#091f2c"
+fg = "#a288d9"
+sub = "#93e8d3"
+main = "#f5b1cc"
+correct = "#a288d9"
+error = "#e45c96"
+error_extra = "#974771"
 
 [[themes]]
 name = "dracula"
@@ -79,6 +199,18 @@ error = "#e67e80"
 error_extra = "#e69875"
 
 [[themes]]
+name = "godspeed"
+
+[themes.colors]
+bg = "#eae4cf"
+fg = "#646669"
+sub = "#ada998"
+main = "#9abbcd"
+correct = "#646669"
+error = "#ca4754"
+error_extra = "#d57e7f"
+
+[[themes]]
 name = "gruvbox"
 
 [themes.colors]
@@ -89,6 +221,42 @@ main = "#d79921"
 correct = "#ebdbb2"
 error = "#fb4934"
 error_extra = "#cc241d"
+
+[[themes]]
+name = "horizon"
+
+[themes.colors]
+bg = "#1c1e26"
+fg = "#bbbbbb"
+sub = "#db886f"
+main = "#c4a88a"
+correct = "#bbbbbb"
+error = "#d55170"
+error_extra = "#943f56"
+
+[[themes]]
+name = "iceberg-dark"
+
+[themes.colors]
+bg = "#161821"
+fg = "#c6c8d1"
+sub = "#595e76"
+main = "#84a0c6"
+correct = "#c6c8d1"
+error = "#e27878"
+error_extra = "#9b565a"
+
+[[themes]]
+name = "iceberg-light"
+
+[themes.colors]
+bg = "#e8e9ec"
+fg = "#33374c"
+sub = "#adb1c4"
+main = "#2d539e"
+correct = "#33374c"
+error = "#cc517a"
+error_extra = "#d686a2"
 
 [[themes]]
 name = "kanagawa"
@@ -103,6 +271,30 @@ error = "#e82424"
 error_extra = "#c34043"
 
 [[themes]]
+name = "laser"
+
+[themes.colors]
+bg = "#221b44"
+fg = "#dbe7e8"
+sub = "#b82356"
+main = "#009eaf"
+correct = "#dbe7e8"
+error = "#a8d400"
+error_extra = "#799318"
+
+[[themes]]
+name = "lavender"
+
+[themes.colors]
+bg = "#ada6c2"
+fg = "#2f2a41"
+sub = "#e4e3e9"
+main = "#e4e3e9"
+correct = "#2f2a41"
+error = "#ca4754"
+error_extra = "#c0687a"
+
+[[themes]]
 name = "light"
 
 [themes.colors]
@@ -113,6 +305,54 @@ main = "#c47a00"
 correct = "#2b2b2b"
 error = "#d0342c"
 error_extra = "#a11d18"
+
+[[themes]]
+name = "matrix"
+
+[themes.colors]
+bg = "#000000"
+fg = "#d1ffcd"
+sub = "#006500"
+main = "#15ff00"
+correct = "#d1ffcd"
+error = "#da3333"
+error_extra = "#8e2121"
+
+[[themes]]
+name = "miami-nights"
+
+[themes.colors]
+bg = "#18181a"
+fg = "#ffffff"
+sub = "#47bac0"
+main = "#e4609b"
+correct = "#ffffff"
+error = "#fff591"
+error_extra = "#aea867"
+
+[[themes]]
+name = "modern-dolch"
+
+[themes.colors]
+bg = "#2d2e30"
+fg = "#e3e6eb"
+sub = "#54585c"
+main = "#7eddd3"
+correct = "#e3e6eb"
+error = "#d36a7b"
+error_extra = "#995561"
+
+[[themes]]
+name = "nautilus"
+
+[themes.colors]
+bg = "#132237"
+fg = "#1cbaac"
+sub = "#0b4c6c"
+main = "#ebb723"
+correct = "#1cbaac"
+error = "#da3333"
+error_extra = "#942d34"
 
 [[themes]]
 name = "nord"
@@ -127,6 +367,18 @@ error = "#bf616a"
 error_extra = "#d08770"
 
 [[themes]]
+name = "olivia"
+
+[themes.colors]
+bg = "#1c1b1d"
+fg = "#f2efed"
+sub = "#4e3e3e"
+main = "#deaf9d"
+correct = "#f2efed"
+error = "#bf616a"
+error_extra = "#86484f"
+
+[[themes]]
 name = "one-dark"
 
 [themes.colors]
@@ -139,6 +391,18 @@ error = "#e06c75"
 error_extra = "#be5046"
 
 [[themes]]
+name = "paper"
+
+[themes.colors]
+bg = "#eeeeee"
+fg = "#444444"
+sub = "#b2b2b2"
+main = "#444444"
+correct = "#444444"
+error = "#d70000"
+error_extra = "#df5353"
+
+[[themes]]
 name = "rose-pine"
 
 [themes.colors]
@@ -149,6 +413,30 @@ main = "#ebbcba"
 correct = "#e0def4"
 error = "#eb6f92"
 error_extra = "#b4637a"
+
+[[themes]]
+name = "serika"
+
+[themes.colors]
+bg = "#e1e1e3"
+fg = "#323437"
+sub = "#aaaeb3"
+main = "#e2b714"
+correct = "#323437"
+error = "#da3333"
+error_extra = "#dc7071"
+
+[[themes]]
+name = "serika-dark"
+
+[themes.colors]
+bg = "#323437"
+fg = "#d1d0c5"
+sub = "#646669"
+main = "#e2b714"
+correct = "#d1d0c5"
+error = "#ca4754"
+error_extra = "#95404a"
 
 [[themes]]
 name = "solarized-dark"
@@ -173,6 +461,18 @@ main = "#268bd2"
 correct = "#586e75"
 error = "#dc322f"
 error_extra = "#cb4b16"
+
+[[themes]]
+name = "superuser"
+
+[themes.colors]
+bg = "#262a33"
+fg = "#e5f7ef"
+sub = "#526777"
+main = "#43ffaf"
+correct = "#e5f7ef"
+error = "#ff5f5f"
+error_extra = "#b34c50"
 
 [[themes]]
 name = "tokyo-night"

@@ -1,0 +1,14 @@
+# "Nautilus" from Monkeytype (https://github.com/monkeytypegame/monkeytype),
+# GPL-3.0. Colours taken from Monkeytype's palette: bg, text, sub, main and
+# error; error_extra is derived (error blended 35% toward bg). See
+# catalog/themes/MONKEYTYPE.md.
+name = "nautilus"
+
+[colors]
+bg = "#132237"
+fg = "#1cbaac"
+sub = "#0b4c6c"
+main = "#ebb723"
+correct = "#1cbaac"
+error = "#da3333"
+error_extra = "#942d34"

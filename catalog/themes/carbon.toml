@@ -1,0 +1,14 @@
+# "Carbon" from Monkeytype (https://github.com/monkeytypegame/monkeytype),
+# GPL-3.0. Colours taken from Monkeytype's palette: bg, text, sub, main and
+# error; error_extra is derived (error blended 35% toward bg). See
+# catalog/themes/MONKEYTYPE.md.
+name = "carbon"
+
+[colors]
+bg = "#313131"
+fg = "#f5e6c8"
+sub = "#616161"
+main = "#f66e0d"
+correct = "#f5e6c8"
+error = "#e72d2d"
+error_extra = "#a72e2e"

@@ -1,0 +1,14 @@
+# "Chaos Theory" from Monkeytype (https://github.com/monkeytypegame/monkeytype),
+# GPL-3.0. Colours taken from Monkeytype's palette: bg, text, sub, main and
+# error; error_extra is derived (error blended 35% toward bg). See
+# catalog/themes/MONKEYTYPE.md.
+name = "chaos-theory"
+
+[colors]
+bg = "#141221"
+fg = "#dde5ed"
+sub = "#676e8a"
+main = "#fd77d7"
+correct = "#dde5ed"
+error = "#fd77d7"
+error_extra = "#ab5497"

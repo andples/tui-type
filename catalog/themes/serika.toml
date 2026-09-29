@@ -1,0 +1,14 @@
+# "Serika" from Monkeytype (https://github.com/monkeytypegame/monkeytype),
+# GPL-3.0. Colours taken from Monkeytype's palette: bg, text, sub, main and
+# error; error_extra is derived (error blended 35% toward bg). See
+# catalog/themes/MONKEYTYPE.md.
+name = "serika"
+
+[colors]
+bg = "#e1e1e3"
+fg = "#323437"
+sub = "#aaaeb3"
+main = "#e2b714"
+correct = "#323437"
+error = "#da3333"
+error_extra = "#dc7071"

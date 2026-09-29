@@ -1,0 +1,14 @@
+# "Superuser" from Monkeytype (https://github.com/monkeytypegame/monkeytype),
+# GPL-3.0. Colours taken from Monkeytype's palette: bg, text, sub, main and
+# error; error_extra is derived (error blended 35% toward bg). See
+# catalog/themes/MONKEYTYPE.md.
+name = "superuser"
+
+[colors]
+bg = "#262a33"
+fg = "#e5f7ef"
+sub = "#526777"
+main = "#43ffaf"
+correct = "#e5f7ef"
+error = "#ff5f5f"
+error_extra = "#b34c50"

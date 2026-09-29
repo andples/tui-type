@@ -1,0 +1,14 @@
+# "Horizon" from Monkeytype (https://github.com/monkeytypegame/monkeytype),
+# GPL-3.0. Colours taken from Monkeytype's palette: bg, text, sub, main and
+# error; error_extra is derived (error blended 35% toward bg). See
+# catalog/themes/MONKEYTYPE.md.
+name = "horizon"
+
+[colors]
+bg = "#1c1e26"
+fg = "#bbbbbb"
+sub = "#db886f"
+main = "#c4a88a"
+correct = "#bbbbbb"
+error = "#d55170"
+error_extra = "#943f56"

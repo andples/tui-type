@@ -1,0 +1,14 @@
+# "Olivia" from Monkeytype (https://github.com/monkeytypegame/monkeytype),
+# GPL-3.0. Colours taken from Monkeytype's palette: bg, text, sub, main and
+# error; error_extra is derived (error blended 35% toward bg). See
+# catalog/themes/MONKEYTYPE.md.
+name = "olivia"
+
+[colors]
+bg = "#1c1b1d"
+fg = "#f2efed"
+sub = "#4e3e3e"
+main = "#deaf9d"
+correct = "#f2efed"
+error = "#bf616a"
+error_extra = "#86484f"

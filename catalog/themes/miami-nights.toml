@@ -1,0 +1,14 @@
+# "Miami Nights" from Monkeytype (https://github.com/monkeytypegame/monkeytype),
+# GPL-3.0. Colours taken from Monkeytype's palette: bg, text, sub, main and
+# error; error_extra is derived (error blended 35% toward bg). See
+# catalog/themes/MONKEYTYPE.md.
+name = "miami-nights"
+
+[colors]
+bg = "#18181a"
+fg = "#ffffff"
+sub = "#47bac0"
+main = "#e4609b"
+correct = "#ffffff"
+error = "#fff591"
+error_extra = "#aea867"

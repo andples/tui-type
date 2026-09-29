@@ -1,0 +1,14 @@
+# "Bento" from Monkeytype (https://github.com/monkeytypegame/monkeytype),
+# GPL-3.0. Colours taken from Monkeytype's palette: bg, text, sub, main and
+# error; error_extra is derived (error blended 35% toward bg). See
+# catalog/themes/MONKEYTYPE.md.
+name = "bento"
+
+[colors]
+bg = "#2d394d"
+fg = "#fffaf8"
+sub = "#4a768d"
+main = "#ff7a90"
+correct = "#fffaf8"
+error = "#ee2a3a"
+error_extra = "#aa2f41"

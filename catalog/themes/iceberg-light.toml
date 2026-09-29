@@ -1,0 +1,14 @@
+# "Iceberg Light" from Monkeytype (https://github.com/monkeytypegame/monkeytype),
+# GPL-3.0. Colours taken from Monkeytype's palette: bg, text, sub, main and
+# error; error_extra is derived (error blended 35% toward bg). See
+# catalog/themes/MONKEYTYPE.md.
+name = "iceberg-light"
+
+[colors]
+bg = "#e8e9ec"
+fg = "#33374c"
+sub = "#adb1c4"
+main = "#2d539e"
+correct = "#33374c"
+error = "#cc517a"
+error_extra = "#d686a2"

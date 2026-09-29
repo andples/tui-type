@@ -1,0 +1,14 @@
+# "80s After Dark" from Monkeytype (https://github.com/monkeytypegame/monkeytype),
+# GPL-3.0. Colours taken from Monkeytype's palette: bg, text, sub, main and
+# error; error_extra is derived (error blended 35% toward bg). See
+# catalog/themes/MONKEYTYPE.md.
+name = "80s-after-dark"
+
+[colors]
+bg = "#1b1d36"
+fg = "#e1e7ec"
+sub = "#99d6ea"
+main = "#fca6d1"
+correct = "#e1e7ec"
+error = "#fffb85"
+error_extra = "#afad69"

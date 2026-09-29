@@ -1,0 +1,14 @@
+# "Lavender" from Monkeytype (https://github.com/monkeytypegame/monkeytype),
+# GPL-3.0. Colours taken from Monkeytype's palette: bg, text, sub, main and
+# error; error_extra is derived (error blended 35% toward bg). See
+# catalog/themes/MONKEYTYPE.md.
+name = "lavender"
+
+[colors]
+bg = "#ada6c2"
+fg = "#2f2a41"
+sub = "#e4e3e9"
+main = "#e4e3e9"
+correct = "#2f2a41"
+error = "#ca4754"
+error_extra = "#c0687a"

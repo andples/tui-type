@@ -1,0 +1,14 @@
+# "Dark Magic Girl" from Monkeytype (https://github.com/monkeytypegame/monkeytype),
+# GPL-3.0. Colours taken from Monkeytype's palette: bg, text, sub, main and
+# error; error_extra is derived (error blended 35% toward bg). See
+# catalog/themes/MONKEYTYPE.md.
+name = "dark-magic-girl"
+
+[colors]
+bg = "#091f2c"
+fg = "#a288d9"
+sub = "#93e8d3"
+main = "#f5b1cc"
+correct = "#a288d9"
+error = "#e45c96"
+error_extra = "#974771"

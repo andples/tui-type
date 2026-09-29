@@ -1,0 +1,14 @@
+# "Matrix" from Monkeytype (https://github.com/monkeytypegame/monkeytype),
+# GPL-3.0. Colours taken from Monkeytype's palette: bg, text, sub, main and
+# error; error_extra is derived (error blended 35% toward bg). See
+# catalog/themes/MONKEYTYPE.md.
+name = "matrix"
+
+[colors]
+bg = "#000000"
+fg = "#d1ffcd"
+sub = "#006500"
+main = "#15ff00"
+correct = "#d1ffcd"
+error = "#da3333"
+error_extra = "#8e2121"

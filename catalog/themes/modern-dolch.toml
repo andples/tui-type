@@ -1,0 +1,14 @@
+# "Modern Dolch" from Monkeytype (https://github.com/monkeytypegame/monkeytype),
+# GPL-3.0. Colours taken from Monkeytype's palette: bg, text, sub, main and
+# error; error_extra is derived (error blended 35% toward bg). See
+# catalog/themes/MONKEYTYPE.md.
+name = "modern-dolch"
+
+[colors]
+bg = "#2d2e30"
+fg = "#e3e6eb"
+sub = "#54585c"
+main = "#7eddd3"
+correct = "#e3e6eb"
+error = "#d36a7b"
+error_extra = "#995561"

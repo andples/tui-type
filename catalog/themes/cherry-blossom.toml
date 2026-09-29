@@ -1,0 +1,14 @@
+# "Cherry Blossom" from Monkeytype (https://github.com/monkeytypegame/monkeytype),
+# GPL-3.0. Colours taken from Monkeytype's palette: bg, text, sub, main and
+# error; error_extra is derived (error blended 35% toward bg). See
+# catalog/themes/MONKEYTYPE.md.
+name = "cherry-blossom"
+
+[colors]
+bg = "#323437"
+fg = "#d1d0c5"
+sub = "#787d82"
+main = "#d65ccc"
+correct = "#d1d0c5"
+error = "#ca4754"
+error_extra = "#95404a"

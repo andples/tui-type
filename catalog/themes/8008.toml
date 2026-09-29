@@ -1,0 +1,14 @@
+# "8008" from Monkeytype (https://github.com/monkeytypegame/monkeytype),
+# GPL-3.0. Colours taken from Monkeytype's palette: bg, text, sub, main and
+# error; error_extra is derived (error blended 35% toward bg). See
+# catalog/themes/MONKEYTYPE.md.
+name = "8008"
+
+[colors]
+bg = "#333a45"
+fg = "#e9ecf0"
+sub = "#939eae"
+main = "#f44c7f"
+correct = "#e9ecf0"
+error = "#da3333"
+error_extra = "#a03539"

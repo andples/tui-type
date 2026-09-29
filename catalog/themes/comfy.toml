@@ -1,0 +1,14 @@
+# "Comfy" from Monkeytype (https://github.com/monkeytypegame/monkeytype),
+# GPL-3.0. Colours taken from Monkeytype's palette: bg, text, sub, main and
+# error; error_extra is derived (error blended 35% toward bg). See
+# catalog/themes/MONKEYTYPE.md.
+name = "comfy"
+
+[colors]
+bg = "#4a5b6e"
+fg = "#f5efee"
+sub = "#9ec1cc"
+main = "#f8cdc6"
+correct = "#f5efee"
+error = "#c9465e"
+error_extra = "#9d4d64"

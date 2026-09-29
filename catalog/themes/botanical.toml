@@ -1,0 +1,14 @@
+# "Botanical" from Monkeytype (https://github.com/monkeytypegame/monkeytype),
+# GPL-3.0. Colours taken from Monkeytype's palette: bg, text, sub, main and
+# error; error_extra is derived (error blended 35% toward bg). See
+# catalog/themes/MONKEYTYPE.md.
+name = "botanical"
+
+[colors]
+bg = "#7b9c98"
+fg = "#eaf1f3"
+sub = "#495755"
+main = "#eaf1f3"
+correct = "#eaf1f3"
+error = "#f6c9b4"
+error_extra = "#cbb9aa"

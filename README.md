@@ -265,6 +265,15 @@ Put the file in `catalog/languages/` or `catalog/themes/`, named after its
 (the test fails while `catalog/index.toml` is stale). Names are lowercase
 letters, digits, `-` and `_`. Installs pick it up once it's on `main`.
 
+### Credits
+
+25 of the catalogue themes (`serika-dark`, `8008`, `iceberg-dark`, …) are
+adapted from [Monkeytype](https://github.com/monkeytypegame/monkeytype)'s themes
+by the Monkeytype contributors, licensed under
+[GPL-3.0](https://github.com/monkeytypegame/monkeytype/blob/master/LICENSE); those
+files keep that license. [`catalog/themes/MONKEYTYPE.md`](catalog/themes/MONKEYTYPE.md)
+lists them and says how the colours were mapped.
+
 ### Profile files
 
 A profile is a TOML file named after the profile, holding any subset of

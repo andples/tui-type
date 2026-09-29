@@ -1,0 +1,14 @@
+# "Paper" from Monkeytype (https://github.com/monkeytypegame/monkeytype),
+# GPL-3.0. Colours taken from Monkeytype's palette: bg, text, sub, main and
+# error; error_extra is derived (error blended 35% toward bg). See
+# catalog/themes/MONKEYTYPE.md.
+name = "paper"
+
+[colors]
+bg = "#eeeeee"
+fg = "#444444"
+sub = "#b2b2b2"
+main = "#444444"
+correct = "#444444"
+error = "#d70000"
+error_extra = "#df5353"
