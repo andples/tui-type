@@ -47,6 +47,9 @@ pub struct CommandLine {
     pub suggestions: Vec<Suggestion>,
     /// Message from the last executed command, shown in place of the palette.
     pub message: Option<String>,
+    /// The highlight was moved with ↑/↓ since the input last changed, so
+    /// Enter means that suggestion rather than the typed text.
+    navigated: bool,
     stage: Stage,
     matcher: Matcher,
 }
@@ -65,6 +68,7 @@ impl CommandLine {
             selected: 0,
             suggestions: Vec::new(),
             message: None,
+            navigated: false,
             stage: Stage::Command,
             matcher: Matcher::new(Config::DEFAULT),
         }
@@ -135,12 +139,14 @@ impl CommandLine {
     pub fn select_next(&mut self) {
         if !self.suggestions.is_empty() {
             self.selected = (self.selected + 1) % self.suggestions.len();
+            self.navigated = true;
         }
     }
 
     pub fn select_prev(&mut self) {
         if !self.suggestions.is_empty() {
             self.selected = (self.selected + self.suggestions.len() - 1) % self.suggestions.len();
+            self.navigated = true;
         }
     }
 
@@ -179,11 +185,18 @@ impl CommandLine {
         }
         // Constrained arguments take the highlighted candidate (`theme gb` →
         // gruvbox). Free arguments run exactly as typed — presets are only
-        // suggestions, and `time 3` must not become `time 30`; Tab completes.
-        if let (Stage::Arg(kind), Some(s)) = (self.stage, self.selected())
-            && !kind.accepts_free_text()
-        {
-            return Some(s.completion.clone());
+        // suggestions, and `time 3` must not become `time 30` — unless the
+        // user picked a suggestion with ↑/↓ or typed no argument at all
+        // (`daily ` + Enter means the highlighted mode, not the default).
+        if let (Stage::Arg(kind), Some(s)) = (self.stage, self.selected()) {
+            let no_arg = self
+                .input
+                .trim()
+                .split_once(char::is_whitespace)
+                .is_none_or(|(_, arg)| arg.trim().is_empty());
+            if !kind.accepts_free_text() || self.navigated || no_arg {
+                return Some(s.completion.clone());
+            }
         }
         Some(self.input.trim().to_string())
     }
@@ -207,6 +220,7 @@ impl CommandLine {
 
     fn refresh(&mut self, comps: &Completions) {
         self.selected = 0;
+        self.navigated = false;
         let input = self.input.trim_start().to_string();
         let (head, rest) = match input.split_once(char::is_whitespace) {
             Some((h, r)) => (h, Some(r.trim_start())),
@@ -339,6 +353,38 @@ mod tests {
         cl.open(&comps());
         type_in(&mut cl, "theme GRUV");
         assert_eq!(cl.submit(&comps()), Some("theme gruvbox".into()));
+    }
+
+    #[test]
+    fn enter_takes_the_highlighted_preset() {
+        let daily = |cl: &mut CommandLine| {
+            cl.open(&comps());
+            type_in(cl, "daily ");
+            assert_eq!(cl.stage, Stage::Arg(ArgKind::DailyModes));
+        };
+        // Nothing typed: the first (highlighted) mode, not today's default.
+        let mut cl = CommandLine::new();
+        daily(&mut cl);
+        let first = cl.selected().unwrap().completion.clone();
+        assert_eq!(cl.submit(&comps()), Some(first));
+        // Arrowed to: that one.
+        let mut cl = CommandLine::new();
+        daily(&mut cl);
+        cl.select_next();
+        let second = cl.selected().unwrap().completion.clone();
+        assert_eq!(cl.submit(&comps()), Some(second));
+        // Typing after arrowing goes back to the typed text.
+        let mut cl = CommandLine::new();
+        cl.open(&comps());
+        type_in(&mut cl, "time ");
+        cl.select_next();
+        type_in(&mut cl, "3");
+        assert_eq!(cl.submit(&comps()), Some("time 3".into()));
+        // Bare `daily` still means the current mode.
+        let mut cl = CommandLine::new();
+        cl.open(&comps());
+        type_in(&mut cl, "daily");
+        assert_eq!(cl.submit(&comps()), Some("daily".into()));
     }
 
     #[test]
