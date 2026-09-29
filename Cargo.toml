@@ -4,6 +4,11 @@ version = "0.2.0"
 edition = "2024"
 description = "Minimal monkeytype-style typing test for the terminal"
 license = "MIT"
+repository = "https://github.com/andples/tui-type"
+readme = "README.md"
+keywords = ["typing", "tui", "monkeytype", "terminal", "ratatui"]
+categories = ["command-line-utilities", "games"]
+include = ["src/**", "assets/**", "Cargo.toml", "README.md", "LICENSE*"]
 
 [workspace]
 members = ["crates/*"]
@@ -15,7 +20,7 @@ default-members = [".", "crates/ttyp-core"]
 all = "warn"
 
 [dependencies]
-ttyp-core = { path = "crates/ttyp-core" }
+ttyp-core = { version = "1.0.0", path = "crates/ttyp-core" }
 anyhow = "1.0.104"
 base64 = "0.23.1"
 chrono = { version = "0.4.45", features = ["serde"] }

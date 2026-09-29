@@ -1,9 +1,11 @@
 [package]
 name = "ttyp-core"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 description = "UI-free core of ttyp: typing-test engine, word generation, languages and API types"
 license = "MIT"
+repository = "https://github.com/andples/tui-type"
+include = ["src/**", "assets/**", "Cargo.toml", "LICENSE"]
 
 [dependencies]
 rand = "0.10.2"

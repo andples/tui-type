@@ -2990,7 +2990,7 @@ dependencies = [
 
 [[package]]
 name = "ttyp-core"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "rand 0.10.2",
  "serde",
