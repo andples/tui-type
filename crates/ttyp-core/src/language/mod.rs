@@ -111,10 +111,17 @@ mod tests {
     #[test]
     fn builtins_parse() {
         let reg = LanguageRegistry::builtin();
-        assert_eq!(reg.get("english").unwrap().words.len(), 200);
+        assert_eq!(reg.get("english").unwrap().words.len(), 199);
         assert!(reg.get("english_1k").unwrap().words.len() > 900);
         let names: Vec<&str> = reg.names().collect();
         assert_eq!(names, BUILTIN_NAMES);
+        // Owner's call: no lone "i" in the English lists ("a" stays).
+        for name in BUILTIN_NAMES {
+            assert!(
+                !reg.get(name).unwrap().words.iter().any(|w| w == "i"),
+                "{name}"
+            );
+        }
     }
 
     #[test]

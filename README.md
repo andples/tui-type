@@ -79,7 +79,7 @@ with a tab for languages and a tab for themes:
 install    languages 3/8    themes 2/14
 
     dutch       Dutch · 196 words          available
-  ● english     English · 200 words         built in
+  ● english     English · 199 words         built in
   ○ english_1k  English 1k · 999 words      built in
 › ○ spanish     Spanish · 258 words        installed
 ```
@@ -255,7 +255,7 @@ display = "English 5k"
 words = ["the", "of", "and", ...]
 ```
 
-Built in: `english` (200 words), `english_1k`. The rest are in the catalogue
+Built in: `english` (199 words), `english_1k`. The rest are in the catalogue
 (`:install`).
 
 ### Adding to the catalogue
