@@ -115,6 +115,11 @@ pub struct Config {
     /// Not a profile setting.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub github_client_id: Option<String>,
+    /// Where `:install` fetches languages and themes: a base URL or a
+    /// local directory. Unset means `catalog::BUILT_IN_CATALOG`; empty
+    /// turns the catalogue off. Not a profile setting.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub catalog: Option<String>,
 }
 
 /// How font sizes above 1 are drawn. Only set in the config file; there is
@@ -289,6 +294,15 @@ impl FontSize {
 }
 
 impl Config {
+    /// The catalogue to fetch from, `None` when it's turned off.
+    pub fn catalog_source(&self) -> Option<&str> {
+        match self.catalog.as_deref() {
+            None => Some(crate::catalog::BUILT_IN_CATALOG),
+            Some(s) if s.trim().is_empty() => None,
+            Some(s) => Some(s.trim()),
+        }
+    }
+
     pub fn font_size(&self) -> FontSize {
         FontSize::from_level(self.font_size)
     }
@@ -341,6 +355,7 @@ impl Default for Config {
             profiles: Vec::new(),
             server: Some(BUILT_IN_SERVER.to_string()),
             github_client_id: Some(BUILT_IN_GITHUB_CLIENT_ID.to_string()),
+            catalog: None,
         }
     }
 }
@@ -406,6 +421,13 @@ impl Config {
             "font" => self.font = value.to_string(),
             "graphics" => self.graphics = Graphics::parse(value)?,
             "server" => self.server = Some(value.to_string()).filter(|v| !v.is_empty()),
+            // `off` (or `""`) is the way to type an empty value.
+            "catalog" => {
+                self.catalog = Some(match value {
+                    "off" | "\"\"" => String::new(),
+                    v => v.to_string(),
+                });
+            }
             "github_client_id" => {
                 self.github_client_id = Some(value.to_string()).filter(|v| !v.is_empty());
             }
@@ -602,6 +624,14 @@ mod tests {
         assert!(c.set("numbers", "maybe").is_err());
         c.set("graphics", "off").unwrap();
         assert_eq!(c.graphics, Graphics::Off);
+        assert!(
+            c.catalog_source()
+                .is_some_and(|s| s.starts_with("https://"))
+        );
+        c.set("catalog", "/tmp/cat").unwrap();
+        assert_eq!(c.catalog_source(), Some("/tmp/cat"));
+        c.set("catalog", "off").unwrap();
+        assert_eq!(c.catalog_source(), None);
         assert!(c.set("graphics", "sixel").is_err());
     }
 }

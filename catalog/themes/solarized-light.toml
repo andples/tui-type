@@ -1,0 +1,10 @@
+name = "solarized-light"
+
+[colors]
+bg = "#fdf6e3"
+fg = "#586e75"
+sub = "#93a1a1"
+main = "#268bd2"
+correct = "#586e75"
+error = "#dc322f"
+error_extra = "#cb4b16"

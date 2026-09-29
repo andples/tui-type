@@ -16,6 +16,10 @@ pub struct Completions {
     pub languages: Vec<String>,
     pub fonts: Vec<String>,
     pub profiles: Vec<String>,
+    /// Catalogue entries not installed yet (empty until the index loads).
+    pub installable: Vec<String>,
+    /// Installed languages and themes that aren't built in.
+    pub removable: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -277,8 +281,7 @@ mod tests {
         Completions {
             themes: vec!["default".into(), "gruvbox".into(), "nord".into()],
             languages: vec!["english".into(), "english_1k".into()],
-            fonts: vec![],
-            profiles: vec![],
+            ..Default::default()
         }
     }
 

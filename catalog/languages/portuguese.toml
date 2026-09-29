@@ -1,0 +1,26 @@
+name = "portuguese"
+display = "Portuguese"
+words = [
+  "de", "a", "o", "que", "e", "do", "da", "em", "um", "para", "é", "com", "não", "uma",
+  "os", "no", "se", "na", "por", "mais", "as", "dos", "como", "mas", "foi", "ao",
+  "ele", "das", "tem", "à", "seu", "sua", "ou", "ser", "quando", "muito", "há", "nos",
+  "já", "está", "eu", "também", "só", "pelo", "pela", "até", "isso", "ela", "entre",
+  "era", "depois", "sem", "mesmo", "aos", "ter", "seus", "quem", "nas", "me", "esse",
+  "eles", "estão", "você", "tinha", "foram", "essa", "num", "nem", "suas", "meu", "às",
+  "minha", "têm", "numa", "pelos", "elas", "havia", "seja", "qual", "será", "nós",
+  "tenho", "lhe", "deles", "essas", "esses", "pelas", "este", "fosse", "dele", "tu",
+  "te", "vocês", "vos", "lhes", "meus", "minhas", "teu", "tua", "teus", "tuas",
+  "nosso", "nossa", "nossos", "nossas", "dela", "delas", "esta", "estes", "estas",
+  "aquele", "aquela", "aqueles", "aquelas", "isto", "aquilo", "estou", "estamos",
+  "estava", "ano", "dia", "vez", "tempo", "casa", "vida", "coisa", "homem", "mulher",
+  "mundo", "país", "trabalho", "parte", "lugar", "governo", "cidade", "forma", "caso",
+  "mão", "olhos", "pai", "mãe", "filho", "água", "noite", "grande", "novo", "bom",
+  "primeiro", "outro", "pouco", "longo", "último", "próprio", "tudo", "nada", "sempre",
+  "nunca", "agora", "aqui", "ali", "hoje", "ontem", "amanhã", "ainda", "bem", "mal",
+  "fazer", "dizer", "ir", "ver", "dar", "saber", "poder", "querer", "ficar", "vir",
+  "passar", "deixar", "falar", "pensar", "chegar", "conhecer", "precisar", "achar",
+  "começar", "viver", "sair", "entrar", "conseguir", "tomar", "voltar", "sentir",
+  "perguntar", "chamar", "olhar", "levar", "trazer", "escrever", "ler", "comer",
+  "beber", "dormir", "abrir", "fechar", "ouvir", "jogar", "ganhar", "perder", "pagar",
+  "comprar", "vender", "morar", "estudar", "gostar", "ajudar"
+]

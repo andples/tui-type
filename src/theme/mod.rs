@@ -87,14 +87,10 @@ impl Theme {
     }
 }
 
-const BUILTIN: &[&str] = &[
-    include_str!("../../assets/themes/default.toml"),
-    include_str!("../../assets/themes/gruvbox.toml"),
-    include_str!("../../assets/themes/catppuccin-mocha.toml"),
-    include_str!("../../assets/themes/nord.toml"),
-    include_str!("../../assets/themes/rose-pine.toml"),
-    include_str!("../../assets/themes/light.toml"),
-];
+/// Only the fallback theme is compiled in; the rest come from the
+/// catalogue (`crate::catalog`).
+const BUILTIN: &[&str] = &[include_str!("../../assets/themes/default.toml")];
+const BUILTIN_NAMES: &[&str] = &["default"];
 
 /// All known themes, keyed by name.
 #[derive(Debug, Clone, Default)]
@@ -136,6 +132,11 @@ impl ThemeRegistry {
         reg
     }
 
+    /// Whether `name` is compiled in (and so can't be uninstalled).
+    pub fn is_builtin(name: &str) -> bool {
+        BUILTIN_NAMES.contains(&name)
+    }
+
     pub fn insert(&mut self, theme: Theme) {
         self.themes.insert(theme.name.clone(), theme);
     }
@@ -172,8 +173,8 @@ mod tests {
     fn builtins_parse() {
         let reg = ThemeRegistry::builtin();
         assert_eq!(reg.len(), BUILTIN.len());
-        assert!(reg.get("default").is_some());
-        assert!(reg.get("gruvbox").is_some());
+        let names: Vec<&str> = reg.names().collect();
+        assert_eq!(names, BUILTIN_NAMES);
     }
 
     #[test]
@@ -189,14 +190,14 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("ttyp-theme-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(
-            dir.join("gruvbox.toml"),
-            "name = \"gruvbox\"\n[colors]\nbg=\"#000000\"\nfg=\"#ffffff\"\nsub=\"#888888\"\nmain=\"#ff0000\"\ncorrect=\"#ffffff\"\nerror=\"#ff0000\"\nerror_extra=\"#aa0000\"\n",
+            dir.join("mine.toml"),
+            "name = \"default\"\n[colors]\nbg=\"#000000\"\nfg=\"#ffffff\"\nsub=\"#888888\"\nmain=\"#ff0000\"\ncorrect=\"#ffffff\"\nerror=\"#ff0000\"\nerror_extra=\"#aa0000\"\n",
         )
         .unwrap();
         std::fs::write(dir.join("broken.toml"), "name = 1").unwrap();
         let mut warnings = vec![];
         let reg = ThemeRegistry::load(&dir, |w| warnings.push(w));
-        assert_eq!(reg.get("gruvbox").unwrap().colors.main, Hex(255, 0, 0));
+        assert_eq!(reg.get("default").unwrap().colors.main, Hex(255, 0, 0));
         assert_eq!(warnings.len(), 1);
         std::fs::remove_dir_all(&dir).unwrap();
     }

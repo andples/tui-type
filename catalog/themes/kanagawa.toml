@@ -1,0 +1,10 @@
+name = "kanagawa"
+
+[colors]
+bg = "#1f1f28"
+fg = "#dcd7ba"
+sub = "#727169"
+main = "#7e9cd8"
+correct = "#dcd7ba"
+error = "#e82424"
+error_extra = "#c34043"

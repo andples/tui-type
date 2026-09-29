@@ -1,0 +1,10 @@
+name = "tokyo-night"
+
+[colors]
+bg = "#1a1b26"
+fg = "#c0caf5"
+sub = "#565f89"
+main = "#7aa2f7"
+correct = "#c0caf5"
+error = "#f7768e"
+error_extra = "#db4b4b"

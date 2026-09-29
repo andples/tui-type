@@ -1,0 +1,27 @@
+name = "italian"
+display = "Italian"
+words = [
+  "di", "e", "il", "la", "che", "a", "per", "un", "in", "è", "non", "una", "del", "le",
+  "si", "con", "i", "da", "mi", "ha", "al", "lo", "della", "gli", "ma", "ti", "come",
+  "sono", "ci", "anche", "io", "se", "più", "dei", "nel", "alla", "o", "questo", "mio",
+  "ho", "cosa", "bene", "tutto", "fare", "suo", "tu", "lei", "era", "essere", "lui",
+  "qui", "quando", "solo", "dove", "perché", "hai", "fatto", "noi", "già", "sei",
+  "ora", "molto", "loro", "ne", "poi", "niente", "allora", "tempo", "casa", "vita",
+  "uomo", "donna", "giorno", "anno", "volta", "parte", "mondo", "lavoro", "modo",
+  "paese", "città", "mano", "occhi", "padre", "madre", "figlio", "acqua", "notte",
+  "grande", "nuovo", "buono", "primo", "altro", "stesso", "poco", "lungo", "ultimo",
+  "proprio", "sempre", "mai", "adesso", "oggi", "ieri", "domani", "ancora", "male",
+  "dire", "andare", "vedere", "dare", "sapere", "potere", "volere", "stare", "venire",
+  "passare", "lasciare", "parlare", "pensare", "arrivare", "conoscere", "trovare",
+  "credere", "sentire", "prendere", "tenere", "portare", "capire", "chiamare",
+  "guardare", "scrivere", "leggere", "mangiare", "bere", "dormire", "aprire",
+  "chiudere", "giocare", "vincere", "perdere", "pagare", "comprare", "vendere",
+  "vivere", "studiare", "aiutare", "amico", "storia", "strada", "tipo", "punto",
+  "fine", "momento", "problema", "caso", "nome", "famiglia", "stato", "governo",
+  "gruppo", "amore", "guerra", "morte", "cuore", "testa", "porta", "forza", "idea",
+  "sera", "mattina", "settimana", "mese", "ragazzo", "ragazza", "bambino", "gente",
+  "persona", "signore", "scuola", "libro", "parola", "lingua", "numero", "nessuno",
+  "qualcosa", "qualcuno", "ogni", "tanto", "troppo", "forse", "insieme", "subito",
+  "dopo", "prima", "contro", "senza", "sotto", "sopra", "dentro", "fuori", "vicino",
+  "lontano"
+]

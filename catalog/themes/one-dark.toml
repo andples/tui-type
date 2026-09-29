@@ -1,0 +1,10 @@
+name = "one-dark"
+
+[colors]
+bg = "#282c34"
+fg = "#abb2bf"
+sub = "#5c6370"
+main = "#61afef"
+correct = "#abb2bf"
+error = "#e06c75"
+error_extra = "#be5046"

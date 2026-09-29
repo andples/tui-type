@@ -2,6 +2,7 @@
 //! (later) remote events all reduce to this enum and go through
 //! `App::dispatch`, which keeps the UI layer purely presentational.
 
+use crate::catalog::CatalogEvent;
 use crate::online::RemoteEvent;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -53,6 +54,12 @@ pub enum Action {
     ShowProfiles,
     Profile(ProfileAction),
 
+    // Install menu (languages and themes from the catalogue)
+    ShowCatalog,
+    Catalog(CatalogAction),
+    /// A catalogue download finished.
+    CatalogFetched(Box<CatalogEvent>),
+
     // Online (only when `server` is configured)
     Login,
     CancelLogin,
@@ -87,6 +94,27 @@ pub enum BoardAction {
     Open,
     /// Back from the graph to the leaderboard, same row selected.
     CloseGraph,
+}
+
+/// Keys on the install screen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CatalogAction {
+    Up,
+    Down,
+    Top,
+    Bottom,
+    /// Languages ↔ themes.
+    SwitchTab,
+    /// Make the selected item current, installing it first if needed.
+    Use,
+    /// Install without switching to it.
+    Install,
+    /// Ask to remove the selected item.
+    Remove,
+    ConfirmRemove,
+    CancelRemove,
+    /// Fetch the catalogue index again.
+    Refresh,
 }
 
 /// Keys on the profile screen, in either the list or the editor.

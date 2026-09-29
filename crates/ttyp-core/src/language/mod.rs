@@ -42,6 +42,7 @@ const BUILTIN: &[&str] = &[
     include_str!("../../assets/languages/english.toml"),
     include_str!("../../assets/languages/english_1k.toml"),
 ];
+const BUILTIN_NAMES: &[&str] = &["english", "english_1k"];
 
 #[derive(Debug, Clone, Default)]
 pub struct LanguageRegistry {
@@ -78,6 +79,12 @@ impl LanguageRegistry {
         reg
     }
 
+    /// Whether `name` is compiled in (other languages are installed from
+    /// the client's catalogue).
+    pub fn is_builtin(name: &str) -> bool {
+        BUILTIN_NAMES.contains(&name)
+    }
+
     pub fn insert(&mut self, lang: Language) {
         self.languages.insert(lang.name.clone(), lang);
     }
@@ -106,6 +113,8 @@ mod tests {
         let reg = LanguageRegistry::builtin();
         assert_eq!(reg.get("english").unwrap().words.len(), 200);
         assert!(reg.get("english_1k").unwrap().words.len() > 900);
+        let names: Vec<&str> = reg.names().collect();
+        assert_eq!(names, BUILTIN_NAMES);
     }
 
     #[test]

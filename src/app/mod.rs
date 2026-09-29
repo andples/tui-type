@@ -2,6 +2,7 @@
 
 pub mod action;
 mod board;
+mod catalog;
 pub mod input;
 mod online;
 mod profiles;
@@ -14,6 +15,7 @@ use crossterm::event::{self, Event};
 use ratatui::DefaultTerminal;
 use ratatui::layout::Rect;
 
+use crate::catalog::{CatalogMenu, Fetcher};
 use crate::command::{self, Command, CommandLine, Completions};
 use crate::config::{Config, Paths};
 use crate::config::{FONT_SIZE_RANGE, FontSize, LINES_RANGE, WORDS_PER_LINE_RANGE};
@@ -44,6 +46,8 @@ pub enum Screen {
     Stats,
     Help,
     Profiles,
+    /// `:install`: languages and themes from the catalogue.
+    Catalog,
     Login,
     Leaderboard,
     /// One leaderboard run's chart, opened from the leaderboard.
@@ -122,6 +126,9 @@ pub struct App {
     pub languages: LanguageRegistry,
     pub profiles: ProfileRegistry,
     pub profile_menu: ProfileMenu,
+    pub catalog_menu: CatalogMenu,
+    /// Present unless `catalog` is turned off in the config.
+    fetcher: Option<Fetcher>,
     pub engine: TestEngine,
     pub outcome: Option<Outcome>,
     pub stats: Box<dyn StatsStore>,
@@ -196,11 +203,14 @@ impl App {
             warnings.push(format!("skipped {skipped} corrupt history line(s)"));
         }
         if themes.get(&config.theme).is_none() {
-            warnings.push(format!("unknown theme `{}`, using default", config.theme));
+            warnings.push(format!(
+                "theme `{}` isn't installed, using default (:install)",
+                config.theme
+            ));
         }
         if languages.get(&config.language).is_none() {
             warnings.push(format!(
-                "unknown language `{}`, using english",
+                "language `{}` isn't installed, using english (:install)",
                 config.language
             ));
         }
@@ -214,10 +224,12 @@ impl App {
             languages: languages.names().map(str::to_string).collect(),
             fonts: gfx::fonts::list(&paths.fonts_dir),
             profiles: profiles.names().map(str::to_string).collect(),
+            ..Default::default()
         };
         let engine = Self::build_engine(&config, &languages);
         let summary = Summary::from_records(store.all());
         let online = Self::connect(&config, &paths);
+        let fetcher = Self::catalog_fetcher(&config);
         let mut app = Self {
             config,
             paths,
@@ -225,6 +237,8 @@ impl App {
             languages,
             profiles,
             profile_menu: ProfileMenu::default(),
+            catalog_menu: CatalogMenu::default(),
+            fetcher,
             engine,
             outcome: None,
             stats: Box::new(store),
@@ -249,9 +263,11 @@ impl App {
             fresh_notice: false,
             dirty: true,
         };
+        app.refresh_catalog_lists();
         if let Some(w) = warnings.first() {
             app.notify(w.clone());
         }
+        app.install_missing();
         app.retry_queued_submissions();
         Ok(app)
     }
@@ -272,6 +288,14 @@ impl App {
     pub fn theme(&self) -> &Theme {
         if let (Screen::Profiles, ProfileMenu::Edit(e)) = (self.screen, &self.profile_menu)
             && let Some(t) = e.preview_theme().and_then(|n| self.themes.get(n))
+        {
+            return t;
+        }
+        if self.screen == Screen::Catalog
+            && !self.cmd_open
+            && let Some(t) = self
+                .catalog_menu
+                .preview_theme(&self.themes, &self.languages)
         {
             return t;
         }
@@ -364,6 +388,7 @@ impl App {
     fn event_loop(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
         while !self.should_quit {
             self.drain_remote();
+            self.drain_catalog();
             if self.dirty {
                 self.draw(terminal)?;
                 self.dirty = false;
@@ -418,7 +443,9 @@ impl App {
         if timed_running {
             return Some(TIMER_TICK);
         }
-        if self.online.as_ref().is_some_and(Online::busy) {
+        if self.online.as_ref().is_some_and(Online::busy)
+            || self.fetcher.as_ref().is_some_and(Fetcher::busy)
+        {
             return Some(REMOTE_POLL);
         }
         self.notice.as_ref().map(|(_, at)| {
@@ -435,6 +462,7 @@ impl App {
             slider_open: self.slider.is_some(),
             test_status: self.engine.status(),
             profile_menu: self.profile_input(),
+            catalog_confirm: self.catalog_menu.confirm_remove,
         }
     }
 
@@ -529,6 +557,9 @@ impl App {
             Action::ShowHelp => self.push_screen(Screen::Help),
             Action::ShowProfiles => self.open_profiles(),
             Action::Profile(a) => self.profile_action(a),
+            Action::ShowCatalog => self.open_catalog(),
+            Action::Catalog(a) => self.catalog_action(a),
+            Action::CatalogFetched(ev) => self.catalog_event(*ev),
             Action::Login => self.login(),
             Action::CancelLogin => self.cancel_login(),
             Action::Logout => self.logout(),
@@ -596,9 +627,10 @@ impl App {
     }
 
     /// Start a fresh test after a test setting changed. From the profile
-    /// screen the new test waits underneath instead of taking over.
+    /// and install screens the new test waits underneath instead of taking
+    /// over.
     fn rebuild_test(&mut self) {
-        if self.screen == Screen::Profiles {
+        if matches!(self.screen, Screen::Profiles | Screen::Catalog) {
             self.daily = None;
             self.engine = Self::build_engine(&self.config, &self.languages);
             self.outcome = None;
@@ -663,7 +695,7 @@ impl App {
             }
             Command::Language(name) => {
                 if self.languages.get(&name).is_none() {
-                    self.notify(format!("unknown language `{name}`"));
+                    self.notify(format!("language `{name}` isn't installed (:install)"));
                     return;
                 }
                 self.config.language = name;
@@ -671,7 +703,7 @@ impl App {
             }
             Command::Theme(name) => {
                 if self.themes.get(&name).is_none() {
-                    self.notify(format!("unknown theme `{name}`"));
+                    self.notify(format!("theme `{name}` isn't installed (:install)"));
                     return;
                 }
                 self.config.theme = name;
@@ -754,6 +786,18 @@ impl App {
                 self.activate_profile(&name);
                 return;
             }
+            Command::Install(None) => {
+                self.dispatch(Action::ShowCatalog);
+                return;
+            }
+            Command::Install(Some(name)) => {
+                self.install(None, &name, true);
+                return;
+            }
+            Command::Uninstall(name) => {
+                self.uninstall(None, &name);
+                return;
+            }
             Command::Restart => self.restart(),
             Command::Stats => self.dispatch(Action::ShowStats),
             Command::Help => self.dispatch(Action::ShowHelp),
@@ -785,6 +829,15 @@ impl App {
                     self.notify(e);
                 }
                 // Reconnect so `:set server …` works without a restart.
+                if key == "catalog" {
+                    self.fetcher = Self::catalog_fetcher(&self.config);
+                    self.catalog_menu.index = Default::default();
+                    self.refresh_catalog_lists();
+                    self.notify(match &self.fetcher {
+                        Some(_) => "catalogue set",
+                        None => "catalogue off",
+                    });
+                }
                 if matches!(key.as_str(), "server" | "github_client_id") {
                     self.online = Self::connect(&self.config, &self.paths);
                     self.notify(match &self.online {
@@ -807,6 +860,7 @@ impl App {
                         | "graphics"
                         | "server"
                         | "github_client_id"
+                        | "catalog"
                 ) && !key.starts_with("results.");
             }
         }

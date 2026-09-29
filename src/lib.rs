@@ -6,6 +6,7 @@
 //! renders them.
 
 pub mod app;
+pub mod catalog;
 pub mod command;
 pub mod config;
 pub mod gfx;

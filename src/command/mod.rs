@@ -32,6 +32,9 @@ pub enum Command {
     Zen(Option<bool>),
     /// `None` opens the profile menu; a name activates that profile.
     Profile(Option<String>),
+    /// `None` opens the install menu; a name installs that language/theme.
+    Install(Option<String>),
+    Uninstall(String),
     Restart,
     Stats,
     Help,
@@ -59,6 +62,10 @@ pub enum ArgKind {
     Languages,
     Fonts,
     Profiles,
+    /// Catalogue entries not installed yet.
+    Installable,
+    /// Installed languages and themes that can be removed.
+    Removable,
     TimePresets,
     WordPresets,
     OnOff,
@@ -85,6 +92,7 @@ impl ArgKind {
                 | ArgKind::WordPresets
                 | ArgKind::DailyModes
                 | ArgKind::Fonts
+                | ArgKind::Installable
                 | ArgKind::Free
                 | ArgKind::Slider { .. }
         )
@@ -217,6 +225,22 @@ pub const COMMANDS: &[CommandSpec] = &[
         help: "switch profiles (enter opens the menu)",
         arg: ArgKind::Profiles,
         requires_arg: false,
+    },
+    CommandSpec {
+        name: "install",
+        aliases: &["catalog", "get"],
+        usage: "[name]",
+        help: "get more languages and themes (enter opens the menu)",
+        arg: ArgKind::Installable,
+        requires_arg: false,
+    },
+    CommandSpec {
+        name: "uninstall",
+        aliases: &["remove"],
+        usage: "<name>",
+        help: "remove an installed language or theme",
+        arg: ArgKind::Removable,
+        requires_arg: true,
     },
     CommandSpec {
         name: "restart",
@@ -352,6 +376,8 @@ pub fn parse(line: &str) -> Result<Command, String> {
         "lines" => Command::Lines(opt_range(rest, LINES_RANGE)?),
         "fullscreen" => Command::Fullscreen(opt_on_off(rest)?),
         "profile" => Command::Profile(Some(rest.to_string()).filter(|r| !r.is_empty())),
+        "install" => Command::Install(Some(rest.to_string()).filter(|r| !r.is_empty())),
+        "uninstall" => Command::Uninstall(need(spec.usage)?.to_string()),
         "restart" => Command::Restart,
         "stats" => Command::Stats,
         "help" => Command::Help,
@@ -438,6 +464,8 @@ pub fn arg_candidates(kind: ArgKind, comps: &Completions) -> Vec<String> {
         ArgKind::Languages => comps.languages.clone(),
         ArgKind::Fonts => comps.fonts.clone(),
         ArgKind::Profiles => comps.profiles.clone(),
+        ArgKind::Installable => comps.installable.clone(),
+        ArgKind::Removable => comps.removable.clone(),
         ArgKind::TimePresets => Mode::TIME_PRESETS.iter().map(u16::to_string).collect(),
         ArgKind::WordPresets => Mode::WORD_PRESETS.iter().map(u16::to_string).collect(),
         ArgKind::OnOff => vec!["on".into(), "off".into()],
@@ -499,6 +527,10 @@ mod tests {
         assert!(parse("graphics off").is_err());
         assert_eq!(parse("zen"), Ok(Command::Zen(None)));
         assert_eq!(parse("profile"), Ok(Command::Profile(None)));
+        assert_eq!(parse("install"), Ok(Command::Install(None)));
+        assert_eq!(parse("get nord"), Ok(Command::Install(Some("nord".into()))));
+        assert_eq!(parse("remove nord"), Ok(Command::Uninstall("nord".into())));
+        assert!(parse("uninstall").is_err());
         assert_eq!(
             parse("pf sprint"),
             Ok(Command::Profile(Some("sprint".into())))

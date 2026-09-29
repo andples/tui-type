@@ -98,7 +98,9 @@ impl App {
         };
         let s = &profile.settings;
         if let Some(t) = s.theme.as_ref().filter(|t| self.themes.get(t).is_none()) {
-            self.notify(format!("profile {name}: unknown theme `{t}`"));
+            self.notify(format!(
+                "profile {name}: theme `{t}` isn't installed (:install {t})"
+            ));
             return;
         }
         if let Some(l) = s
@@ -106,7 +108,9 @@ impl App {
             .as_ref()
             .filter(|l| self.languages.get(l).is_none())
         {
-            self.notify(format!("profile {name}: unknown language `{l}`"));
+            self.notify(format!(
+                "profile {name}: language `{l}` isn't installed (:install {l})"
+            ));
             return;
         }
         let before = self.config.clone();

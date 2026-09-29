@@ -1,0 +1,10 @@
+name = "catppuccin-latte"
+
+[colors]
+bg = "#eff1f5"
+fg = "#4c4f69"
+sub = "#9ca0b0"
+main = "#8839ef"
+correct = "#4c4f69"
+error = "#d20f39"
+error_extra = "#e64553"

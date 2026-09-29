@@ -3,7 +3,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use super::Screen;
-use super::action::{Action, BoardAction, ProfileAction};
+use super::action::{Action, BoardAction, CatalogAction, ProfileAction};
 use crate::test::Status;
 
 /// Context needed to interpret a key.
@@ -14,6 +14,8 @@ pub struct InputContext {
     pub slider_open: bool,
     pub test_status: Status,
     pub profile_menu: ProfileInput,
+    /// The install screen is asking whether to remove something.
+    pub catalog_confirm: bool,
 }
 
 /// Which part of the profile screen has the keyboard.
@@ -64,6 +66,7 @@ pub fn map_key(key: KeyEvent, ctx: InputContext) -> Action {
             _ => Action::Nop,
         },
         Screen::Profiles => map_profiles(key, ctx.profile_menu),
+        Screen::Catalog => map_catalog(key, ctx.catalog_confirm),
         Screen::Login => match key.code {
             KeyCode::Esc | KeyCode::Char('q') => Action::CancelLogin,
             KeyCode::Char(':') => Action::OpenCommandLine,
@@ -124,6 +127,37 @@ fn map_leaderboard(key: KeyEvent, ctrl: bool) -> Action {
         KeyCode::Char('[') => b(B::PrevDay),
         KeyCode::Char(']') => b(B::NextDay),
         KeyCode::Enter => b(B::Open),
+        KeyCode::Esc | KeyCode::Char('q') => Action::Back,
+        KeyCode::Char(':') => Action::OpenCommandLine,
+        KeyCode::Char('?') => Action::ShowHelp,
+        _ => Action::Nop,
+    }
+}
+
+fn map_catalog(key: KeyEvent, confirm: bool) -> Action {
+    use CatalogAction as C;
+    let c = |a| Action::Catalog(a);
+    if confirm {
+        return match key.code {
+            KeyCode::Char('y') => c(C::ConfirmRemove),
+            _ => c(C::CancelRemove),
+        };
+    }
+    match key.code {
+        KeyCode::Up | KeyCode::Char('k') => c(C::Up),
+        KeyCode::Down | KeyCode::Char('j') => c(C::Down),
+        KeyCode::Home | KeyCode::Char('g') => c(C::Top),
+        KeyCode::End | KeyCode::Char('G') => c(C::Bottom),
+        KeyCode::Tab
+        | KeyCode::BackTab
+        | KeyCode::Left
+        | KeyCode::Right
+        | KeyCode::Char('h')
+        | KeyCode::Char('l') => c(C::SwitchTab),
+        KeyCode::Enter | KeyCode::Char(' ') => c(C::Use),
+        KeyCode::Char('i') => c(C::Install),
+        KeyCode::Char('d') | KeyCode::Char('x') | KeyCode::Delete => c(C::Remove),
+        KeyCode::Char('r') => c(C::Refresh),
         KeyCode::Esc | KeyCode::Char('q') => Action::Back,
         KeyCode::Char(':') => Action::OpenCommandLine,
         KeyCode::Char('?') => Action::ShowHelp,
@@ -240,6 +274,7 @@ mod tests {
             slider_open: false,
             test_status: status,
             profile_menu: ProfileInput::List,
+            catalog_confirm: false,
         }
     }
 

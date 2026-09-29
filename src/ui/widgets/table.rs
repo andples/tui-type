@@ -4,7 +4,7 @@
 
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Rect};
-use ratatui::style::Style;
+use ratatui::style::{Color, Style};
 use ratatui::text::{Span, Text};
 use ratatui::widgets::{HighlightSpacing, Row as TableRow, Table, TableState};
 
@@ -67,6 +67,8 @@ pub enum Role {
     Dim,
     Accent,
     Error,
+    /// A fixed colour that ignores the palette (theme swatches).
+    Swatch(Color),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -100,6 +102,10 @@ impl Cell {
 
     pub fn error(text: impl Into<String>) -> Self {
         Self::new(text, Role::Error)
+    }
+
+    pub fn swatch(text: impl Into<String>, color: Color) -> Self {
+        Self::new(text, Role::Swatch(color))
     }
 
     pub fn span(mut self, columns: u16) -> Self {
@@ -292,6 +298,7 @@ fn cell_style(role: Role, accent_row: bool, highlight: bool, p: &Palette) -> Sty
         Role::Dim => p.sub(),
         Role::Accent => p.main(),
         Role::Error => p.error(),
+        Role::Swatch(c) => Style::default().fg(c),
     }
 }
 

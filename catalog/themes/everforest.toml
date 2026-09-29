@@ -1,0 +1,10 @@
+name = "everforest"
+
+[colors]
+bg = "#2d353b"
+fg = "#d3c6aa"
+sub = "#859289"
+main = "#a7c080"
+correct = "#d3c6aa"
+error = "#e67e80"
+error_extra = "#e69875"

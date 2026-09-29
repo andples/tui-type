@@ -1,0 +1,10 @@
+name = "solarized-dark"
+
+[colors]
+bg = "#002b36"
+fg = "#93a1a1"
+sub = "#586e75"
+main = "#b58900"
+correct = "#93a1a1"
+error = "#dc322f"
+error_extra = "#cb4b16"

@@ -1,8 +1,8 @@
 # ttyp
 
 A minimal, monkeytype-style typing test for the terminal. Rust, ratatui, no
-network. Themes and word lists are plain TOML files; your history stays on
-your machine.
+network. Themes and word lists are plain TOML files, installed from a small
+catalogue as you want them (`:install`); your history stays on your machine.
 
 ```
 ttyp
@@ -52,6 +52,8 @@ Press `esc`, start typing, and the palette fuzzy-filters as you go.
 | `fullscreen [on\|off]` | `full` | largest text that fits the terminal, no chrome |
 | `zen [on\|off]` | | words only — hides the brand, timer and mode line |
 | `profile [name]` | `profiles`, `pf` | open the profile menu, or switch a profile on |
+| `install [name]` | `catalog`, `get` | open the install menu, or install and use a language/theme |
+| `uninstall <name>` | `remove` | remove an installed language or theme |
 | `set <key> <value>` | | any config key, e.g. `set results.chart off` |
 | `restart` | `r` | new test |
 | `stats` | `s` | history |
@@ -66,6 +68,38 @@ with no number to open a slider on the bottom line: `←`/`→` (or `h`/`l`)
 adjust with a live preview, `enter` applies, `esc` reverts.
 
 Every change is written to the config file immediately.
+
+### Installing languages and themes
+
+ttyp ships with only `english`, `english_1k` and the `default` theme. Everything
+else is in the catalogue and installed when you want it. `:install` opens a menu
+with a tab for languages and a tab for themes:
+
+```
+install    languages 3/8    themes 2/14
+
+    dutch       Dutch · 196 words          available
+  ● english     English · 200 words         built in
+  ○ english_1k  English 1k · 999 words      built in
+› ○ spanish     Spanish · 258 words        installed
+```
+
+`↑↓`/`jk` move, `tab` (or `←→`) switches tabs, `enter` uses the highlighted
+item and installs it first if needed, `i` only installs it, `d` removes it
+(after a `y`), `r` fetches the catalogue again and `esc` goes back. On the
+themes tab the highlighted theme previews live, whether or not it's
+installed. `:install nord` and `:uninstall nord` do the same from the command
+line.
+
+Installed files go in `~/.config/ttyp/languages/` and `~/.config/ttyp/themes/`,
+next to any you wrote yourself (the menu lists those as `local`). If your
+config names a language or theme that isn't installed, such as `gruvbox`
+from before themes moved to the catalogue, ttyp installs it at startup.
+
+The catalogue is the [`catalog/`](catalog/) directory of this repository,
+fetched from GitHub. Set `catalog` in the config to use another base URL or a
+local directory, or `catalog = ""` to turn it off. With `server = ""` ttyp
+never installs anything on its own at startup.
 
 ### Profiles
 
@@ -209,8 +243,7 @@ error = "#f38ba8"       # wrong characters
 error_extra = "#eba0ac" # characters typed past the end of a word
 ```
 
-Built in: `default`, `gruvbox`, `catppuccin-mocha`, `nord`, `rose-pine`,
-`light`.
+Built in: `default`. The rest are in the catalogue (`:install`).
 
 ### Adding a language
 
@@ -222,7 +255,15 @@ display = "English 5k"
 words = ["the", "of", "and", ...]
 ```
 
-Built in: `english` (200 words), `english_1k`.
+Built in: `english` (200 words), `english_1k`. The rest are in the catalogue
+(`:install`).
+
+### Adding to the catalogue
+
+Put the file in `catalog/languages/` or `catalog/themes/`, named after its
+`name`, then regenerate the index with `TTYP_BLESS=1 cargo test catalog_index`
+(the test fails while `catalog/index.toml` is stale). Names are lowercase
+letters, digits, `-` and `_`. Installs pick it up once it's on `main`.
 
 ### Profile files
 

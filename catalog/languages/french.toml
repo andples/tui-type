@@ -1,0 +1,28 @@
+name = "french"
+display = "French"
+words = [
+  "de", "la", "le", "et", "les", "des", "en", "un", "du", "une", "que", "est", "pour",
+  "qui", "dans", "a", "par", "plus", "pas", "au", "sur", "ne", "se", "ce", "il",
+  "sont", "ou", "avec", "son", "aux", "cette", "été", "elle", "je", "comme", "on",
+  "mais", "nous", "ses", "leur", "sa", "y", "même", "tout", "deux", "vous", "faire",
+  "bien", "sans", "peut", "autres", "entre", "dont", "aussi", "ces", "fait", "cas",
+  "alors", "lui", "encore", "ont", "avant", "très", "moins", "ans", "avoir", "sous",
+  "après", "leurs", "non", "autre", "si", "notre", "temps", "tous", "où", "premier",
+  "être", "donc", "ainsi", "toute", "chez", "faut", "contre", "peu", "nouveau",
+  "depuis", "jour", "lors", "fois", "grand", "monde", "vie", "pays", "mois", "année",
+  "france", "ceux", "avait", "trois", "partie", "dire", "doit", "tant",
+  "quand", "rien", "là", "ici", "homme", "chose", "part", "celle", "celui", "fin",
+  "cela", "mieux", "plusieurs", "toujours", "pendant", "quelque", "déjà", "nom",
+  "place", "moment", "petit", "femme", "jamais", "pourquoi", "ville", "politique",
+  "travail", "enfant", "seul", "question", "tête", "point", "main", "enfin", "voir",
+  "savoir", "groupe", "devant", "pouvoir", "vers", "chaque", "aller", "maison",
+  "nouvelle", "état", "général", "œil", "mettre", "raison", "droit", "besoin", "porte",
+  "heure", "prendre", "compte", "dernier", "personne", "lieu", "venir", "histoire",
+  "mot", "cœur", "penser", "rester", "côté", "affaire", "moyen", "long", "guerre",
+  "problème", "ami", "vouloir", "sens", "mort", "ordre", "eau", "mère", "père",
+  "parler", "terre", "effet", "public", "bon", "gens", "grande", "façon", "dieu",
+  "jeune", "forme", "rapport", "idée", "tenir", "air", "nuit", "vieux", "fond",
+  "famille", "nombre", "action", "pied", "semaine", "demander", "service",
+  "gouvernement", "mouvement", "nature", "parole", "loi", "amour", "mal", "pourtant",
+  "voiture"
+]

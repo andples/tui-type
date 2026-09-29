@@ -1,0 +1,28 @@
+name = "german"
+display = "German"
+words = [
+  "der", "die", "und", "in", "den", "von", "zu", "das", "mit", "sich", "des", "auf",
+  "für", "ist", "im", "dem", "nicht", "ein", "eine", "als", "auch", "es", "an",
+  "werden", "aus", "er", "hat", "dass", "sie", "nach", "wird", "bei", "einer", "um",
+  "am", "sind", "noch", "wie", "einem", "über", "einen", "so", "zum", "war", "haben",
+  "nur", "oder", "aber", "vor", "zur", "bis", "mehr", "durch", "man", "sein", "wurde",
+  "sei", "hatte", "kann", "gegen", "vom", "können", "schon", "wenn", "habe", "seine",
+  "ihre", "dann", "unter", "wir", "soll", "ich", "eines", "jahr", "zwei", "jahren",
+  "diese", "dieser", "wieder", "keine", "seiner", "worden", "will", "zwischen",
+  "immer", "was", "sagte", "gibt", "alle", "diesen", "seit", "muss", "wurden", "beim",
+  "doch", "jetzt", "waren", "drei", "neue", "damit", "bereits", "da", "ihr", "seinen",
+  "müssen", "ab", "ihrer", "ihren", "wo", "sagt", "sehr", "ohne", "weil", "kein",
+  "neuen", "etwa", "uns", "mann", "alles", "heute", "sollen", "tag", "viel", "ihm",
+  "dieses", "hier", "einmal", "dort", "leben", "welt", "land", "stadt", "zeit", "frau",
+  "kind", "arbeit", "haus", "hand", "frage", "geld", "seite", "recht", "weg", "teil",
+  "ende", "kopf", "auge", "woche", "grund", "morgen", "abend", "nacht", "wasser",
+  "jahre", "menschen", "leute", "ganz", "gut", "groß", "klein", "alt", "jung", "lang",
+  "hoch", "lange", "viele", "wenig", "letzte", "erste", "andere", "eigene", "gleich",
+  "deutsch", "schnell", "später", "dabei", "denn", "nun", "also", "oft", "wohl",
+  "fast", "selbst", "gerade", "genau", "bitte", "danke", "sagen", "machen", "gehen",
+  "kommen", "sehen", "geben", "stehen", "finden", "bleiben", "liegen", "heißen",
+  "denken", "nehmen", "tun", "dürfen", "glauben", "halten", "nennen", "zeigen",
+  "führen", "sprechen", "bringen", "fahren", "fragen", "kennen", "gelten", "stellen",
+  "spielen", "arbeiten", "brauchen", "folgen", "lernen", "bestehen", "verstehen",
+  "setzen", "bekommen", "beginnen", "erzählen"
+]

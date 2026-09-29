@@ -1,0 +1,187 @@
+# Generated from the files in this directory: TTYP_BLESS=1 cargo test catalog_index
+
+[[languages]]
+name = "dutch"
+display = "Dutch"
+words = 196
+
+[[languages]]
+name = "french"
+display = "French"
+words = 216
+
+[[languages]]
+name = "german"
+display = "German"
+words = 225
+
+[[languages]]
+name = "italian"
+display = "Italian"
+words = 202
+
+[[languages]]
+name = "portuguese"
+display = "Portuguese"
+words = 215
+
+[[languages]]
+name = "spanish"
+display = "Spanish"
+words = 258
+
+[[themes]]
+name = "catppuccin-latte"
+
+[themes.colors]
+bg = "#eff1f5"
+fg = "#4c4f69"
+sub = "#9ca0b0"
+main = "#8839ef"
+correct = "#4c4f69"
+error = "#d20f39"
+error_extra = "#e64553"
+
+[[themes]]
+name = "catppuccin-mocha"
+
+[themes.colors]
+bg = "#1e1e2e"
+fg = "#cdd6f4"
+sub = "#6c7086"
+main = "#cba6f7"
+correct = "#cdd6f4"
+error = "#f38ba8"
+error_extra = "#eba0ac"
+
+[[themes]]
+name = "dracula"
+
+[themes.colors]
+bg = "#282a36"
+fg = "#f8f8f2"
+sub = "#6272a4"
+main = "#bd93f9"
+correct = "#f8f8f2"
+error = "#ff5555"
+error_extra = "#b0414a"
+
+[[themes]]
+name = "everforest"
+
+[themes.colors]
+bg = "#2d353b"
+fg = "#d3c6aa"
+sub = "#859289"
+main = "#a7c080"
+correct = "#d3c6aa"
+error = "#e67e80"
+error_extra = "#e69875"
+
+[[themes]]
+name = "gruvbox"
+
+[themes.colors]
+bg = "#282828"
+fg = "#ebdbb2"
+sub = "#928374"
+main = "#d79921"
+correct = "#ebdbb2"
+error = "#fb4934"
+error_extra = "#cc241d"
+
+[[themes]]
+name = "kanagawa"
+
+[themes.colors]
+bg = "#1f1f28"
+fg = "#dcd7ba"
+sub = "#727169"
+main = "#7e9cd8"
+correct = "#dcd7ba"
+error = "#e82424"
+error_extra = "#c34043"
+
+[[themes]]
+name = "light"
+
+[themes.colors]
+bg = "#f5f5f5"
+fg = "#2b2b2b"
+sub = "#9a9a9a"
+main = "#c47a00"
+correct = "#2b2b2b"
+error = "#d0342c"
+error_extra = "#a11d18"
+
+[[themes]]
+name = "nord"
+
+[themes.colors]
+bg = "#2e3440"
+fg = "#d8dee9"
+sub = "#616e88"
+main = "#88c0d0"
+correct = "#d8dee9"
+error = "#bf616a"
+error_extra = "#d08770"
+
+[[themes]]
+name = "one-dark"
+
+[themes.colors]
+bg = "#282c34"
+fg = "#abb2bf"
+sub = "#5c6370"
+main = "#61afef"
+correct = "#abb2bf"
+error = "#e06c75"
+error_extra = "#be5046"
+
+[[themes]]
+name = "rose-pine"
+
+[themes.colors]
+bg = "#191724"
+fg = "#e0def4"
+sub = "#6e6a86"
+main = "#ebbcba"
+correct = "#e0def4"
+error = "#eb6f92"
+error_extra = "#b4637a"
+
+[[themes]]
+name = "solarized-dark"
+
+[themes.colors]
+bg = "#002b36"
+fg = "#93a1a1"
+sub = "#586e75"
+main = "#b58900"
+correct = "#93a1a1"
+error = "#dc322f"
+error_extra = "#cb4b16"
+
+[[themes]]
+name = "solarized-light"
+
+[themes.colors]
+bg = "#fdf6e3"
+fg = "#586e75"
+sub = "#93a1a1"
+main = "#268bd2"
+correct = "#586e75"
+error = "#dc322f"
+error_extra = "#cb4b16"
+
+[[themes]]
+name = "tokyo-night"
+
+[themes.colors]
+bg = "#1a1b26"
+fg = "#c0caf5"
+sub = "#565f89"
+main = "#7aa2f7"
+correct = "#c0caf5"
+error = "#f7768e"
+error_extra = "#db4b4b"

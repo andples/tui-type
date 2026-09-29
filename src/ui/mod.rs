@@ -2,6 +2,7 @@
 //! screen, then overlays the command line or a transient notice.
 
 pub mod bigtext;
+pub mod catalog;
 pub mod command_line;
 pub mod font;
 pub mod graph;
@@ -54,6 +55,7 @@ pub fn render(frame: &mut Frame, app: &App) -> Vec<ImageLine> {
         Screen::Stats => stats::render(frame, app, body, &p),
         Screen::Help => help::render(frame, app, body, &p),
         Screen::Profiles => profiles::render(frame, app, body, &p),
+        Screen::Catalog => catalog::render(frame, app, body, &p),
         Screen::Login => login::render(frame, app, body, &p),
         Screen::Leaderboard => leaderboard::render(frame, app, body, &p),
         Screen::Graph => graph::render(frame, app, body, &p),

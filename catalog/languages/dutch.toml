@@ -1,0 +1,24 @@
+name = "dutch"
+display = "Dutch"
+words = [
+  "de", "en", "van", "ik", "te", "dat", "die", "in", "een", "hij", "het", "niet",
+  "zijn", "is", "was", "op", "aan", "met", "als", "voor", "had", "er", "maar", "om",
+  "hem", "dan", "zou", "of", "wat", "mijn", "men", "dit", "zo", "door", "over", "ze",
+  "zich", "bij", "ook", "tot", "je", "mij", "uit", "der", "daar", "haar", "naar",
+  "heb", "hoe", "heeft", "hebben", "deze", "u", "want", "nog", "zal", "me", "zij",
+  "nu", "ge", "geen", "omdat", "iets", "worden", "toch", "al", "waren", "veel", "meer",
+  "doen", "toen", "moet", "ben", "zonder", "kan", "hun", "dus", "alles", "onder", "ja",
+  "eens", "hier", "wie", "werd", "altijd", "doch", "wordt", "wezen", "kunnen", "ons",
+  "zelf", "tegen", "na", "reeds", "wil", "kon", "niets", "uw", "iemand", "geweest",
+  "andere", "jaar", "dag", "tijd", "huis", "man", "vrouw", "kind", "land", "stad",
+  "werk", "hand", "oog", "hoofd", "water", "nacht", "week", "leven", "wereld",
+  "mensen", "vraag", "weg", "deel", "kant", "plaats", "moeder", "vader", "vriend",
+  "school", "boek", "woord", "naam", "geld", "deur", "auto", "groot", "klein", "goed",
+  "nieuw", "oud", "jong", "lang", "eerste", "laatste", "hele", "weinig", "snel",
+  "samen", "gewoon", "misschien", "echt", "heel", "vaak", "soms", "nooit", "weer",
+  "later", "eigenlijk", "zeggen", "gaan", "komen", "zien", "geven", "staan", "vinden",
+  "blijven", "liggen", "denken", "nemen", "houden", "laten", "spreken", "brengen",
+  "rijden", "vragen", "kennen", "spelen", "lopen", "werken", "leren", "beginnen",
+  "maken", "wonen", "eten", "drinken", "slapen", "lezen", "schrijven", "kopen",
+  "betalen", "horen", "voelen", "wachten", "zoeken", "proberen", "helpen"
+]
