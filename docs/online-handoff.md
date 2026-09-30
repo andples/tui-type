@@ -1,8 +1,8 @@
 # Handoff: daily tests, server and leaderboards
 
-Status: **shipped.** Latest release **v1.3.1** (2026-09-30) on GitHub
+Status: **shipped.** Latest release **v1.4.1** (2026-10-01) on GitHub
 (prebuilt binaries), the Homebrew tap `andples/ttyp` and crates.io (`ttyp`
-1.3.1, `ttyp-core` 1.3.0); the server runs 1.3.0's core behind the
+1.4.1, `ttyp-core` 1.3.0); the server runs 1.3.0's core behind the
 Cloudflare tunnel. This brief is self-contained: read it, then `CLAUDE.md`
 and `README.md` at the repo root. Decisions marked **decided** came from the
 project owner; don't re-litigate them. Anything marked *open* is yours to
@@ -10,11 +10,9 @@ settle and note here.
 
 ## Handoff (2026-10-01)
 
-**Unreleased on `main`:** `0180db8` landing menu: `↑`/`↓` highlight, `enter`
-runs the highlighted row, "today's daily" opens the command line on
-`daily ` so the modes are listed. Tested; the owner chose not to ship it yet.
-App-only: shipping is `scripts/release.sh patch` then `cargo publish -p ttyp`
-(no server rebuild, `ttyp-core` unchanged).
+Nothing unreleased on `main`. App-only releases are `scripts/release.sh
+patch|minor` then `cargo publish -p ttyp` (no server rebuild while
+`ttyp-core` is unchanged).
 
 What shipped since 1.1.0, in order (details in README and CLAUDE.md):
 
@@ -32,6 +30,11 @@ What shipped since 1.1.0, in order (details in README and CLAUDE.md):
   `code_*` languages (Lean 4 uses editor abbreviations like `\all`, `\R`,
   checked against vscode-lean4's `abbreviations.json`).
 - **1.3.1** landing screen: a letter goes to the words without being typed.
+- **1.4.0** landing menu `↑`/`↓` + `enter`; one selection look for every
+  list (`widgets::cursor`: ` › `, row nudged one column right, whole row in
+  `Palette::selected`); the history screen has a cursor.
+- **1.4.1** leaderboard key line lists `p profile` (the key existed since
+  1.3.0).
 
 Decided by the owner along the way:
 
@@ -50,6 +53,14 @@ Decided by the owner along the way:
   pushes to `main` are done on the owner's say-so.
 
 Open items:
+
+- **Daily seeds** (reported 2026-10-01: "same seed, just longer for longer
+  modes"): not reproduced. Server, live DB (distinct seed and words per
+  row), public API and a headless client all show distinct words;
+  `daily::tests::every_daily_has_its_own_words` guards it. Waiting on the
+  owner for which dailies looked alike and where.
+- **Public profiles:** live, but every account is still private
+  (`:account public on`).
 
 - **Login white bar** (reported, not reproduced): a white bar of pixels
   about a third down, left of centre, when logging in. A simulated Ghostty
