@@ -1,6 +1,6 @@
 //! Public profiles (see docs/online-handoff.md §8): personal bests, streak
-//! and recent dailies of one user. Private unless the user turned
-//! `users.public` on; a user can always see their own.
+//! and recent dailies of one user. Public unless the user turned
+//! `users.public` off; a user can always see their own.
 
 use anyhow::Result;
 use chrono::NaiveDate;

@@ -75,7 +75,8 @@ pub fn hash(token: &str) -> Vec<u8> {
 pub async fn issue(pool: &SqlitePool, github_id: i64, login: &str) -> Result<(User, String)> {
     let now = crate::db::now();
     sqlx::query(
-        "INSERT INTO users (github_id, github_login, created_at) VALUES (?1, ?2, ?3) \
+        // New users start public; a returning user keeps their choice.
+        "INSERT INTO users (github_id, github_login, public, created_at) VALUES (?1, ?2, 1, ?3) \
          ON CONFLICT (github_id) DO UPDATE SET github_login = excluded.github_login",
     )
     .bind(github_id)

@@ -870,7 +870,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn profiles_are_private_until_opted_in() {
+    async fn profiles_are_public_until_opted_out() {
         let (app, state) = app().await;
         let (_, body) = call(&app, get("/dailies/today", None)).await;
         let list: Vec<DailySummary> = serde_json::from_value(body).unwrap();
@@ -890,27 +890,12 @@ mod tests {
             assert_eq!(status, StatusCode::OK);
         }
 
-        // Private by default: hidden from others, visible to its owner.
-        let (status, _) = call(&app, get("/users/alice", None)).await;
-        assert_eq!(status, StatusCode::NOT_FOUND);
-        let (status, _) = call(&app, get("/users/alice", Some(&bob))).await;
-        assert_eq!(status, StatusCode::NOT_FOUND);
-        let (status, body) = call(&app, get("/users/alice", Some(&alice))).await;
-        assert_eq!(status, StatusCode::OK, "{body}");
+        // Public by default: anyone can look, login case doesn't matter.
         let (_, body) = call(&app, get("/account", Some(&alice))).await;
         let acct: Account = serde_json::from_value(body).unwrap();
-        assert_eq!((acct.login.as_str(), acct.public), ("Alice", false));
+        assert_eq!((acct.login.as_str(), acct.public), ("Alice", true));
         let (status, _) = call(&app, get("/account", None)).await;
         assert_eq!(status, StatusCode::UNAUTHORIZED);
-
-        // Opted in: anyone can look, login case doesn't matter.
-        let (_, body) = call(
-            &app,
-            post("/account", Some(&alice), &AccountUpdate { public: true }),
-        )
-        .await;
-        let acct: Account = serde_json::from_value(body).unwrap();
-        assert!(acct.public);
         let (status, body) = call(&app, get("/users/ALICE", None)).await;
         assert_eq!(status, StatusCode::OK, "{body}");
         let p: Profile = serde_json::from_value(body).unwrap();
@@ -922,12 +907,22 @@ mod tests {
         assert_eq!(p.bests[0].attempt, 2, "the faster run");
         assert!(p.bests[0].wpm > p.recent[1].wpm);
 
-        // And back to private.
-        call(
+        // Opted out: hidden from others, still visible to its owner.
+        let (_, body) = call(
             &app,
             post("/account", Some(&alice), &AccountUpdate { public: false }),
         )
         .await;
+        let acct: Account = serde_json::from_value(body).unwrap();
+        assert!(!acct.public);
+        let (status, _) = call(&app, get("/users/alice", None)).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        let (status, _) = call(&app, get("/users/alice", Some(&bob))).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        let (status, body) = call(&app, get("/users/alice", Some(&alice))).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        // Logging in again keeps the choice.
+        auth::issue(&state.pool, 1, "Alice").await.unwrap();
         let (status, _) = call(&app, get("/users/alice", None)).await;
         assert_eq!(status, StatusCode::NOT_FOUND);
         let (status, _) = call(&app, get("/users/nobody", None)).await;

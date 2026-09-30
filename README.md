@@ -228,8 +228,8 @@ ttyp. `:set server …` changes it live.
   scrolls off.
 - `:user <login>` shows a player's profile: daily streak, personal best per
   language and mode, and their latest runs (`enter` opens a run's graph).
-  `:user` alone shows yours. Profiles are private until you run
-  `:account public on`; `:account` shows which it is. Leaderboards list your
+  `:user` alone shows yours. Profiles are public; `:account public off`
+  hides yours from everyone else, and `:account` shows which it is. Leaderboards list your
   GitHub login either way.
 - Medals: the main dailies are `english` time 15, 30 and 60. Finishing 1st,
   2nd or 3rd on one of their *first try* boards earns gold, silver or bronze
