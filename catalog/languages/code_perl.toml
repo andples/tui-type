@@ -1,12 +1,27 @@
 name = "code_perl"
 display = "Perl (code)"
 words = [
-  "#!/usr/bin/perl", "use", "strict;", "warnings;", "my", "our", "local", "sub",
-  "return", "if", "elsif", "else", "unless", "while", "until", "for", "foreach",
-  "last", "next", "redo", "print", "say", "printf", "chomp", "split", "join", "push",
-  "pop", "shift", "unshift", "keys", "values", "each", "exists", "delete", "defined",
-  "open", "close", "die", "warn", "eval", "ref", "bless", "scalar", "wantarray",
-  "length", "substr", "index", "lc", "uc", "sprintf", "sort", "map", "grep", "$x",
-  "@list", "%hash", "$_", "@_", "$0", "$!", "=~", "!~", "s///", "tr///", "qw()", "=>",
-  "->", "::", ".", ".=", "eq", "ne", "lt", "gt", "cmp", "<=>", "<STDIN>", "__END__"
+  "#!/usr/bin/perl", "#!/usr/bin/env", "perl", "use", "strict;", "warnings;", "my",
+  "our", "local", "sub", "return", "if", "elsif", "else", "unless", "while", "until",
+  "for", "foreach", "last", "next", "redo", "do", "package", "require", "no", "BEGIN",
+  "END", "__END__", "__DATA__", "__PACKAGE__", "__FILE__", "__LINE__", "and", "or",
+  "not", "x", "eq", "ne", "lt", "gt", "le", "ge", "cmp", "print", "say", "printf",
+  "chomp", "chop", "split", "join", "push", "pop", "shift", "unshift", "splice",
+  "keys", "values", "each", "exists", "delete", "defined", "undef", "open", "close",
+  "die", "warn", "eval", "ref", "bless", "scalar", "wantarray", "length", "substr",
+  "index", "rindex", "lc", "uc", "lcfirst", "ucfirst", "sprintf", "sort", "reverse",
+  "map", "grep", "abs", "int", "sqrt", "rand", "srand", "time", "localtime", "sleep",
+  "exit", "system", "exec", "binmode", "opendir", "readdir", "closedir", "mkdir",
+  "unlink", "rename", "wait", "$x", "$self", "$class", "$_", "@_", "$0", "$1", "$2",
+  "$!", "$@", "$$", "$/", "@ARGV", "%ENV", "$ENV{HOME}", "@list", "%hash",
+  "$hash{key}", "$array[0]", "@array", "$#array", "scalar(@list)", "@{$ref}",
+  "%{$ref}", "$ref->{key}", "$ref->[0]", "$self->{name}", "\\@list", "\\%hash",
+  "$$ref", "STDIN", "<STDIN>", "STDOUT", "STDERR", "<$fh>", "$fh", "<>", "=~", "!~",
+  "s///", "tr///", "m//", "qw()", "qw//", "q()", "qq()", "=>", "->", "::", ".", ".=",
+  "==", "!=", "<=>", "&&", "||", "//", "//=", "||=", "**", "++", "--", "..",
+  "s/foo/bar/g", "/^\\s+$/", "\\d+", "\\w+", "/i", "/g", "<<EOF", "EOF", "-e", "-f",
+  "-d", "Data::Dumper", "Dumper()", "Getopt::Long", "GetOptions()", "File::Basename",
+  "List::Util", "Scalar::Util", "blessed()", "POSIX", "Carp", "croak", "confess",
+  "JSON::PP", "Moose", "has", "DBI", "DBI->connect()", "$dbh->prepare()",
+  "$sth->execute()", "@ISA", "SUPER::new()", "new()", "parent"
 ]

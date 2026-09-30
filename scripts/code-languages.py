@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Writes the programming-language word lists (catalog/languages/code_*.toml):
-keywords, built-ins and common idioms per language. Edit the lists below,
-run `scripts/code-languages.py catalog/languages`, then regenerate the index
+keywords, operators, built-ins, standard-library names and common idioms per
+language. Each list is split on whitespace, so every entry must be one
+self-contained token (no spaces inside). Edit the lists below, run
+`scripts/code-languages.py catalog/languages`, then regenerate the index
 with `TTYP_BLESS=1 cargo test catalog_index`."""
 import json, sys
 L = {}
@@ -11,261 +13,680 @@ def lang(name, display, text):
 lang("python", "Python", r"""
 def return if elif else for while in not and or is None True False import from as class self
 try except finally raise with yield lambda pass break continue global nonlocal assert del async await
+match case
 print() len() range() enumerate() zip() map() filter() sorted() reversed() sum() min() max() abs() round()
-int() float() str() bool() list() dict() set() tuple() type() isinstance() hasattr() getattr() setattr()
-open() input() super() iter() next() any() all() __init__ __name__ __main__ __repr__ __str__ __eq__
-self.name self.value cls @property @staticmethod @classmethod @dataclass
-append() extend() insert() pop() remove() index() count() keys() values() items() get() update() copy()
-split() join() strip() replace() format() startswith() endswith() lower() upper() find() encode() decode()
-import os import sys import json import re from typing List Dict Optional Any Callable Iterable
-os.path sys.argv json.loads json.dumps re.match f"{x}" "__main__" if __name__ == "__main__": args kwargs *args **kwargs
-[x for x in xs] {k: v} ValueError TypeError KeyError IndexError Exception StopIteration
-with open(path) as f: f.read() f.write() for i in range(n): return None yield from
-numpy np pandas pd pytest assert raise ValueError("bad") -> int -> str x: int = 0
+int() float() str() bool() list() dict() set() tuple() type() isinstance() issubclass()
+hasattr() getattr() setattr() open() input() super() iter() next() any() all() repr()
+__init__ __name__ __main__ __repr__ __str__ __eq__ __len__ __iter__ __next__ __enter__ __exit__
+__getitem__ __call__ __file__ __all__
+self.name self.value cls
+@property @staticmethod @classmethod @dataclass @abstractmethod
+@pytest.fixture @functools.lru_cache
+append() extend() insert() pop() remove() index() count() sort() clear() keys() values() items()
+get() update() copy() add()
+split() join() strip() rstrip() lstrip() replace() startswith() endswith() lower() upper() find()
+encode() decode() read() write() close()
+os sys json re math time random itertools functools collections pathlib subprocess logging typing
+datetime asyncio
+os.path.join() os.path.exists() os.environ os.getcwd() os.listdir()
+sys.argv sys.exit() sys.stdin sys.stdout
+json.loads() json.dumps() json.load() json.dump() re.match() re.search() re.sub() re.compile()
+math.sqrt() time.time() time.sleep() random.randint() random.choice()
+Path() Path.cwd() datetime.now() defaultdict() Counter() namedtuple() deque()
+subprocess.run() logging.getLogger() logger.info() argparse.ArgumentParser()
+asyncio.run()
+List Dict Set Tuple Optional Any Union Callable Iterable Iterator TypeVar
+Literal list[int] list[str] Optional[str]
+Exception ValueError TypeError KeyError IndexError AttributeError RuntimeError StopIteration
+NotImplementedError FileNotFoundError
+== != <= >= += -= *= // ** % -> := ... *args **kwargs args kwargs
+f"{x}" f"{name}" "__main__" [] {} () [0] [-1] [1:] [:-1] [::-1] [i] range(n) range(len(xs))
+print(f"{x}") len(xs)
+numpy np pandas pd np.array() np.zeros() pd.DataFrame() df.head()
+pytest requests requests.get() response.json()
 """)
 
 lang("cpp", "C++", r"""
-#include <iostream> <vector> <string> <map> <memory> <algorithm> <unordered_map>
-int main() return 0; std::cout std::cin std::endl std::string std::vector<int> std::map std::unique_ptr std::shared_ptr std::make_unique std::move
-namespace using class struct public: private: protected: virtual override final const constexpr static inline
-template <typename T> auto void bool char int long double float unsigned size_t nullptr true false
-new delete this operator friend explicit mutable volatile noexcept enum typedef sizeof decltype
-if else for while do switch case default: break; continue; try catch throw
-std::sort std::find std::begin std::end std::pair std::optional std::array std::thread std::mutex
-push_back() emplace_back() size() empty() begin() end() clear() insert() erase() find() at() front() back()
-const& && -> :: << >> ++i i++ != == <= >= &x *ptr ptr-> ~Foo() Foo::Foo() #pragma once #define #ifdef #endif
-for (auto& x : xs) { } std::string_view static_cast<int> dynamic_cast reinterpret_cast const_cast
+#include #define #ifdef #ifndef #endif #pragma once
+<iostream> <vector> <string> <map> <set> <memory> <algorithm> <unordered_map> <unordered_set>
+<utility> <functional> <optional> <array> <cstdint> <cstdio> <thread> <mutex> <chrono> <sstream>
+<fstream> <cassert> <cmath>
+int main() return return 0; argc argv
+namespace using class struct union public: private: protected: virtual override final const constexpr
+consteval static inline template typename auto void bool char int long short double float unsigned
+signed size_t nullptr true false new delete this operator friend explicit mutable volatile noexcept
+enum typedef sizeof decltype alignof static_assert thread_local extern concept requires
+co_await co_return co_yield if else for while do switch case default: break; continue; try catch
+throw goto
+std::cout std::cin std::cerr std::endl std::string std::vector std::map std::set std::unordered_map
+std::unordered_set std::unique_ptr std::shared_ptr std::weak_ptr std::make_unique std::make_shared
+std::move std::forward std::swap std::pair std::make_pair std::tuple std::optional std::nullopt
+std::variant std::array std::thread std::mutex std::lock_guard std::function std::string_view
+std::sort std::find std::find_if std::remove_if std::count std::reverse std::fill std::transform
+std::for_each std::accumulate std::begin std::end std::min std::max std::abs std::size
+std::to_string std::stoi std::getline std::runtime_error std::exception std::ostream std::istream
+std::chrono std::size_t std::vector<int> std::vector<std::string> std::unique_ptr<T> std::optional<T>
+uint8_t uint32_t uint64_t int32_t int64_t
+push_back() emplace_back() pop_back() size() empty() begin() end() cbegin() rbegin() clear()
+insert() erase() find() at() front() back() reserve() resize() data() c_str() substr() length()
+count() emplace() get() reset() lock() join() first second
+const& && auto& auto&& const auto* -> :: << >> ++i i++ != == <= >= += &x *ptr ptr-> this->
+~Foo() Foo::Foo() operator== operator<< operator() T&& int& int* char* void* std::string&
+[&] [=] [this] {} <T>
+static_cast<int> static_cast<size_t> dynamic_cast<T*> reinterpret_cast<char*> const_cast<T&>
+= default; delete;
 """)
 
 lang("c", "C", r"""
-#include <stdio.h> <stdlib.h> <string.h> <stdint.h> <stdbool.h> <assert.h>
-int main(void) main(int argc, char **argv) return 0; printf() scanf() fprintf() stderr stdout stdin
-malloc() calloc() realloc() free() memcpy() memset() strlen() strcpy() strcmp() strncpy() sizeof()
-void char short int long float double unsigned signed const static extern volatile register
-struct union enum typedef if else for while do switch case default: break; continue; goto
-NULL EOF size_t uint8_t uint32_t int64_t bool true false FILE fopen() fclose() fgets() fputs() fread() fwrite()
-#define #ifndef #ifdef #endif #pragma #if #else inline restrict
-*ptr &x ptr->next -> ++ -- != == <= >= && || << >> %d %s %zu \n exit() abort() atoi()
-for (int i = 0; i < n; i++) { } char buf[256]; struct node *next; typedef struct { } Node;
+#include #define #undef #ifndef #ifdef #if #elif #else #endif #pragma
+<stdio.h> <stdlib.h> <string.h> <stdint.h> <stdbool.h> <assert.h> <errno.h> <math.h> <ctype.h>
+<unistd.h> <limits.h> <stddef.h> <time.h> <signal.h> <pthread.h>
+int main(void) return return 0; argc argv char** **argv
+printf() scanf() fprintf() snprintf() sprintf() puts() putchar() getchar() perror()
+stderr stdout stdin
+malloc() calloc() realloc() free() memcpy() memset() memmove() memcmp()
+strlen() strcpy() strncpy() strcmp() strncmp() strcat() strchr() strstr() strdup() strtol()
+atoi() atof() qsort() exit() abort() assert() isdigit() isalpha() isspace() toupper() tolower()
+sizeof sizeof(int) sizeof(*p)
+void char short int long float double unsigned signed const static extern volatile register auto
+struct union enum typedef inline restrict _Bool
+if else for while do switch case default: break; continue; goto
+size_t ssize_t ptrdiff_t uint8_t uint16_t uint32_t uint64_t int8_t int32_t int64_t uintptr_t
+bool true false FILE NULL EOF EXIT_SUCCESS EXIT_FAILURE INT_MAX errno
+fopen() fclose() fgets() fputs() fread() fwrite() fseek() ftell() fflush() fgetc() fputc() feof()
+open() close() read() write() getenv() time() rand() srand() sleep()
+pthread_create() pthread_join() pthread_mutex_lock() pthread_mutex_unlock() pthread_t
+__FILE__ __LINE__ __func__
+*ptr &x ptr->next p->data node->next -> ++ -- += -= != == <= >= && || << >> ! ~ ^ % &
+%d %s %c %f %zu %p %x %ld \n \0 '\0' "%d\n" "%s\n" i++ ++i
+(void) (char*) (int) char* void* int* buf[256] buf[i] arr[0] {0} &buf *argv[]
 """)
 
 lang("javascript", "JavaScript", r"""
 function return const let var if else for while do switch case default: break continue
 try catch finally throw new this class extends super constructor static get set async await yield
 import export default from as typeof instanceof in of delete void null undefined true false NaN
-console.log() console.error() JSON.parse() JSON.stringify() Object.keys() Object.values() Object.entries()
-Array.isArray() Array.from() Promise.all() Promise.resolve() setTimeout() setInterval() clearTimeout()
-map() filter() reduce() forEach() find() some() every() includes() indexOf() push() pop() shift()
-slice() splice() concat() join() split() trim() toString() length then() catch() fetch()
-document.querySelector() addEventListener() window require() module.exports process.env
-=> === !== ?? ?. ... `${x}` () => {} async () => {} Math.max() Math.floor() Math.random() Date.now()
-Map Set Symbol Error TypeError RegExp parseInt() parseFloat() Number String Boolean
+Infinity debugger
+console.log() console.error() console.warn() console.table() JSON.parse() JSON.stringify()
+Object.keys() Object.values() Object.entries() Object.assign() Object.freeze() Object.fromEntries()
+Array.isArray() Array.from() Array.of() Promise.all() Promise.resolve() Promise.reject()
+Promise.race() Promise.allSettled() Promise setTimeout() setInterval() clearTimeout() clearInterval()
+requestAnimationFrame() structuredClone() queueMicrotask() fetch()
+Math.max() Math.min() Math.floor() Math.ceil() Math.round() Math.random() Math.abs() Math.PI
+Date.now() Date parseInt() parseFloat() isNaN() encodeURIComponent() Number.isInteger()
+String() Number() Boolean() Symbol() BigInt Map Set WeakMap WeakSet Symbol Error TypeError
+RangeError SyntaxError RegExp Proxy Reflect globalThis
+map() filter() reduce() forEach() find() findIndex() some() every() includes() indexOf()
+lastIndexOf() push() pop() shift() unshift() slice() splice() concat() join() split() trim()
+toString() toUpperCase() toLowerCase() startsWith() endsWith() replace() replaceAll() padStart()
+repeat() charAt() at() flat() flatMap() sort() reverse() fill() keys() values() entries() has()
+get() set() add() delete() then() catch() finally() json() text() bind() call() apply()
+hasOwnProperty() length size prototype
+document window document.querySelector() document.querySelectorAll() document.getElementById()
+document.createElement() addEventListener() removeEventListener() appendChild()
+classList.add() classList.toggle() textContent innerHTML event e.preventDefault() e.target.value
+localStorage.getItem() localStorage.setItem() alert() location.href
+require() module.exports exports process.env process.argv process.exit() __dirname
+fs.readFileSync() path.join() npm package.json node_modules
+req res err req.body req.params res.json() res.send() res.status(404) app.get() app.listen()
+=> === !== == != ?? ?. ... && || ! += ++ -- ** ??= ||= () {} [] ...args `${x}` `${name}`
+()
 """)
 
 lang("typescript", "TypeScript", r"""
-interface type enum namespace declare readonly abstract implements private public protected
+interface type enum namespace declare readonly abstract implements private public protected override
 string number boolean any unknown never void null undefined object bigint symbol
-function return const let if else for while switch case break continue try catch finally throw
-class extends super constructor new this static async await import export default from as
-keyof typeof infer extends satisfies is asserts
-Partial<T> Required<T> Readonly<T> Record<K, Pick<T, Omit<T, Exclude<T, Extract<T, ReturnType<T> NonNullable<T>
-Promise<void> Array<string> Map<string, Set<number> string[] number[] ?: ! ?. ?? => ===
-console.log() JSON.parse() Object.keys() map() filter() reduce() forEach() find() includes()
-<T> <T extends > as const unknown[] never[] T[] export type export interface import type
-@Component() @Injectable() tsconfig.json strict noImplicitAny
+function return const let var if else for while switch case default: break continue try catch
+finally throw class extends super constructor new this static async await import export default
+from as of in typeof instanceof keyof infer satisfies is asserts unique get set yield
+Partial<T> Required<T> Readonly<T> NonNullable<T> Awaited<T> Partial<User> Record Pick Omit
+Exclude Extract ReturnType Parameters InstanceType
+Promise<void> Promise<string> Promise<T> Array<string> Array<T> Set<number> Map
+string[] number[] T[] unknown[] <T> Error
+?: ! ?. ?? => === !== | & ... && || `${x}`
+console.log() console.error() JSON.parse() JSON.stringify() Object.keys() Object.entries()
+Object.values() Array.isArray() Array.from() Promise.all() Promise.resolve() setTimeout() fetch()
+Math.floor() Math.max() Date.now()
+map() filter() reduce() forEach() find() some() every() includes() push() slice() split() join()
+trim() then() length toString()
+React React.FC JSX.Element React.ReactNode props children useState() useEffect() useMemo()
+useCallback() useRef() useState<string>()
+@Component() @Injectable() @Input() @Output() @NgModule()
+tsconfig.json strict noImplicitAny strictNullChecks esModuleInterop .d.ts index.ts tsc
+@ts-ignore @ts-expect-error
 """)
 
 lang("ocaml", "OCaml", r"""
-let in rec and fun function match with | -> if then else begin end type of module struct sig
-open include functor val mutable ref ! := when as try raise exception assert lazy
-true false () unit int float string bool char list array option Some None
-List.map List.iter List.fold_left List.filter List.length List.rev List.nth Array.make Array.length
-String.length String.concat String.sub Printf.printf print_endline print_string print_int
-Hashtbl.create Hashtbl.add Hashtbl.find Option.map Result Ok Error failwith invalid_arg
-:: @ ^ ; ;; <> = == != < > <= >= +. *. /. -. |> @@ fst snd not
-let () = let rec go acc = function | [] -> acc | x :: xs -> go
-module M = struct end module type S = sig end dune opam utop
+let in rec and fun function match with if then else begin end type of module struct sig open
+include functor val mutable ref when as try raise exception assert lazy method object class
+inherit new private virtual external constraint for to downto while do done nonrec
+land lor lxor lsl lsr asr mod
+true false () unit int float string bool char list array option exn bytes int64 'a 'b
+Some None Ok Error Not_found Invalid_argument Failure Exit
+List.map List.iter List.iteri List.mapi List.fold_left List.fold_right List.filter List.filter_map
+List.length List.rev List.nth List.hd List.tl List.mem List.assoc List.find List.find_opt
+List.exists List.for_all List.sort List.sort_uniq List.concat List.init List.combine List.split
+List.append List.flatten
+Array.make Array.length Array.get Array.set Array.init Array.map Array.iter Array.of_list
+Array.to_list
+String.length String.concat String.sub String.get String.split_on_char String.trim
+String.uppercase_ascii String.equal String.make
+Printf.printf Printf.sprintf Printf.eprintf Format.printf Format.fprintf
+print_endline print_string print_int print_newline read_line string_of_int int_of_string
+float_of_int int_of_float string_of_float
+Hashtbl.create Hashtbl.add Hashtbl.replace Hashtbl.find Hashtbl.find_opt Hashtbl.mem Hashtbl.iter
+Hashtbl.remove Option.map Option.value Option.get Option.is_some Result.map Result.bind
+Map.Make Set.Make Buffer.create Buffer.add_string Buffer.contents Seq Fun.id Stdlib
+compare failwith invalid_arg ignore fst snd not exit incr decr min max abs succ pred
+:: @ ^ ; ;; <> = == != < > <= >= + - * / +. *. /. -. |> @@ := ! -> | _ [] [||] ~f ~init
+x::xs acc xs let* let+ >>= >|= [@@inline]
+Lwt Lwt.return Core ppx_deriving dune opam utop .ml .mli
 """)
 
 lang("java", "Java", r"""
 public private protected static final abstract class interface extends implements enum record
-void int long double float boolean char byte short String Object Integer Long Boolean
-return if else for while do switch case default: break; continue; try catch finally throw throws
-new this super null true false instanceof import package synchronized volatile transient native var
-public static void main(String[] args) System.out.println() System.err String.format() Math.max()
-List<String> ArrayList<> Map<String, HashMap<> Set<Integer> HashSet<> Optional<T> Stream
-@Override @Deprecated @FunctionalInterface @SuppressWarnings
-add() get() put() size() isEmpty() contains() remove() equals() hashCode() toString() length()
-stream() map() filter() collect() Collectors.toList() forEach() orElse() of() ofNullable()
-Exception RuntimeException IllegalArgumentException NullPointerException IOException
--> :: != == && || ++ -- this.name getName() setName() Thread Runnable
+sealed permits void int long double float boolean char byte short
+return if else for while do switch case default: default break; continue; try catch finally throw
+throws new this super null true false instanceof import package synchronized volatile transient
+native var assert yield
+String Object Integer Long Double Boolean Character StringBuilder List ArrayList LinkedList Map
+HashMap TreeMap Set HashSet Queue Deque Iterator Iterable Optional
+Stream IntStream Collectors Arrays Collections Objects Math System Thread Runnable
+CompletableFuture ExecutorService Executors LocalDate LocalDateTime Path Paths
+Files Scanner BufferedReader InputStream OutputStream File UUID Random Comparator Comparable
+List<String> List<Integer> ArrayList<> HashMap<> Set<Integer> Optional<T> Optional<String>
+Stream<T> <T> String[] String... args main
+System.out.println() System.out.printf() System.err.println() System.currentTimeMillis()
+System.exit() String.format() String.valueOf() String.join() Integer.parseInt() Integer.valueOf()
+Integer.MAX_VALUE Math.max() Math.min() Math.abs() Math.random() Arrays.asList() Arrays.sort()
+Arrays.stream() Collections.sort() Collections.emptyList() List.of() Map.of() Set.of()
+Objects.equals() Objects.requireNonNull() Optional.of() Optional.empty() Optional.ofNullable()
+Thread.sleep() Files.readAllLines() Paths.get() Path.of()
+@Override @Deprecated @FunctionalInterface @SuppressWarnings("unchecked") @Test
+@BeforeEach @Autowired @Service @RestController @GetMapping @Entity
+add() get() put() size() isEmpty() contains() containsKey() remove() equals() hashCode()
+toString() length() charAt() substring() indexOf() trim() split() toUpperCase() toLowerCase()
+append() getOrDefault() putIfAbsent() keySet() values() entrySet() getKey() getValue()
+stream() map() filter() collect() Collectors.toList() Collectors.toMap() Collectors.groupingBy()
+Collectors.joining() forEach() reduce() sorted() findFirst() anyMatch() toList() orElse()
+orElseThrow() ifPresent() isPresent() iterator() hasNext() next() compareTo() close() start()
+join() run() getClass() getName() setName() build() builder()
+Exception RuntimeException IllegalArgumentException IllegalStateException NullPointerException
+IOException IndexOutOfBoundsException UnsupportedOperationException InterruptedException
+-> :: != == && || ++ -- += this.name this.value i++ // /** */ @param @return
 """)
 
 lang("csharp", "C#", r"""
-using namespace class struct interface enum record public private protected internal static readonly
-const void int long double float decimal bool char string object var dynamic
-return if else for foreach in while do switch case default: break; continue; try catch finally throw
-new this base null true false is as typeof sizeof nameof async await yield get; set; init;
-virtual override abstract sealed partial params ref out
-Console.WriteLine() Console.ReadLine() string.Format() Math.Max() DateTime.Now Guid.NewGuid()
-List<int> Dictionary<string, IEnumerable<T> Task<T> Action Func<T> Span<T> IDisposable
-Add() Remove() Contains() Count Length ToString() Equals() GetHashCode() ToList() ToArray()
-Where() Select() OrderBy() FirstOrDefault() Any() All() Sum() GroupBy()
-=> ?? ?. ! $"{x}" @"" [Serializable] [HttpGet] Exception ArgumentNullException
+using namespace class struct interface enum record public private protected internal static
+readonly const void int long double float decimal bool char string object var dynamic byte short
+uint ulong return if else for foreach in while do switch case default: break; continue; try catch
+finally throw new this base null true false is as typeof sizeof nameof async await yield
+get; set; init; virtual override abstract sealed partial params ref out required when where with
+lock event delegate operator implicit explicit goto not
+and or
+String Int32 Object Exception List<T> List<int> List<string> Dictionary HashSet<T> IEnumerable<T>
+IList<T> IReadOnlyList<T> Task Task<T> Task<int> Action Action<T> Func<T> Span<T>
+IDisposable CancellationToken ILogger<T> StringBuilder
+DateTime TimeSpan Guid Nullable Tuple KeyValuePair Stream File Path Regex Encoding.UTF8
+Main string[] args Program
+Console.WriteLine() Console.Write() Console.ReadLine() string.Format() string.Join()
+string.IsNullOrEmpty() string.IsNullOrWhiteSpace() string.Empty Math.Max() Math.Min() Math.Abs()
+Math.Round() DateTime.Now DateTime.UtcNow Guid.NewGuid() int.Parse() int.TryParse()
+Convert.ToInt32() File.ReadAllText() File.WriteAllText() Path.Combine() Task.Run() Task.Delay()
+Task.WhenAll() Task.FromResult() Task.CompletedTask JsonSerializer.Serialize()
+JsonSerializer.Deserialize<T>() Environment.GetEnvironmentVariable() Enum.Parse()
+Enumerable.Range() Array.Empty<T>() ArgumentNullException.ThrowIfNull()
+WebApplication.CreateBuilder(args); app.MapGet() app.Run();
+Add() AddRange() Remove() Contains() ContainsKey() TryGetValue() Clear() Count Count() Length
+ToString() Equals() GetHashCode() GetType() ToList() ToArray() ToDictionary() Where() Select()
+SelectMany() OrderBy() OrderByDescending() ThenBy() First() FirstOrDefault() Single()
+SingleOrDefault() Last() Any() All() Sum() Max() Min() Average() GroupBy() Distinct() Skip()
+Take() Aggregate() Split() Trim() Substring() Replace() StartsWith() IndexOf() ToUpper()
+ToLower() Dispose() ConfigureAwait(false) Invoke()
+=> ?? ??= ?. ! == != && || ++ += $"{x}" $"" @"" #region #endregion #nullable #if ///
+[Serializable] [HttpGet] [HttpPost] [ApiController] [Route("api/[controller]")] [Fact] [Test]
+[Required] [Obsolete] [JsonPropertyName("id")]
+ArgumentException ArgumentNullException InvalidOperationException NotImplementedException
+NullReferenceException KeyNotFoundException OperationCanceledException
 """)
 
 lang("go", "Go", r"""
 package main import func return var const type struct interface map chan go defer select
 if else for range switch case default: break continue fallthrough goto
-int int64 uint8 float64 string bool byte rune error any nil true false iota
-make() new() len() cap() append() copy() delete() panic() recover() close() print()
-fmt.Println() fmt.Printf() fmt.Sprintf() fmt.Errorf() errors.New() os.Exit() os.Args
-strings.Split() strings.Join() strconv.Itoa() strconv.Atoi() time.Now() time.Sleep()
-context.Context ctx http.HandleFunc() http.ListenAndServe() json.Marshal() json.Unmarshal()
-sync.WaitGroup sync.Mutex io.Reader io.Writer bufio.NewScanner()
-:= <- ... != == && || err if err != nil { return err } func (s *Server) []string map[string]int
-go.mod go.sum go run go build go test t.Fatal() t.Errorf()
+int int8 int16 int32 int64 uint uint8 uint16 uint32 uint64 uintptr float32 float64 complex128
+string bool byte rune error any comparable nil true false iota
+make() new() len() cap() append() copy() delete() panic() recover() close() print() println()
+min() max() clear() main() init()
+fmt.Println() fmt.Printf() fmt.Sprintf() fmt.Errorf() fmt.Fprintf() fmt.Sprint() fmt.Print()
+errors.New() errors.Is() errors.As() os.Exit() os.Args os.Getenv() os.Open() os.Create()
+os.ReadFile() os.WriteFile() os.Stdout os.Stderr
+strings.Split() strings.Join() strings.Contains() strings.HasPrefix() strings.HasSuffix()
+strings.TrimSpace() strings.Replace() strings.ToLower() strings.ToUpper() strings.Fields()
+strings.Builder strconv.Itoa() strconv.Atoi() strconv.ParseInt() strconv.FormatInt()
+time.Now() time.Sleep() time.Since() time.Duration time.Second time.Millisecond time.After()
+context.Context context.Background() context.WithCancel() context.WithTimeout() context.TODO()
+ctx ctx.Done() cancel()
+http.HandleFunc() http.ListenAndServe() http.Get() http.NewRequest() http.StatusOK http.Handler
+http.ResponseWriter *http.Request w.Header() w.WriteHeader() r.URL r.Body
+json.Marshal() json.Unmarshal() json.NewEncoder() json.NewDecoder()
+sync.WaitGroup sync.Mutex sync.RWMutex sync.Once wg.Add() wg.Done() wg.Wait() mu.Lock() mu.Unlock()
+io.Reader io.Writer io.EOF io.ReadAll() io.Copy() bufio.NewScanner() bufio.NewReader()
+scanner.Scan() scanner.Text() log.Println() log.Printf() log.Fatal() sort.Slice() sort.Ints()
+slices.Sort() slices.Contains() filepath.Join() bytes.Buffer regexp.MustCompile() math.MaxInt
+rand.Intn()
+:= <- ... != == && || ++ -- += & * _ ok err &T{} *T
+[]string []byte []int map[string]int map[string]any <-chan chan<- struct{} interface{} func()
+[]byte(s) string(b)
+t.Fatal() t.Errorf() t.Run() *testing.T String() Error() ServeHTTP()
+go.mod go.sum gofmt //go:embed //go:generate
 """)
 
 lang("rust", "Rust", r"""
-fn let mut const static struct enum impl trait pub use mod crate self Self super
+fn let mut const static struct enum impl trait pub pub(crate) use mod crate self Self super
 match if else loop while for in return break continue move ref as where unsafe async await dyn
-i32 i64 u8 u32 u64 usize f64 bool char str String Vec<T> Option<T> Result<T, Box<dyn HashMap BTreeMap
-Some None Ok() Err() true false unwrap() expect() ? clone() to_string() into() iter() collect()
-map() filter() fold() len() push() pop() is_empty() contains() get() insert() as_str() as_ref()
-println!() format!() vec![] assert_eq!() panic!() todo!() unimplemented!() #[derive(Debug)] #[test]
-&self &mut self -> => :: 'a &'a str impl<T> where T: Clone + Send + Sync Rc<RefCell<T>> Arc<Mutex<T>>
-cargo build cargo test cargo run std::io std::fs std::collections serde tokio anyhow
+type extern macro_rules!
+i32 i64 u8 u32 u64 usize f32 f64 bool char str &str String
+Vec<T> Vec<u8> Vec<String> Option<T> Result<T> Result<()> Box<T> Rc<T> Arc<T> RefCell<T>
+Mutex HashMap HashSet BTreeMap Path PathBuf Duration Instant
+Ordering Default Debug Display Clone Copy PartialEq Eq Hash PartialOrd Ord Send Sync
+Iterator From Into Fn FnMut FnOnce Error
+impl<T> <T> 'a 'static &'static
+Some() Ok() Err() None true false Ok(()) ?
+Self::new() Default::default() String::new() String::from() Vec::new()
+HashMap::new() Box::new() Arc::new()
+std::mem::take() fs::read_to_string()
+thread::spawn()
+unwrap() expect() unwrap_or() unwrap_or_default() unwrap_or_else() map_err() and_then()
+ok() is_some() is_none() take() clone() to_string() into()
+iter() iter_mut() into_iter() collect() map() filter() filter_map() flat_map() fold() enumerate()
+zip() rev() any() all() find() count() sum() max() min()
+skip() cloned()
+sort() sort_by() extend() len() push() pop() is_empty() contains()
+get() insert() remove() entry() or_insert() keys() values()
+as_str() as_ref() chars() split() trim()
+parse() parse::<i32>() starts_with() push_str() first() last()
+borrow() lock() join() new() default() from() next()
+println!() print!() eprintln!() format!() write!() vec![] assert!() assert_eq!()
+assert_ne!() panic!() todo!() unimplemented!() unreachable!() matches!() dbg!()
+#[derive(Debug)] #[derive(Default)] #[test] #[cfg(test)] #[allow(dead_code)] #[inline]
+#[tokio::main] #[serde(default)]
+&self &mut -> => :: .. ..= |x| |_| || && &x *x _ += == !=
+std::io std::fs std::fmt std::collections std::sync::Arc std::collections::HashMap;
+fmt::Result io::Result<()> anyhow::Result<()> super::*
+serde tokio anyhow Serialize Deserialize cargo Cargo.toml
 """)
 
 lang("php", "PHP", r"""
-<?php ?> echo print function return if else elseif foreach as while for do switch case default: break;
-class interface trait extends implements public private protected static final abstract new
-$this $x $arr $_GET $_POST $_SERVER $_SESSION self:: parent:: namespace use require_once include
-null true false array() isset() empty() unset() count() strlen() str_replace() explode() implode()
-array_map() array_filter() array_keys() in_array() json_encode() json_decode() var_dump() die()
-try catch finally throw Exception PDO mysqli_query() header() session_start()
-=> -> :: . .= === !== ?? ?-> fn() match readonly enum string int float bool mixed void
-composer.json Laravel Route::get() $request->input()
+<?php ?> echo print function return if else elseif foreach as while for do switch case default:
+break; continue; class interface trait extends implements public private protected static final
+abstract new namespace use require require_once include include_once global const instanceof
+clone yield list() fn match readonly enum
+null true false string int float bool mixed void never iterable callable object ?string ?int self
+$this $x $i $arr $key $value $data $result $request $_GET $_POST $_SERVER $_SESSION $_COOKIE
+$_FILES $this-> $this->id $this->name self:: parent:: static:: parent::__construct()
+__construct() __destruct() __toString() __get() __call() __DIR__ __CLASS__ __FUNCTION__ PHP_EOL
+array() [] isset() empty() unset() count() strlen() str_replace() str_contains()
+str_starts_with() explode() implode() trim() strtolower() strtoupper() substr() strpos()
+sprintf() printf() preg_match() preg_replace() htmlspecialchars() number_format() intval()
+is_array() is_null() is_string() is_numeric() array_map() array_filter() array_keys()
+array_values() array_merge() array_push() array_pop() array_key_exists() array_search()
+array_slice() array_reduce() array_unique() in_array() sort() usort() ksort() json_encode()
+json_decode() var_dump() print_r() die() exit() file_get_contents() file_put_contents() date()
+time() strtotime() microtime() password_hash() password_verify() define() function_exists()
+header() session_start() setcookie() http_response_code()
+try catch finally throw Exception InvalidArgumentException RuntimeException Throwable TypeError
+PDO PDOException $pdo->prepare() $stmt->execute() $stmt->fetch() $stmt->fetchAll()
+PDO::FETCH_ASSOC mysqli_query()
+=> -> :: . .= === !== == != ?? ??= ?-> <=> && || ! ++ declare(strict_types=1); #[Override]
+composer.json Laravel Route::get() $request->input() view() collect()
 """)
 
 lang("ruby", "Ruby", r"""
-def end class module if elsif else unless case when while until for in do begin rescue ensure raise
-return yield self nil true false and or not require require_relative include extend attr_accessor
-attr_reader puts print p gets each map select reject reduce each_with_index times upto inject
-length size empty? nil? include? push pop first last sort sort_by reverse join split strip to_s to_i to_sym
-@name @@count :symbol => {} |x| do |item| end "#{x}" Hash Array String Integer Proc lambda ->
-.freeze .dup .tap private protected initialize super Struct.new Comparable Enumerable
-rails bundle gem Gemfile rspec describe it expect().to eq()
+def end class module if elsif else unless case when while until for in do begin rescue ensure
+raise return yield self nil true false and or not then next break redo retry super alias undef
+defined? __method__ __FILE__ __dir__
+require require_relative include extend prepend attr_accessor attr_reader attr_writer private
+protected public puts print p pp gets new initialize lambda proc loop catch throw format sleep
+exit block_given?
+each map select reject reduce each_with_index each_with_object times upto downto step inject
+collect detect find find_all group_by partition sort sort_by min_by max_by sum count zip flatten
+compact uniq take drop first last push pop shift unshift length size tally filter_map
+empty? nil? include? any? all? none? is_a? respond_to? key? frozen? start_with? end_with? zero?
+even? odd?
+reverse join split strip chomp gsub sub upcase downcase capitalize to_s to_i to_f to_a to_h
+to_sym to_proc inspect freeze dup tap then send public_send define_method method_missing fetch
+dig merge keys values each_pair transform_values slice
+@name @@count :symbol :name => -> ->(x) {} [] |x| |item| |i| &:to_s &block *args **opts &.
+||= << <=> == === =~ .. ... "#{x}" "#{name}" %w[] %i[]
+Hash.new Array.new Struct.new Class.new Hash Array String Integer Float Symbol Proc Range Set
+Time.now File.read File.open File.join Dir.glob JSON.parse ENV ARGV StandardError ArgumentError
+RuntimeError NoMethodError NotImplementedError Comparable Enumerable Kernel Object
+rails bundle gem Gemfile rake rspec describe it context let before expect eq to be_truthy
+has_many belongs_to validates before_action params render redirect_to ActiveRecord::Base
+ApplicationController find_by where create save update destroy
 """)
 
 lang("swift", "Swift", r"""
 func let var return if else guard switch case default: for in while repeat break continue
-class struct enum protocol extension init deinit self Self super import public private internal fileprivate open
-static final lazy weak unowned mutating inout throws throw try try? catch do defer async await
-Int Double Float String Bool Character Array Dictionary Set Optional Any AnyObject Void
-nil true false some any where associatedtype typealias
-print() count isEmpty append() remove() contains() map() filter() reduce() forEach() sorted()
-?? ?. ! -> ... ..< == != "\(x)" @State @Binding @Published @MainActor @escaping @objc
-if let guard let SwiftUI View var body: some View Text() VStack HStack Button()
+fallthrough class struct enum protocol extension init deinit self Self super import public private
+internal fileprivate open static final lazy weak unowned mutating nonmutating inout throws
+rethrows throw try try? try! catch do defer async await actor some any where associatedtype
+typealias subscript convenience required override is as as? as! nil true false get set willSet
+didSet #if #available #selector @available
+Int Int64 UInt Double Float String Bool Character Array Dictionary Set Optional Any AnyObject Void
+Never Error Result Data Date URL UUID Codable Decodable Encodable Equatable Hashable Identifiable
+Comparable CustomStringConvertible Sendable Task ObservableObject Int? String? [String] [Int]
+[Int]()
+print() count isEmpty first last description append() insert() remove() removeAll()
+removeLast() contains() map() compactMap() flatMap() filter() reduce() forEach() sorted()
+sorted(by:) sort() reversed() joined() split() enumerated() zip() min() max() firstIndex(of:)
+prefix() dropFirst() lowercased() uppercased() hasPrefix() hasSuffix() String(describing:)
+String() Int() abs() stride(from:to:by:) fatalError() precondition() assert()
+DispatchQueue.main.async Task.sleep() JSONDecoder() JSONEncoder() URLSession.shared
+NotificationCenter.default UserDefaults.standard FileManager.default Date() UUID()
+?? ?. ! -> ... ..< == != === && || += "\(x)" "\(name)" $0 $1 _
+@State @Binding @Published @MainActor @escaping @objc @ObservedObject @StateObject
+@EnvironmentObject @Environment @discardableResult @main @Observable @ViewBuilder @IBOutlet
+@IBAction @testable
+SwiftUI Foundation UIKit XCTest View body: Text() VStack HStack ZStack Button() Image() List
+NavigationStack ForEach Spacer() .padding() .frame() .onAppear() XCTAssertEqual()
+UIViewController viewDidLoad()
 """)
 
 lang("kotlin", "Kotlin", r"""
-fun val var return if else when for in while do break continue class object interface enum data sealed
-open abstract override private public internal protected companion init constructor this super
-import package null true false is as as? in !in typealias suspend inline reified lateinit by lazy
-Int Long Double Float Boolean String Char Unit Any Nothing List<T> MutableList Map<K, V> Set
-listOf() mutableListOf() mapOf() setOf() println() print() require() check() error() also apply let run with
-map filter forEach first last size isEmpty() contains() joinToString() toString()
-?. ?: !! -> :: .. $name "${x}" @JvmStatic @Composable coroutineScope launch async await() Flow
+fun val var return if else when for in while do break continue class object interface enum data
+sealed open abstract override private public internal protected companion init constructor this
+super import package null true false is !is as as? !in typealias suspend inline reified lateinit
+by lazy const operator infix vararg tailrec noinline crossinline value annotation inner out where
+throw try catch finally
+Int Long Short Byte Double Float Boolean String Char Unit Any Nothing Array List MutableList Map
+MutableMap Set MutableSet Pair Triple Sequence IntArray StringBuilder Result Regex Exception
+IllegalArgumentException IllegalStateException Int? String? List<String> List<Int>
+MutableList<T> Array<String> Flow<T> StateFlow MutableStateFlow Job Deferred CoroutineScope
+Dispatchers.IO Dispatchers.Main
+listOf() mutableListOf() mapOf() mutableMapOf() setOf() mutableSetOf() emptyList() arrayOf()
+intArrayOf() hashMapOf() println() print() require() requireNotNull() check() checkNotNull()
+error() TODO() repeat() also apply let run with takeIf use main() args
+map filter forEach first last size isEmpty() isNotEmpty() isNullOrEmpty() isBlank() contains()
+joinToString() toString() toInt() toList() toMutableList() toSet() toMap() mapNotNull()
+flatMap() filterNot() groupBy associateBy sortedBy() sortedByDescending() sumOf() count() any()
+all() none() find() firstOrNull() getOrNull() getOrElse() getOrPut() zip() withIndex()
+forEachIndexed() indices lastIndex reversed() distinct() chunked() windowed() take() drop()
+split() trim() substring() startsWith() replace() uppercase() lowercase() format() copy()
+equals() hashCode() invoke()
+it it.name launch async await() delay() runBlocking withContext() coroutineScope
+viewModelScope flow emit() collect()
+?. ?: !! -> :: .. ..< until downTo step $name "${x}" "$name" ::class ::class.java == === != &&
+@JvmStatic @JvmOverloads @JvmField @Composable @Test @Suppress("UNUSED") @Serializable @Inject
+@Deprecated @Volatile
+Modifier remember mutableStateOf() setContent Column Row Text()
 """)
 
 lang("sql", "SQL", r"""
-SELECT FROM WHERE AND OR NOT IN IS NULL LIKE BETWEEN EXISTS DISTINCT AS ON
-INSERT INTO VALUES UPDATE SET DELETE CREATE TABLE ALTER ADD DROP INDEX VIEW PRIMARY KEY FOREIGN REFERENCES
-JOIN LEFT RIGHT INNER OUTER FULL CROSS GROUP BY ORDER HAVING LIMIT OFFSET UNION ALL ASC DESC
-COUNT(*) SUM() AVG() MIN() MAX() COALESCE() CAST() CASE WHEN THEN ELSE END NOW() LOWER() UPPER()
-INTEGER TEXT VARCHAR(255) BOOLEAN DATE TIMESTAMP REAL BLOB DEFAULT UNIQUE CHECK
-BEGIN COMMIT ROLLBACK TRANSACTION WITH RECURSIVE OVER PARTITION ROW_NUMBER() RANK()
-* = <> != <= >= ; users id name email created_at user_id
+SELECT FROM WHERE AND OR NOT IN IS NULL LIKE ILIKE BETWEEN EXISTS DISTINCT AS ON USING
+INSERT INTO VALUES UPDATE SET DELETE CREATE TABLE ALTER ADD COLUMN DROP INDEX VIEW PRIMARY KEY
+FOREIGN REFERENCES CASCADE CONSTRAINT RENAME TO TRUNCATE IF
+JOIN LEFT RIGHT INNER OUTER FULL CROSS NATURAL GROUP BY ORDER HAVING LIMIT OFFSET FETCH FIRST ROWS
+ONLY UNION ALL INTERSECT EXCEPT ASC DESC NULLS LAST CASE WHEN THEN ELSE END
+COUNT(*) COUNT() SUM() AVG() MIN() MAX() COALESCE() NULLIF() CAST() EXTRACT() NOW() CURRENT_DATE
+CURRENT_TIMESTAMP DATE_TRUNC() LOWER() UPPER() TRIM() LENGTH() SUBSTRING() CONCAT() REPLACE()
+ROUND() ABS() IFNULL() STRING_AGG() GROUP_CONCAT() ARRAY_AGG() ROW_NUMBER() RANK() DENSE_RANK()
+LAG() LEAD() OVER PARTITION WINDOW
+INTEGER INT BIGINT SMALLINT SERIAL TEXT VARCHAR VARCHAR(255) CHAR(10) BOOLEAN DATE TIME TIMESTAMP
+TIMESTAMPTZ INTERVAL REAL FLOAT DOUBLE NUMERIC DECIMAL(10,2) BLOB JSON JSONB UUID
+DEFAULT UNIQUE CHECK AUTOINCREMENT AUTO_INCREMENT
+BEGIN COMMIT ROLLBACK SAVEPOINT TRANSACTION WITH RECURSIVE RETURNING CONFLICT DO NOTHING EXPLAIN
+ANALYZE GRANT REVOKE TRIGGER FUNCTION PROCEDURE DATABASE SCHEMA SEQUENCE VACUUM PRAGMA ANY SOME
+MERGE MATCHED
+* = <> != < > <= >= ; || % . -- ? $1
+users orders products id name email status amount price total created_at updated_at user_id
+order_id u.id o.user_id users.id 'active'
 """)
 
 lang("bash", "Bash", r"""
-#!/usr/bin/env bash set -euo pipefail if then elif else fi for in do done while until case esac function return
-echo printf read local export source exit shift test [ ] [[ ]] (( )) $1 $@ $# $? $$ "$@" ${var} $(cmd)
+#!/bin/bash #!/usr/bin/env bash sh set -euo pipefail -e -u -x -o
+if then elif else fi for in do done while until case esac function return select break continue ;;
+echo printf read local declare readonly export unset source . exit shift test eval exec trap wait
+alias type command getopts let shopt mapfile readarray
+$1 $2 $0 $@ $# $? $$ $! $* "$@" "$1" ${var} ${1:-} ${#arr[@]} ${arr[@]}
+"${arr[@]}" ${var:-default} ${var%.*} ${var##*/} $(pwd) "$(pwd)" $((i+1)) ((i++)) i=0
+"${BASH_SOURCE[0]}" $RANDOM $HOME $PATH $PWD $USER $SHELL $LINENO IFS IFS=$'\n' OPTARG
+$i $f $file "$file" "$var"
 cd ls pwd mkdir rm cp mv cat grep sed awk find xargs sort uniq head tail wc cut tr tee chmod chown
-curl wget tar ssh scp git sudo kill ps top df du which env true false /dev/null 2>&1 > >> < | || && ;
--eq -ne -lt -gt -le -ge -z -n -f -d -e ~/ ./ ../ *.txt $HOME $PATH $PWD IFS trap
+ln touch basename dirname date sleep diff less jq curl wget tar gzip unzip zip ssh scp rsync git
+sudo kill pkill ps top df du which whoami env true false yes seq
+/dev/null 2>&1 >/dev/null > >> < << <<EOF EOF <<< | || && ; & !
+-eq -ne -lt -gt -le -ge -z -n -f -d -e -r -w -x -s == != =~
+~/ ./ ../ *.txt *.sh
+-rf -p -v -r -i -l -a -c -h -q -E --help -name -type -exec -print0 -maxdepth {} \;
 """)
 
 lang("lua", "Lua", r"""
 local function return end if then elseif else for in do while repeat until break goto
 and or not nil true false self require
-print() pairs() ipairs() type() tostring() tonumber() pcall() error() assert() select() next() setmetatable()
-string.format() string.sub() string.find() string.gsub() table.insert() table.remove() table.concat() table.sort()
-math.floor() math.max() math.random() os.time() io.write() io.read()
-.. ~= == <= >= # {} [] : ... __index __newindex __call M.new() love.draw() vim.api
+print() pairs() ipairs() type() tostring() tonumber() pcall() xpcall() error() assert() select()
+next() setmetatable() getmetatable() rawget() rawset() rawequal() rawlen() unpack() load()
+loadfile() dofile() collectgarbage()
+coroutine.create() coroutine.resume() coroutine.yield() coroutine.wrap() coroutine.status()
+string.format() string.sub() string.find() string.gsub() string.gmatch() string.match()
+string.len() string.rep() string.byte() string.char() string.lower() string.upper()
+string.reverse() s:sub() s:find() s:gsub() s:match() s:gmatch() s:upper() s:lower() s:len()
+table.insert() table.remove() table.concat() table.sort() table.pack() table.unpack()
+math.floor() math.ceil() math.max() math.min() math.abs() math.sqrt() math.random()
+math.randomseed() math.huge math.pi math.fmod() math.tointeger()
+os.time() os.clock() os.date() os.getenv() os.exit() os.remove() os.rename()
+io.write() io.read() io.open() io.lines() io.stdout f:read() f:write() f:close() f:lines()
+utf8.char() utf8.len() package.path package.loaded _G _ENV _VERSION arg
+.. ~= == <= >= < > = # {} [] : ... -- #t #list t[#t+1] t[i] t.x k v i
+M M.new() self.x obj:method() {...} __index __newindex __call __tostring __eq __lt __le __add
+__concat __len __gc __mode __metatable
+love.load() love.update(dt) love.draw() love.keypressed() love.graphics.print()
+love.graphics.rectangle() dt
+vim.api vim.opt vim.g vim.o vim.fn vim.cmd() vim.keymap.set() vim.notify()
+vim.api.nvim_create_autocmd() vim.api.nvim_set_keymap() vim.tbl_deep_extend()
 """)
 
 lang("r", "R", r"""
-function return if else for while repeat break next in TRUE FALSE NULL NA NaN Inf library require
-<- -> <<- %>% |> %in% == != <= >= & | ! $ @ :: [[ ]]
-c() list() vector() matrix() data.frame() factor() seq() rep() length() names() nrow() ncol()
-mean() median() sd() sum() max() min() round() paste() paste0() print() cat() str() summary() head()
-apply() lapply() sapply() mapply() tapply() is.na() which() order() sort() unique() table()
-read.csv() write.csv() ggplot() aes() geom_point() dplyr filter() mutate() select() group_by() summarise()
-lm() glm() plot() hist() set.seed() rnorm() runif() df$x
+function return if else for while repeat break next in TRUE FALSE NULL NA NA_integer_
+NA_character_ NaN Inf function(x) \(x)
+<- -> <<- %>% |> %in% == != <= >= & | && || ! $ @ :: ~ %% %/% ^ : 1:10 x[i] x[[i]] [[1]] df[1,]
+df$x df$y df data x y na.rm stringsAsFactors .data
+library() require() library(dplyr) library(ggplot2) library(tidyverse) install.packages() source()
+c() list() vector() matrix() array() data.frame() tibble() factor() levels() nlevels() seq()
+seq_len() seq_along() rep() length() names() colnames() rownames() nrow() ncol() dim()
+mean() median() sd() var() sum() max() min() range() round() abs() sqrt() exp() log() cumsum()
+quantile() cor()
+paste() paste0() sprintf() format() print() cat() message() warning() stop() str() summary()
+head() tail() class() typeof() is.null() is.na() is.numeric() is.character() as.numeric()
+as.character() as.integer() as.factor() as.Date() nchar() substr() toupper() tolower() gsub()
+sub() grepl() grep() strsplit() trimws()
+apply() lapply() sapply() vapply() mapply() tapply() Map() Reduce() Filter() do.call() which()
+which.max() order() sort() rev() unique() duplicated() table() any() all() ifelse() switch()
+tryCatch() invisible() return() on.exit() stopifnot() identical() match() unlist() setNames()
+rbind() cbind() merge() subset() with() split()
+Sys.time() Sys.Date() Sys.getenv() file.path() file.exists() readRDS() saveRDS() read.csv()
+write.csv() readLines() writeLines() setwd() getwd()
+set.seed() rnorm() runif() rbinom() sample() lm() glm() predict() anova() t.test()
+plot() hist() lines() points() abline() legend() par() dev.off() png() boxplot() barplot()
+ggplot() aes() geom_point() geom_line() geom_bar() geom_histogram() facet_wrap() labs()
+theme_minimal() filter() mutate() select() group_by() summarise() summarize() arrange()
+left_join() pull() rename() distinct() n() across() everything() pivot_longer() pivot_wider()
+read_csv() str_detect() str_replace() map() map_dbl() glimpse()
 """)
 
 lang("haskell", "Haskell", r"""
-module where import qualified as hiding data type newtype class instance deriving
-let in case of if then else do return where -> <- => :: = | \ _
+module where import qualified as hiding data type newtype class instance deriving let in case of
+if then else do infixl infixr infix forall
+-> <- => :: = | \ _ @ ~ ! .. \x \_ otherwise
 Int Integer Double Float Bool Char String Maybe Just Nothing Either Left Right IO () True False
-map filter foldr foldl zip zipWith head tail length reverse concat concatMap elem sum product
-show read print putStrLn getLine mapM_ forM_ pure fmap <$> <*> >>= >> . $ ++ !! `div` `mod`
-Functor Applicative Monad Show Eq Ord Num Monoid Semigroup mempty <> Data.Map Data.List
-main :: IO () main = do xs x:xs [] [x] (x, y) fst snd id const flip undefined error
+Ordering LT GT EQ Word Rational Text ByteString Map Set Vector IORef MVar TVar STM Proxy
+[a] [Int] [String] [Char] [] [x] x:xs (x:xs) xs acc go main
+map filter foldr foldl foldl' foldMap zip zipWith head tail init last length null
+reverse concat concatMap elem lookup sum product maximum minimum and or any all take drop
+takeWhile dropWhile span break splitAt replicate iterate repeat lines unlines words unwords
+show read print putStrLn putStr getLine readFile writeFile
+mapM mapM_ forM forM_ traverse when unless void
+pure return fmap
+<$> <$ <*> *> <* >>= >> =<< >=> <|> <> . $ $! ++ !! `div` `mod` `elem`
+fromIntegral floor ceiling round truncate div mod even odd max
+min compare succ pred fst snd id const flip undefined error
+maybe either fromMaybe mapMaybe isJust isNothing sortBy sortOn groupBy nub
+partition intercalate
+Functor Applicative Monad Alternative Show Eq Ord Num Enum Read Integral Fractional
+Foldable Traversable Monoid Semigroup
+mempty mconcat empty fromList toList Map.insert Map.lookup Map.empty Map.fromList
+Map.findWithDefault Data.Map Data.List Data.Maybe Data.Char Data.Text Data.IORef Control.Monad
+System.IO Text.Printf printf newIORef readIORef modifyIORef T.pack T.unpack
+LANGUAGE OverloadedStrings ScopedTypeVariables stack cabal ghci
 """)
 
 lang("scala", "Scala", r"""
-def val var lazy object class trait case sealed abstract final override private protected implicit given using
-extends with new this super import package if else match case for yield while do return throw try catch finally
-Int Long Double Boolean String Unit Any Nothing Option Some None List Seq Vector Map Set Future Either
-map flatMap filter foldLeft foreach collect getOrElse mkString toList size head tail isEmpty
-println() => <- -> :: ++ _ ??? s"$x" @tailrec sbt Akka Spark implicitly enum then
+def val var lazy object class trait case sealed abstract final override private protected
+implicit given using extends with new this super import package if else match for yield while
+do return throw try catch finally enum then export extension opaque inline transparent derives
+end type
+Int Long Double Float Boolean String Char Byte Unit Any AnyRef AnyVal Nothing Null Option Some
+None List Nil Seq Vector Array ArrayBuffer ListBuffer Map Set Future Promise Either Left Right Try
+Success Failure Iterator LazyList Range Tuple2 StringBuilder BigInt BigDecimal Ordering Throwable
+Exception IllegalArgumentException App ExecutionContext
+Option[T] Option[Int] List[Int] List[String] Seq[A] Future[Unit] Array[String] [A] [T] [+A] [_]
+map flatMap filter filterNot foldLeft foldRight fold reduce foreach collect collectFirst
+getOrElse orElse mkString toList toSeq toMap toSet toVector toArray size length head headOption
+tail last lastOption isEmpty nonEmpty isDefined contains exists forall find count sum max min
+maxBy minBy sortBy sorted sortWith groupBy groupMapReduce partition zip zipWithIndex take drop
+takeWhile dropWhile distinct reverse flatten grouped sliding indices updated appended prepended
+get apply unapply copy recover andThen compose
+println() print() require() assert() Option() Some() List() Map() Seq() Vector() Set() Array()
+Future.successful() Await.result()
+s"$x" s"${x}" f"$x%.2f" _ => <- -> :: ::: ++ +: :+ == != && || ??? _*
+@tailrec @main @volatile @deprecated @inline
+implicitly summon classOf sbt build.sbt scala.util scala.collection.mutable Akka Spark ZIO cats IO
 """)
 
 lang("dart", "Dart", r"""
-void main() return if else for in while do switch case default: break; continue; try catch finally throw
-class abstract extends implements with mixin enum extension import export library part
-final const var late required static factory get set async await yield sync* async*
-int double num String bool List<int> Map<String, Set dynamic Object Future<void> Stream null true false
-print() length isEmpty add() addAll() remove() contains() map() where() toList() forEach() toString()
-this super new ?? ?. ! => ... '$x' '${x}' @override Widget build(BuildContext context) setState()
-StatelessWidget StatefulWidget Text() Column() Row() Container() flutter pubspec.yaml
+void main() return if else for in while do switch case default: break; continue; try catch finally
+throw rethrow on class abstract extends implements with mixin enum extension import export library
+part show hide deferred final const var late required static factory get set async await yield
+sync* async* covariant operator typedef external interface sealed base when assert is is! as this
+super new null true false Function
+int double num String bool List Map Set Iterable dynamic Object Never Future Stream Duration
+DateTime RegExp StringBuffer Uri Exception Error StateError ArgumentError FormatException
+List<int> List<String> Set<int> Future<void> Future<String> Stream<int> int? String?
+print() length isEmpty isNotEmpty first last keys values entries reversed add() addAll()
+remove() removeWhere() removeAt() insert() clear() contains() containsKey() indexOf() map()
+where() firstWhere() any() every() fold() reduce() expand() toList() toSet() forEach() join()
+split() trim() toUpperCase() toLowerCase() startsWith() substring() replaceAll() toString()
+toStringAsFixed() putIfAbsent() sort() compareTo() listen() cast<T>() whereType<T>() then()
+catchError() identical() debugPrint()
+int.parse() double.parse() int.tryParse() jsonEncode() jsonDecode() DateTime.now() Duration()
+Future.delayed() Future.wait() Future.value()
+?? ??= ?. ! => ... ...? .. ?.. == != && || '$x' '${x}' "$name" @override @immutable
+'package:flutter/material.dart'; 'dart:async'; 'dart:convert'; 'dart:io';
+Widget BuildContext context setState() StatelessWidget StatefulWidget State<MyApp> initState()
+dispose() super.initState() build() runApp() Text() Column() Row() Container() Padding()
+SizedBox() Center() Scaffold() AppBar() ElevatedButton() ListView.builder() MaterialApp()
+EdgeInsets.all() Colors.blue Navigator.push() Navigator.pop() Theme.of(context)
+MediaQuery.of(context) child: children: onPressed: super.key flutter pubspec.yaml
 """)
 
 lang("perl", "Perl", r"""
-#!/usr/bin/perl use strict; use warnings; my our local sub return if elsif else unless while until for foreach last next redo
-print say printf chomp split join push pop shift unshift keys values each exists delete defined
-open close die warn eval ref bless scalar wantarray length substr index lc uc sprintf sort map grep
-$x @list %hash $_ @_ $0 $! =~ !~ s/// tr/// qw() => -> :: . .= eq ne lt gt cmp <=> <STDIN> __END__
+#!/usr/bin/perl #!/usr/bin/env perl use strict; warnings; my our local sub return if elsif else
+unless while until for foreach last next redo do package require no BEGIN END __END__ __DATA__
+__PACKAGE__ __FILE__ __LINE__ and or not x eq ne lt gt le ge cmp
+print say printf chomp chop split join push pop shift unshift splice keys values each exists
+delete defined undef open close die warn eval ref bless scalar wantarray length substr index
+rindex lc uc lcfirst ucfirst sprintf sort reverse map grep abs int sqrt rand srand time localtime
+sleep exit system exec binmode opendir readdir closedir mkdir unlink rename wait
+$x $self $class $_ @_ $0 $1 $2 $! $@ $$ $/ @ARGV %ENV $ENV{HOME} @list %hash $hash{key}
+$array[0] @array $#array scalar(@list) @{$ref} %{$ref} $ref->{key} $ref->[0] $self->{name}
+\@list \%hash $$ref STDIN <STDIN> STDOUT STDERR <$fh> $fh <>
+=~ !~ s/// tr/// m// qw() qw// q() qq() => -> :: . .= == != <=> && || // //= ||= ** ++ -- ..
+s/foo/bar/g /^\s+$/ \d+ \w+ /i /g <<EOF EOF -e -f -d
+Data::Dumper Dumper() Getopt::Long GetOptions() File::Basename List::Util Scalar::Util blessed()
+POSIX Carp croak confess JSON::PP Moose has DBI DBI->connect() $dbh->prepare() $sth->execute()
+@ISA SUPER::new() new() parent
 """)
 
 lang("elixir", "Elixir", r"""
-defmodule def defp do end fn -> case cond with if else unless when receive after try rescue catch raise
-import alias require use quote unquote true false nil :ok :error @moduledoc @doc @spec @impl
-|> <- => ++ <> =~ & &1 %{} [] {} ~r// ~s"" "#{x}" _ ^pin
-Enum.map Enum.filter Enum.reduce Enum.each Enum.count Map.get Map.put Map.merge List.first String.split
-IO.puts IO.inspect Kernel spawn send self() GenServer Agent Task Supervisor Ecto Phoenix mix iex
+defmodule def defp defmacro defstruct defimpl defprotocol defdelegate defguard defexception do end
+fn -> case cond with if else unless when receive after try rescue catch raise reraise throw for
+in import alias require use quote unquote true false nil and or not do: else:
+:ok :error :noreply :reply :stop @moduledoc @doc @spec @impl @type @typedoc @behaviour @callback
+@derive @enforce_keys @tag
+|> <- => ++ -- <> =~ & &1 &2 %{} [] {} :: .. | \\ ^x _ "#{x}" ~r// ~s() ~w() ~D[2024-01-01]
+%User{} %__MODULE__{} __MODULE__ [h|t] [head|tail] &Enum.map/2 &IO.puts/1
+Enum.map Enum.filter Enum.reduce Enum.each Enum.count Enum.sum Enum.sort Enum.sort_by Enum.find
+Enum.any? Enum.all? Enum.member? Enum.into Enum.join Enum.group_by Enum.with_index Enum.zip
+Enum.take Enum.uniq Enum.flat_map Enum.reverse Enum.at Enum.max Enum.min Enum.chunk_every
+Enum.reject Enum.map_join
+Map.get Map.put Map.merge Map.fetch Map.fetch! Map.delete Map.keys Map.values Map.new Map.update
+Map.has_key? List.first List.last List.flatten List.wrap
+String.split String.trim String.length String.upcase String.downcase String.to_integer
+String.contains? String.replace String.starts_with? Integer.to_string Integer.parse Keyword.get
+Stream.map Stream.filter IO.puts IO.inspect IO.gets Kernel spawn spawn_link send self()
+Process.sleep Process.send_after
+GenServer GenServer.start_link GenServer.call GenServer.cast handle_call handle_cast handle_info
+init start_link Agent Agent.start_link Agent.get Task Task.async Task.await Supervisor
+Supervisor.start_link Registry Application Logger Logger.info Logger.error
+File.read! File.write! Path.join Jason.encode! Jason.decode!
+is_nil is_binary is_integer is_list is_map elem hd tl length to_string inspect put_elem apply
+Ecto Ecto.Changeset Repo.all Repo.get Repo.insert cast validate_required Phoenix conn plug
+render json mix mix.exs iex ExUnit.Case test assert refute describe setup doctest
 """)
 
 lang("zig", "Zig", r"""
-const var fn pub return if else while for switch break continue defer errdefer try catch orelse unreachable
-struct enum union error opaque comptime inline export extern test and or null undefined true false
-u8 u32 u64 i32 i64 usize f32 f64 bool void anyerror anytype type noreturn []const u8 ?*T !void
-@import("std") std.debug.print() std.mem.Allocator std.ArrayList std.heap.page_allocator
-allocator.alloc() allocator.free() @intCast() @as() @sizeOf() @TypeOf() .{} => |x| ... zig build
+const var fn pub return if else while for switch break continue defer errdefer try catch orelse
+unreachable struct enum union error opaque comptime inline noinline export extern test and or
+null undefined true false packed align allowzero volatile noalias threadlocal callconv
+linksection anyframe suspend resume nosuspend asm
+u8 u16 u32 u64 u128 usize i8 i16 i32 i64 isize f16 f32 f64 f128 bool void anyerror anytype
+anyopaque type noreturn comptime_int comptime_float c_int
+[]u8 []const []T [*]u8 [4]u8 [_]u8 ?*T ?T !void *const *T *Self anyerror!void
+@import("std") @import("std"); @import("builtin") @intCast() @as() @sizeOf() @TypeOf() @This()
+@field() @ptrCast() @floatFromInt() @intFromFloat() @intFromEnum() @enumFromInt() @truncate()
+@min() @max() @memcpy() @memset() @panic() @compileError() @embedFile() @hasDecl() @typeInfo()
+@tagName() @errorName() @divTrunc() @mod() @rem() @bitCast() @alignOf() @src() @Vector()
+@splat() @abs() @sqrt()
+std std.debug.print() std.debug.assert() std.mem.Allocator std.mem.eql() std.mem.indexOf()
+std.mem.splitScalar() std.mem.tokenizeScalar() std.mem.sort() std.fmt.allocPrint()
+std.fmt.bufPrint() std.fmt.parseInt() std.ArrayList std.StringHashMap std.AutoHashMap
+std.heap.page_allocator std.heap.GeneralPurposeAllocator std.heap.ArenaAllocator
+std.testing.allocator std.testing.expect() std.testing.expectEqual() std.fs.cwd()
+std.process.argsAlloc() std.process.exit() std.log.info() std.log.err() std.math.maxInt()
+std.time.milliTimestamp() std.Thread std.meta std.json std.ascii
+allocator allocator.alloc() allocator.free() allocator.create() allocator.destroy()
+allocator.dupe() list.deinit() list.append() list.items map.put() map.get() gpa.allocator()
+arena.deinit() .deinit() .init() .items .len .ptr .{} .? .* x.* &x
+=> |x| |*x| |i| |err| ... .. ++ ** +% -% *% << >> == != and or
+Self self main() zig build build.zig build.zig.zon
+""")
+
+lang("lean", "Lean 4", r"""
+def theorem lemma example abbrev structure inductive instance class namespace section end
+variable open where match with fun λ let have show calc by do if then else return mutual
+deriving extends private protected noncomputable partial unsafe
+universe import at for in mut termination_by decreasing_by
+set_option
+#eval #check
+intro intros apply exact rfl simp simp_all simpa rw rwa induction cases rcases obtain constructor
+refine use linarith omega norm_num decide trivial contradiction exfalso
+unfold ring aesop assumption exists left right ext
+funext by_cases by_contra push_neg split next case all_goals first
+repeat sorry exact? apply? absurd <;> ·
+Nat Int Prop Type Type* Sort List Array Option IO String Bool True False Unit
+DecidableEq Inhabited Repr
+ToString BEq Monad Eq Iff And Or Not Exists
+ℕ ℤ ℝ α β ∀ ∃ → ↔ ∧ ∨ ¬ ≠ ≤ ≥ ⟨⟩ ⟨h⟩ <|> <| |> ← := => -> <- <-> /\ \/ × ∈
+>>= <$> <*> ++ :: == != && || ! _ ?_
+none some zero succ .none .some Nat.succ Nat.zero n+1 x::xs []
+#[] ih h h.1 h.2 .mp .mpr Iff.intro And.intro Or.inl Or.inr
+Eq.symm congrArg Classical.em Nat.add_comm Nat.zero_add
+add_comm zero_add
+List.map List.filter List.foldl List.foldr List.length List.reverse
+xs.map xs.length arr[i]! arr[i]?
+toString s!"{x}" IO.println IO.print pure get set panic!
+Option.get! Id.run main
+@[simp] @[inline] lake lakefile.lean Mathlib Mathlib.Tactic Lean
 """)
 
 out = sys.argv[1]

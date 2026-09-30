@@ -3,122 +3,127 @@
 [[languages]]
 name = "code_bash"
 display = "Bash (code)"
-words = 105
+words = 206
 
 [[languages]]
 name = "code_c"
 display = "C (code)"
-words = 110
+words = 209
 
 [[languages]]
 name = "code_cpp"
 display = "C++ (code)"
-words = 128
+words = 241
 
 [[languages]]
 name = "code_csharp"
 display = "C# (code)"
-words = 109
+words = 246
 
 [[languages]]
 name = "code_dart"
 display = "Dart (code)"
-words = 91
+words = 219
 
 [[languages]]
 name = "code_elixir"
 display = "Elixir (code)"
-words = 75
+words = 220
 
 [[languages]]
 name = "code_go"
 display = "Go (code)"
-words = 92
+words = 204
 
 [[languages]]
 name = "code_haskell"
 display = "Haskell (code)"
-words = 105
+words = 243
 
 [[languages]]
 name = "code_java"
 display = "Java (code)"
-words = 109
+words = 244
 
 [[languages]]
 name = "code_javascript"
 display = "JavaScript (code)"
-words = 114
+words = 233
 
 [[languages]]
 name = "code_kotlin"
 display = "Kotlin (code)"
-words = 100
+words = 242
+
+[[languages]]
+name = "code_lean"
+display = "Lean 4 (code)"
+words = 222
 
 [[languages]]
 name = "code_lua"
 display = "Lua (code)"
-words = 66
+words = 173
 
 [[languages]]
 name = "code_ocaml"
 display = "OCaml (code)"
-words = 106
+words = 225
 
 [[languages]]
 name = "code_perl"
 display = "Perl (code)"
-words = 79
+words = 201
 
 [[languages]]
 name = "code_php"
 display = "PHP (code)"
-words = 95
+words = 200
 
 [[languages]]
 name = "code_python"
 display = "Python (code)"
-words = 157
+words = 251
 
 [[languages]]
 name = "code_r"
 display = "R (code)"
-words = 90
+words = 237
 
 [[languages]]
 name = "code_ruby"
 display = "Ruby (code)"
-words = 99
+words = 244
 
 [[languages]]
 name = "code_rust"
 display = "Rust (code)"
-words = 110
+words = 238
 
 [[languages]]
 name = "code_scala"
 display = "Scala (code)"
-words = 83
+words = 221
 
 [[languages]]
 name = "code_sql"
 display = "SQL (code)"
-words = 98
+words = 196
 
 [[languages]]
 name = "code_swift"
 display = "Swift (code)"
-words = 102
+words = 224
 
 [[languages]]
 name = "code_typescript"
 display = "TypeScript (code)"
-words = 95
+words = 168
 
 [[languages]]
 name = "code_zig"
 display = "Zig (code)"
-words = 68
+words = 200
 
 [[languages]]
 name = "dutch"

@@ -1,14 +1,25 @@
 name = "code_bash"
 display = "Bash (code)"
 words = [
-  "#!/usr/bin/env", "bash", "set", "-euo", "pipefail", "if", "then", "elif", "else",
-  "fi", "for", "in", "do", "done", "while", "until", "case", "esac", "function",
-  "return", "echo", "printf", "read", "local", "export", "source", "exit", "shift",
-  "test", "$1", "$@", "$#", "$?", "$$", "\"$@\"", "${var}", "$(cmd)", "cd", "ls",
-  "pwd", "mkdir", "rm", "cp", "mv", "cat", "grep", "sed", "awk", "find", "xargs",
-  "sort", "uniq", "head", "tail", "wc", "cut", "tr", "tee", "chmod", "chown", "curl",
-  "wget", "tar", "ssh", "scp", "git", "sudo", "kill", "ps", "top", "df", "du", "which",
-  "env", "true", "false", "/dev/null", "2>&1", ">", ">>", "<", "|", "||", "&&", ";",
-  "-eq", "-ne", "-lt", "-gt", "-le", "-ge", "-z", "-n", "-f", "-d", "-e", "~/", "./",
-  "../", "*.txt", "$HOME", "$PATH", "$PWD", "IFS", "trap"
+  "#!/bin/bash", "#!/usr/bin/env", "bash", "sh", "set", "-euo", "pipefail", "-e", "-u",
+  "-x", "-o", "if", "then", "elif", "else", "fi", "for", "in", "do", "done", "while",
+  "until", "case", "esac", "function", "return", "select", "break", "continue", ";;",
+  "echo", "printf", "read", "local", "declare", "readonly", "export", "unset",
+  "source", ".", "exit", "shift", "test", "eval", "exec", "trap", "wait", "alias",
+  "type", "command", "getopts", "let", "shopt", "mapfile", "readarray", "$1", "$2",
+  "$0", "$@", "$#", "$?", "$$", "$!", "$*", "\"$@\"", "\"$1\"", "${var}", "${1:-}",
+  "${#arr[@]}", "${arr[@]}", "\"${arr[@]}\"", "${var:-default}", "${var%.*}",
+  "${var##*/}", "$(pwd)", "\"$(pwd)\"", "$((i+1))", "((i++))", "i=0",
+  "\"${BASH_SOURCE[0]}\"", "$RANDOM", "$HOME", "$PATH", "$PWD", "$USER", "$SHELL",
+  "$LINENO", "IFS", "IFS=$'\\n'", "OPTARG", "$i", "$f", "$file", "\"$file\"",
+  "\"$var\"", "cd", "ls", "pwd", "mkdir", "rm", "cp", "mv", "cat", "grep", "sed",
+  "awk", "find", "xargs", "sort", "uniq", "head", "tail", "wc", "cut", "tr", "tee",
+  "chmod", "chown", "ln", "touch", "basename", "dirname", "date", "sleep", "diff",
+  "less", "jq", "curl", "wget", "tar", "gzip", "unzip", "zip", "ssh", "scp", "rsync",
+  "git", "sudo", "kill", "pkill", "ps", "top", "df", "du", "which", "whoami", "env",
+  "true", "false", "yes", "seq", "/dev/null", "2>&1", ">/dev/null", ">", ">>", "<",
+  "<<", "<<EOF", "EOF", "<<<", "|", "||", "&&", ";", "&", "!", "-eq", "-ne", "-lt",
+  "-gt", "-le", "-ge", "-z", "-n", "-f", "-d", "-r", "-w", "-s", "==", "!=", "=~",
+  "~/", "./", "../", "*.txt", "*.sh", "-rf", "-p", "-v", "-i", "-l", "-a", "-c", "-h",
+  "-q", "-E", "--help", "-name", "-type", "-exec", "-print0", "-maxdepth", "{}", "\\;"
 ]
