@@ -58,7 +58,7 @@ words = 242
 [[languages]]
 name = "code_lean"
 display = "Lean 4 (code)"
-words = 222
+words = 221
 
 [[languages]]
 name = "code_lua"
