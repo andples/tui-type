@@ -203,8 +203,14 @@ ttyp. `:set server …` changes it live.
   in the config).
 - `:leaderboard` shows both boards side by side (or behind `tab` on narrow
   terminals): `↑↓`/`jk` move, `g`/`G` top/bottom, `←→` mode, `l` language,
-  `[` `]` day, `enter` opens that run's wpm graph, `esc` goes back. Your own
-  row stays visible at the bottom when it scrolls off.
+  `[` `]` day, `enter` opens that run's wpm graph, `p` opens that player's
+  profile, `esc` goes back. Your own row stays visible at the bottom when it
+  scrolls off.
+- `:user <login>` shows a player's profile: daily streak, personal best per
+  language and mode, and their latest runs (`enter` opens a run's graph).
+  `:user` alone shows yours. Profiles are private until you run
+  `:account public on`; `:account` shows which it is. Leaderboards list your
+  GitHub login either way.
 
 Daily runs also land in your local history, marked with the daily's id.
 Only daily results ever leave your machine.

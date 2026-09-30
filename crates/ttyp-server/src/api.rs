@@ -12,14 +12,14 @@ use serde::Deserialize;
 use sqlx::Row;
 use sqlx::sqlite::SqlitePool;
 use ttyp_core::api::{
-    AuthRequest, AuthResponse, Board, Daily, DailySummary, ErrorBody, Leaderboard, ResultDetail,
-    StartResponse, SubmitRequest, SubmitResponse,
+    Account, AccountUpdate, AuthRequest, AuthResponse, Board, Daily, DailySummary, ErrorBody,
+    Leaderboard, Profile, ResultDetail, StartResponse, SubmitRequest, SubmitResponse,
 };
 use ttyp_core::language::LanguageRegistry;
 use ttyp_core::test::{Rejected, replay};
 
 use crate::auth::{self, User};
-use crate::{daily, leaderboard};
+use crate::{daily, leaderboard, profile};
 
 /// Attempts (starts and submissions) per user per daily.
 const MAX_ATTEMPTS: i64 = 30;
@@ -55,6 +55,8 @@ pub fn router(state: AppState) -> Router {
         .route("/results", post(submit))
         .route("/results/{id}", get(result_by_id))
         .route("/leaderboard/{daily_id}", get(leaderboard))
+        .route("/account", get(account).post(update_account))
+        .route("/users/{login}", get(user_profile))
         .route("/auth/github", post(auth_github))
         .route("/auth/logout", post(auth_logout))
         .with_state(state)
@@ -328,6 +330,36 @@ async fn auth_github(
         token,
         login: user.login,
     }))
+}
+
+async fn account(State(state): State<AppState>, headers: HeaderMap) -> ApiResult<Account> {
+    let user = require_user(&state, &headers).await?;
+    Ok(Json(profile::account(&state.pool, user.id).await?))
+}
+
+/// Make the caller's profile public or private.
+async fn update_account(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(req): Json<AccountUpdate>,
+) -> ApiResult<Account> {
+    let user = require_user(&state, &headers).await?;
+    profile::set_public(&state.pool, user.id, req.public).await?;
+    Ok(Json(profile::account(&state.pool, user.id).await?))
+}
+
+/// A public profile, or the caller's own. Private and unknown users look
+/// the same.
+async fn user_profile(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(login): Path<String>,
+) -> ApiResult<Profile> {
+    let viewer = auth::user_from_headers(&state.pool, &headers).await?;
+    profile::load(&state.pool, &login, viewer.map(|u| u.id), daily::today())
+        .await?
+        .map(Json)
+        .ok_or(ApiError::NotFound)
 }
 
 /// Revoke the presented token.
@@ -835,5 +867,70 @@ mod tests {
         let lb: Leaderboard = serde_json::from_value(body).unwrap();
         let names: Vec<&str> = lb.rows.iter().map(|r| r.user.as_str()).collect();
         assert_eq!(names, ["carol"]);
+    }
+
+    #[tokio::test]
+    async fn profiles_are_private_until_opted_in() {
+        let (app, state) = app().await;
+        let (_, body) = call(&app, get("/dailies/today", None)).await;
+        let list: Vec<DailySummary> = serde_json::from_value(body).unwrap();
+        let (_, body) = call(&app, get(&format!("/dailies/{}", list[0].id), None)).await;
+        let daily: Daily = serde_json::from_value(body).unwrap();
+        let (_, alice) = auth::issue(&state.pool, 1, "Alice").await.unwrap();
+        let (_, bob) = auth::issue(&state.pool, 2, "bob").await.unwrap();
+        for ms in [120, 90] {
+            let s = start(&app, &alice, daily.id).await;
+            let (_, keylog) = type_daily(&daily, ms, false);
+            let req = SubmitRequest {
+                daily_id: daily.id,
+                keylog,
+                start_id: Some(s.start_id),
+            };
+            let (status, _) = call(&app, post("/results", Some(&alice), &req)).await;
+            assert_eq!(status, StatusCode::OK);
+        }
+
+        // Private by default: hidden from others, visible to its owner.
+        let (status, _) = call(&app, get("/users/alice", None)).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        let (status, _) = call(&app, get("/users/alice", Some(&bob))).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        let (status, body) = call(&app, get("/users/alice", Some(&alice))).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        let (_, body) = call(&app, get("/account", Some(&alice))).await;
+        let acct: Account = serde_json::from_value(body).unwrap();
+        assert_eq!((acct.login.as_str(), acct.public), ("Alice", false));
+        let (status, _) = call(&app, get("/account", None)).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+
+        // Opted in: anyone can look, login case doesn't matter.
+        let (_, body) = call(
+            &app,
+            post("/account", Some(&alice), &AccountUpdate { public: true }),
+        )
+        .await;
+        let acct: Account = serde_json::from_value(body).unwrap();
+        assert!(acct.public);
+        let (status, body) = call(&app, get("/users/ALICE", None)).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        let p: Profile = serde_json::from_value(body).unwrap();
+        assert_eq!((p.login.as_str(), p.public), ("Alice", true));
+        assert_eq!((p.streak, p.dailies), (1, 1));
+        assert_eq!(p.recent.len(), 2);
+        assert_eq!(p.recent[0].attempt, 2, "newest first");
+        assert_eq!(p.bests.len(), 1, "one per language and mode");
+        assert_eq!(p.bests[0].attempt, 2, "the faster run");
+        assert!(p.bests[0].wpm > p.recent[1].wpm);
+
+        // And back to private.
+        call(
+            &app,
+            post("/account", Some(&alice), &AccountUpdate { public: false }),
+        )
+        .await;
+        let (status, _) = call(&app, get("/users/alice", None)).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        let (status, _) = call(&app, get("/users/nobody", None)).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
     }
 }

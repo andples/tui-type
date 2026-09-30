@@ -5,8 +5,8 @@ use std::time::Duration;
 
 use serde::de::DeserializeOwned;
 use ttyp_core::api::{
-    AuthRequest, AuthResponse, Board, Daily, DailySummary, ErrorBody, Leaderboard, ResultDetail,
-    StartResponse, SubmitRequest, SubmitResponse,
+    Account, AccountUpdate, AuthRequest, AuthResponse, Board, Daily, DailySummary, ErrorBody,
+    Leaderboard, Profile, ResultDetail, StartResponse, SubmitRequest, SubmitResponse,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -151,6 +151,20 @@ impl Client {
 
     pub fn result(&self, id: i64) -> Result<ResultDetail, OnlineError> {
         self.get(&format!("/results/{id}"))
+    }
+
+    pub fn account(&self) -> Result<Account, OnlineError> {
+        self.get("/account")
+    }
+
+    pub fn set_public(&self, public: bool) -> Result<Account, OnlineError> {
+        self.call("/account", Some(&AccountUpdate { public }))
+    }
+
+    /// A public profile, or your own. Logins are GitHub names, which only
+    /// use letters, digits and `-`, so they go into the path as they are.
+    pub fn user(&self, login: &str) -> Result<Profile, OnlineError> {
+        self.get(&format!("/users/{login}"))
     }
 
     /// Trade a GitHub access token for a ttyp token.

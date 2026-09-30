@@ -17,6 +17,7 @@ mod auth;
 mod daily;
 mod db;
 mod leaderboard;
+mod profile;
 
 #[tokio::main]
 async fn main() -> Result<()> {

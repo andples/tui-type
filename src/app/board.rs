@@ -91,7 +91,7 @@ impl App {
             self.graph = None;
             self.graph_loading = false;
             if self.screen == Screen::Graph {
-                self.screen = Screen::Leaderboard;
+                self.screen = self.graph_from;
             }
             return;
         }
@@ -125,6 +125,11 @@ impl App {
                 if let (Some(id), Some(o)) = (id, &mut self.online) {
                     self.graph_loading = true;
                     o.request(Request::Result(id));
+                }
+            }
+            B::Profile => {
+                if let Some(login) = view.focused().selected().map(|r| r.user.clone()) {
+                    self.open_user(Some(login));
                 }
             }
             B::CloseGraph => {}
@@ -192,7 +197,8 @@ impl App {
         match result {
             Ok(d) => {
                 self.graph = Some(d);
-                if self.screen == Screen::Leaderboard {
+                if matches!(self.screen, Screen::Leaderboard | Screen::User) {
+                    self.graph_from = self.screen;
                     self.screen = Screen::Graph;
                 }
             }

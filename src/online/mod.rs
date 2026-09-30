@@ -8,8 +8,10 @@ pub mod client;
 pub mod device;
 pub mod queue;
 pub mod token;
+pub mod user;
 pub mod worker;
 
 pub use board::{BoardPane, BoardView};
 pub use client::{Client, OnlineError};
+pub use user::UserView;
 pub use worker::{Online, RemoteEvent, Request};

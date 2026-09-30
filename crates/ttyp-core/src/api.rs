@@ -134,6 +134,49 @@ pub struct ResultDetail {
     pub errors_per_second: Vec<u32>,
 }
 
+/// `GET /account` and `POST /account`: the caller's own account settings.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Account {
+    pub login: String,
+    /// Whether `GET /users/{login}` shows this profile to everyone.
+    pub public: bool,
+}
+
+/// `POST /account`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AccountUpdate {
+    pub public: bool,
+}
+
+/// `GET /users/{login}`: a public profile, or your own.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Profile {
+    pub login: String,
+    pub public: bool,
+    /// UTC date the account was created (`YYYY-MM-DD`).
+    pub joined: String,
+    /// Consecutive UTC days, up to today or yesterday, with a valid daily.
+    pub streak: u32,
+    /// Dailies with at least one valid run.
+    pub dailies: u32,
+    /// Best valid run per language and mode.
+    pub bests: Vec<ProfileRun>,
+    /// Latest valid runs, newest first.
+    pub recent: Vec<ProfileRun>,
+}
+
+/// One run on a profile.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProfileRun {
+    pub result_id: i64,
+    pub date: String,
+    pub language: String,
+    pub mode: Mode,
+    pub wpm: f64,
+    pub acc: f64,
+    pub attempt: u32,
+}
+
 /// `POST /auth/github`: trade a GitHub access token for a ttyp token.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuthRequest {

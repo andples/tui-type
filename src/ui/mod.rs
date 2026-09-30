@@ -15,6 +15,7 @@ pub mod slider;
 pub mod stats;
 pub mod style;
 pub mod typing;
+pub mod user;
 pub mod widgets;
 
 use ratatui::Frame;
@@ -59,6 +60,7 @@ pub fn render(frame: &mut Frame, app: &App) -> Vec<ImageLine> {
         Screen::Login => login::render(frame, app, body, &p),
         Screen::Leaderboard => leaderboard::render(frame, app, body, &p),
         Screen::Graph => graph::render(frame, app, body, &p),
+        Screen::User => user::render(frame, app, body, &p),
     }
 
     if app.slider.is_some() {

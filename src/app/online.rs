@@ -129,6 +129,8 @@ impl App {
                 result,
             } => self.board_page(daily_id, board, offset, result),
             RemoteEvent::ResultDetail(result) => self.board_result(result),
+            RemoteEvent::Account(result) => self.account_reply(result),
+            RemoteEvent::User { login, result } => self.user_reply(&login, result),
         }
     }
 

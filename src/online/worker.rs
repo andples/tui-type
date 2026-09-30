@@ -10,8 +10,8 @@ use std::thread;
 use std::time::Duration;
 
 use ttyp_core::api::{
-    Board, Daily, DailySummary, Leaderboard, ResultDetail, StartResponse, SubmitRequest,
-    SubmitResponse,
+    Account, Board, Daily, DailySummary, Leaderboard, Profile, ResultDetail, StartResponse,
+    SubmitRequest, SubmitResponse,
 };
 
 use super::client::{Client, OnlineError};
@@ -41,6 +41,9 @@ pub enum Request {
         limit: u32,
     },
     Result(i64),
+    Account,
+    SetPublic(bool),
+    User(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -79,6 +82,11 @@ pub enum RemoteEvent {
         result: Result<Leaderboard, OnlineError>,
     },
     ResultDetail(Result<ResultDetail, OnlineError>),
+    Account(Result<Account, OnlineError>),
+    User {
+        login: String,
+        result: Result<Profile, OnlineError>,
+    },
 }
 
 impl RemoteEvent {
@@ -211,6 +219,22 @@ impl Online {
             Request::Result(id) => {
                 thread::spawn(move || {
                     let _ = tx.send(RemoteEvent::ResultDetail(client.result(id)));
+                });
+            }
+            Request::Account => {
+                thread::spawn(move || {
+                    let _ = tx.send(RemoteEvent::Account(client.account()));
+                });
+            }
+            Request::SetPublic(public) => {
+                thread::spawn(move || {
+                    let _ = tx.send(RemoteEvent::Account(client.set_public(public)));
+                });
+            }
+            Request::User(login) => {
+                thread::spawn(move || {
+                    let result = client.user(&login);
+                    let _ = tx.send(RemoteEvent::User { login, result });
                 });
             }
         }

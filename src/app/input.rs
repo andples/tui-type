@@ -3,7 +3,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use super::Screen;
-use super::action::{Action, BoardAction, CatalogAction, ProfileAction};
+use super::action::{Action, BoardAction, CatalogAction, ProfileAction, UserAction};
 use crate::test::Status;
 
 /// Context needed to interpret a key.
@@ -73,6 +73,21 @@ pub fn map_key(key: KeyEvent, ctx: InputContext) -> Action {
             _ => Action::Nop,
         },
         Screen::Leaderboard => map_leaderboard(key, ctrl),
+        Screen::User => {
+            use UserAction as U;
+            let u = |a| Action::User(a);
+            match key.code {
+                KeyCode::Up | KeyCode::Char('k') => u(U::Up),
+                KeyCode::Down | KeyCode::Char('j') => u(U::Down),
+                KeyCode::Home | KeyCode::Char('g') => u(U::Top),
+                KeyCode::End | KeyCode::Char('G') => u(U::Bottom),
+                KeyCode::Enter => u(U::Open),
+                KeyCode::Esc | KeyCode::Char('q') => u(U::Close),
+                KeyCode::Char(':') => Action::OpenCommandLine,
+                KeyCode::Char('?') => Action::ShowHelp,
+                _ => Action::Nop,
+            }
+        }
         Screen::Graph => match key.code {
             KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter => {
                 Action::Board(BoardAction::CloseGraph)
@@ -127,6 +142,7 @@ fn map_leaderboard(key: KeyEvent, ctrl: bool) -> Action {
         KeyCode::Char('[') => b(B::PrevDay),
         KeyCode::Char(']') => b(B::NextDay),
         KeyCode::Enter => b(B::Open),
+        KeyCode::Char('p') => b(B::Profile),
         KeyCode::Esc | KeyCode::Char('q') => Action::Back,
         KeyCode::Char(':') => Action::OpenCommandLine,
         KeyCode::Char('?') => Action::ShowHelp,

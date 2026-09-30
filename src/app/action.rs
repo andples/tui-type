@@ -66,6 +66,8 @@ pub enum Action {
     Logout,
     ShowLeaderboard,
     Board(BoardAction),
+    /// Keys on a user's profile screen.
+    User(UserAction),
     /// A reply from a background network request (boxed: replies carry
     /// whole leaderboards, and every other action is a few bytes).
     Remote(Box<RemoteEvent>),
@@ -92,8 +94,23 @@ pub enum BoardAction {
     NextDay,
     /// Open the selected run's graph.
     Open,
-    /// Back from the graph to the leaderboard, same row selected.
+    /// Back from the graph to the screen that opened it, same row selected.
     CloseGraph,
+    /// Open the profile of the selected row's user.
+    Profile,
+}
+
+/// Keys on a user's profile screen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UserAction {
+    Up,
+    Down,
+    Top,
+    Bottom,
+    /// Open the selected recent run's graph.
+    Open,
+    /// Back to where the profile was opened from.
+    Close,
 }
 
 /// Keys on the install screen.

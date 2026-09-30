@@ -43,6 +43,10 @@ pub enum Command {
     Leaderboard,
     Login,
     Logout,
+    /// `None` shows the account; `Some` makes the profile public or private.
+    Account(Option<bool>),
+    /// A user's profile; `None` is your own.
+    User(Option<String>),
     Quit,
     Results {
         section: String,
@@ -72,6 +76,8 @@ pub enum ArgKind {
     ResultSections,
     /// `time 30`, `words 25`, …: the modes dailies exist for.
     DailyModes,
+    /// `public on` / `public off`.
+    Account,
     /// Numeric setting in an inclusive range. Typing a number sets it
     /// directly; Enter with no number opens an interactive slider.
     Slider {
@@ -307,6 +313,22 @@ pub const COMMANDS: &[CommandSpec] = &[
         requires_arg: false,
     },
     CommandSpec {
+        name: "account",
+        aliases: &["acct"],
+        usage: "[public on|off]",
+        help: "your online account; make your profile public or private",
+        arg: ArgKind::Account,
+        requires_arg: false,
+    },
+    CommandSpec {
+        name: "user",
+        aliases: &["whois"],
+        usage: "[login]",
+        help: "a player's public profile (yours with no name)",
+        arg: ArgKind::Free,
+        requires_arg: false,
+    },
+    CommandSpec {
         name: "help",
         aliases: &["h", "?"],
         usage: "",
@@ -389,6 +411,14 @@ pub fn parse(line: &str) -> Result<Command, String> {
         "leaderboard" => Command::Leaderboard,
         "login" => Command::Login,
         "logout" => Command::Logout,
+        "account" => Command::Account(match rest {
+            "" => None,
+            r => match r.split_whitespace().collect::<Vec<_>>().as_slice() {
+                ["public", v] => Some(parse_on_off(v)?),
+                _ => return Err(format!("usage: account {}", spec.usage)),
+            },
+        }),
+        "user" => Command::User(Some(rest.to_string()).filter(|r| !r.is_empty())),
         "quit" => Command::Quit,
         "results" => {
             let mut a = rest.split_whitespace();
@@ -473,6 +503,7 @@ pub fn arg_candidates(kind: ArgKind, comps: &Completions) -> Vec<String> {
             .iter()
             .map(|s| s.to_string())
             .collect(),
+        ArgKind::Account => vec!["public on".into(), "public off".into()],
         ArgKind::DailyModes => ttyp_core::api::DAILY_MODES
             .iter()
             .map(Mode::label)
@@ -501,6 +532,15 @@ mod tests {
         assert_eq!(parse("q"), Ok(Command::Quit));
         assert_eq!(parse("daily"), Ok(Command::Daily(None)));
         assert_eq!(parse("lb"), Ok(Command::Leaderboard));
+        assert_eq!(parse("account"), Ok(Command::Account(None)));
+        assert_eq!(parse("account public on"), Ok(Command::Account(Some(true))));
+        assert!(parse("account public maybe").is_err());
+        assert!(parse("account private").is_err());
+        assert_eq!(parse("user"), Ok(Command::User(None)));
+        assert_eq!(
+            parse("whois octocat"),
+            Ok(Command::User(Some("octocat".into())))
+        );
         assert_eq!(parse("d time 30"), Ok(Command::Daily(Some(Mode::Time(30)))));
         assert_eq!(
             parse("daily w25"),

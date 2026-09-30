@@ -36,7 +36,10 @@ Open items, none blocking:
 - **Backup sidecar runs as root** to write the host-mounted `./backups`;
   the server container is unprivileged. Off-machine copy of `./backups` is
   recommended, not built.
-- **Public profiles (§8)**: schema ready, nothing built.
+- **Public profiles: built in 1.3.0** (§8). `GET /users/{login}` (public,
+  or the caller's own; private and unknown both 404), `GET`/`POST /account`
+  (`public` flag). Client: `:user [login]`, `p` on a leaderboard row,
+  `:account [public on|off]`. No migration: `users.public` was there.
 
 Operating: `docker compose ps` on the owner's machine; `docker compose logs
 -f ttyp-server`; restore steps in `crates/ttyp-server/README.md`; release
@@ -415,7 +418,7 @@ local debugging.
   where the DB and backups live, restore steps, and how the tunnel is wired
   (generically: "set `TUNNEL_TOKEN` in `.env`", no hostnames)
 
-## 8. Public profiles (notes only, don't build)
+## 8. Public profiles (built in 1.3.0; the original notes)
 
 - `users.public` exists from the first migration, default private, so
   enabling profiles later needs no migration.

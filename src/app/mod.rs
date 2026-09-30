@@ -6,6 +6,7 @@ mod catalog;
 pub mod input;
 mod online;
 mod profiles;
+mod user;
 
 use std::io::Write;
 use std::time::{Duration, Instant};
@@ -21,7 +22,7 @@ use crate::config::{Config, Paths};
 use crate::config::{FONT_SIZE_RANGE, FontSize, LINES_RANGE, WORDS_PER_LINE_RANGE};
 use crate::gfx::{self, Gfx};
 use crate::language::LanguageRegistry;
-use crate::online::{BoardView, Online};
+use crate::online::{BoardView, Online, UserView};
 use crate::profile::{ProfileMenu, ProfileRegistry};
 use crate::stats::{LocalJsonlStore, StatsStore, Summary, TestRecord, personal_best};
 use crate::test::{Metrics, Mode, Modifiers, RandomGenerator, Status, TestEngine};
@@ -50,8 +51,10 @@ pub enum Screen {
     Catalog,
     Login,
     Leaderboard,
-    /// One leaderboard run's chart, opened from the leaderboard.
+    /// One run's chart, opened from the leaderboard or a profile.
     Graph,
+    /// A player's profile.
+    User,
 }
 
 /// Which config value a slider edits.
@@ -173,6 +176,14 @@ pub struct App {
     pub board: Option<BoardView>,
     /// The run shown on the graph screen.
     pub graph: Option<ResultDetail>,
+    /// Where the graph was opened from.
+    graph_from: Screen,
+    /// The profile screen, while open.
+    pub user: Option<UserView>,
+    /// Where the profile was opened from.
+    user_from: Screen,
+    /// `:user` with no name: show ours once the account says who we are.
+    own_profile_pending: bool,
     /// `enter` on a row: waiting for the run to arrive.
     graph_loading: bool,
     /// Screen to return to from stats/help.
@@ -279,6 +290,10 @@ impl App {
             held_submission: None,
             board: None,
             graph: None,
+            graph_from: Screen::Leaderboard,
+            user: None,
+            user_from: Screen::Typing,
+            own_profile_pending: false,
             graph_loading: false,
             previous_screen: Screen::Typing,
             fresh_notice: false,
@@ -590,6 +605,7 @@ impl App {
             Action::Logout => self.logout(),
             Action::ShowLeaderboard => self.open_leaderboard(),
             Action::Board(a) => self.board_action(a),
+            Action::User(a) => self.user_action(a),
             Action::Remote(ev) => self.remote_event(ev),
             Action::ScrollDown => self.scroll += 1,
             Action::ScrollUp => self.scroll = self.scroll.saturating_sub(1),
@@ -858,6 +874,14 @@ impl App {
             Command::Leaderboard => self.dispatch(Action::ShowLeaderboard),
             Command::Login => self.dispatch(Action::Login),
             Command::Logout => self.dispatch(Action::Logout),
+            Command::Account(public) => {
+                self.account(public);
+                return;
+            }
+            Command::User(login) => {
+                self.open_user(login);
+                return;
+            }
             Command::Quit => self.should_quit = true,
             Command::Results { section, value } => {
                 let current = self.config.results.get(&section).unwrap_or(true);
