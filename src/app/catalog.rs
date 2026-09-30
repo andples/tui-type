@@ -17,6 +17,7 @@ impl App {
 
     pub(super) fn open_catalog(&mut self) {
         self.catalog_menu.confirm_remove = false;
+        self.catalog_menu.query.clear();
         self.load_index(false);
         self.sync_catalog();
         // Start on the language and theme in use.
@@ -100,6 +101,34 @@ impl App {
                 }
             }
             C::Refresh => self.load_index(true),
+            C::SearchChar(ch) => {
+                self.catalog_menu
+                    .search(|q| q.push(ch), &self.themes, &self.languages);
+            }
+            C::SearchBackspace => {
+                self.catalog_menu.search(
+                    |q| {
+                        q.pop();
+                    },
+                    &self.themes,
+                    &self.languages,
+                );
+            }
+            C::SearchDeleteWord => {
+                self.catalog_menu.search(
+                    |q| {
+                        let keep = q.trim_end().rfind(' ').map_or(0, |i| i + 1);
+                        q.truncate(keep);
+                    },
+                    &self.themes,
+                    &self.languages,
+                );
+            }
+            C::Escape if self.catalog_menu.query.is_empty() => self.dispatch(Action::Back),
+            C::Escape => {
+                self.catalog_menu
+                    .search(String::clear, &self.themes, &self.languages);
+            }
         }
     }
 

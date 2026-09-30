@@ -75,7 +75,7 @@ pub fn map_key(key: KeyEvent, ctx: InputContext) -> Action {
             _ => Action::Nop,
         },
         Screen::Profiles => map_profiles(key, ctx.profile_menu),
-        Screen::Catalog => map_catalog(key, ctx.catalog_confirm),
+        Screen::Catalog => map_catalog(key, ctrl || alt, ctx.catalog_confirm),
         Screen::Login => match key.code {
             KeyCode::Esc | KeyCode::Char('q') => Action::CancelLogin,
             KeyCode::Char(':') => Action::OpenCommandLine,
@@ -204,7 +204,9 @@ fn map_leaderboard(key: KeyEvent, ctrl: bool) -> Action {
     }
 }
 
-fn map_catalog(key: KeyEvent, confirm: bool) -> Action {
+/// Letters go to the search, so the other actions sit on arrows, enter
+/// and ctrl.
+fn map_catalog(key: KeyEvent, modified: bool, confirm: bool) -> Action {
     use CatalogAction as C;
     let c = |a| Action::Catalog(a);
     if confirm {
@@ -214,23 +216,25 @@ fn map_catalog(key: KeyEvent, confirm: bool) -> Action {
         };
     }
     match key.code {
-        KeyCode::Up | KeyCode::Char('k') => c(C::Up),
-        KeyCode::Down | KeyCode::Char('j') => c(C::Down),
-        KeyCode::Home | KeyCode::Char('g') => c(C::Top),
-        KeyCode::End | KeyCode::Char('G') => c(C::Bottom),
-        KeyCode::Tab
-        | KeyCode::BackTab
-        | KeyCode::Left
-        | KeyCode::Right
-        | KeyCode::Char('h')
-        | KeyCode::Char('l') => c(C::SwitchTab),
-        KeyCode::Enter | KeyCode::Char(' ') => c(C::Use),
-        KeyCode::Char('i') => c(C::Install),
-        KeyCode::Char('d') | KeyCode::Char('x') | KeyCode::Delete => c(C::Remove),
-        KeyCode::Char('r') => c(C::Refresh),
-        KeyCode::Esc | KeyCode::Char('q') => Action::Back,
+        KeyCode::Char('s') if modified => c(C::Install),
+        KeyCode::Char('d') if modified => c(C::Remove),
+        KeyCode::Char('r') if modified => c(C::Refresh),
+        KeyCode::Char('w') | KeyCode::Char('h') if modified => c(C::SearchDeleteWord),
+        KeyCode::Backspace if modified => c(C::SearchDeleteWord),
+        KeyCode::Char('n') if modified => c(C::Down),
+        KeyCode::Char('p') if modified => c(C::Up),
+        KeyCode::Up => c(C::Up),
+        KeyCode::Down => c(C::Down),
+        KeyCode::Home => c(C::Top),
+        KeyCode::End => c(C::Bottom),
+        KeyCode::Tab | KeyCode::BackTab | KeyCode::Left | KeyCode::Right => c(C::SwitchTab),
+        KeyCode::Enter => c(C::Use),
+        KeyCode::Delete => c(C::Remove),
+        KeyCode::Backspace => c(C::SearchBackspace),
+        KeyCode::Esc => c(C::Escape),
         KeyCode::Char(':') => Action::OpenCommandLine,
         KeyCode::Char('?') => Action::ShowHelp,
+        KeyCode::Char(ch) if !modified => c(C::SearchChar(ch)),
         _ => Action::Nop,
     }
 }

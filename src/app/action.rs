@@ -157,6 +157,14 @@ pub enum CatalogAction {
     CancelRemove,
     /// Fetch the catalogue index again.
     Refresh,
+    /// Add a character to the search.
+    SearchChar(char),
+    /// Drop the search's last character.
+    SearchBackspace,
+    /// Drop the search's last word.
+    SearchDeleteWord,
+    /// Clear the search, or leave when it's already empty.
+    Escape,
 }
 
 /// Keys on the profile screen, in either the list or the editor.

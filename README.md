@@ -98,15 +98,16 @@ with a tab for languages and a tab for themes:
 ```
 install    languages 3/8    themes 2/14
 
-    dutch       Dutch · 196 words          available
-  ● english     English · 199 words         built in
-  ○ english_1k  English 1k · 999 words      built in
-› ○ spanish     Spanish · 258 words        installed
+  / span    1 found
+ › ○ spanish     Spanish · 258 words        installed
 ```
 
-`↑↓`/`jk` move, `tab` (or `←→`) switches tabs, `enter` uses the highlighted
-item and installs it first if needed, `i` only installs it, `d` removes it
-(after a `y`), `r` fetches the catalogue again and `esc` goes back. On the
+Type to search: both tabs narrow to the names (and descriptions) that match
+every word typed, `backspace` edits the search and `esc` clears it (and goes
+back when it's empty). `↑↓` move, `tab` (or `←→`) switches tabs, `enter` uses
+the highlighted item and installs it first if needed, `ctrl+s` only installs
+it, `ctrl+d` removes it (after a `y`) and `ctrl+r` fetches the catalogue
+again. On the
 themes tab the highlighted theme previews live, whether or not it's
 installed. `:install nord` and `:uninstall nord` do the same from the command
 line.

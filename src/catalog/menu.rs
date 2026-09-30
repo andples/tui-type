@@ -73,6 +73,8 @@ pub struct CatalogMenu {
     pub index: IndexState,
     /// Downloads in flight.
     pub installing: Vec<(Kind, String)>,
+    /// Typed search: both tabs list only what matches.
+    pub query: String,
 }
 
 impl Default for CatalogMenu {
@@ -84,6 +86,7 @@ impl Default for CatalogMenu {
             confirm_remove: false,
             index: IndexState::NotLoaded,
             installing: Vec::new(),
+            query: String::new(),
         }
     }
 }
@@ -114,8 +117,37 @@ impl CatalogMenu {
         self.installing.iter().any(|(k, n)| *k == kind && n == name)
     }
 
-    /// Everything installed plus everything the catalogue offers, by name.
+    /// The rows of `kind`'s tab: `all_items` narrowed by the search.
     pub fn items(&self, kind: Kind, themes: &ThemeRegistry, langs: &LanguageRegistry) -> Vec<Item> {
+        let mut items = self.all_items(kind, themes, langs);
+        items.retain(|i| matches(&self.query, i));
+        items
+    }
+
+    /// Change the search with `edit`, then start both tabs at the top.
+    pub fn search(
+        &mut self,
+        edit: impl FnOnce(&mut String),
+        themes: &ThemeRegistry,
+        langs: &LanguageRegistry,
+    ) {
+        self.confirm_remove = false;
+        edit(&mut self.query);
+        for kind in Kind::ALL {
+            let len = self.items(kind, themes, langs).len();
+            let sel = self.selection_mut(kind);
+            sel.set_len(len);
+            sel.home();
+        }
+    }
+
+    /// Everything installed plus everything the catalogue offers, by name.
+    pub fn all_items(
+        &self,
+        kind: Kind,
+        themes: &ThemeRegistry,
+        langs: &LanguageRegistry,
+    ) -> Vec<Item> {
         let index = self.index();
         let in_catalogue = |name: &str| index.is_some_and(|i| i.contains(kind, name));
         let mut items: BTreeMap<String, Item> = BTreeMap::new();
@@ -265,6 +297,16 @@ impl CatalogMenu {
     }
 }
 
+/// Every word of `query` appears in the item's name or detail, ignoring
+/// case; an empty query matches everything.
+fn matches(query: &str, item: &Item) -> bool {
+    let hay = format!("{} {}", item.name, item.detail).to_lowercase();
+    query
+        .to_lowercase()
+        .split_whitespace()
+        .all(|w| hay.contains(w))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -286,6 +328,29 @@ mod tests {
             }),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn search_narrows_both_tabs_and_resets_the_cursor() {
+        let mut m = menu_with_index();
+        let (themes, langs) = (ThemeRegistry::builtin(), LanguageRegistry::builtin());
+        let names = |m: &CatalogMenu, k| -> Vec<String> {
+            m.items(k, &themes, &langs)
+                .into_iter()
+                .map(|i| i.name)
+                .collect()
+        };
+        m.move_by(2, 3);
+        m.search(|q| q.push_str("SPAN"), &themes, &langs);
+        assert_eq!(names(&m, Kind::Language), ["spanish"]);
+        assert_eq!(m.selection(Kind::Language).selected, 0);
+        assert!(names(&m, Kind::Theme).is_empty());
+        // Words match anywhere in the name or detail.
+        m.search(|q| *q = "english 1k".into(), &themes, &langs);
+        assert_eq!(names(&m, Kind::Language), ["english_1k"]);
+        m.search(String::clear, &themes, &langs);
+        assert_eq!(names(&m, Kind::Language).len(), 3);
+        assert_eq!(m.all_items(Kind::Theme, &themes, &langs).len(), 2);
     }
 
     #[test]
