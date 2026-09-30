@@ -27,17 +27,62 @@ pub enum SplashMenu {
     LoggedIn,
 }
 
-impl SplashMenu {
-    /// (key, label) rows, the primary one first.
-    pub fn items(self) -> &'static [(&'static str, &'static str)] {
+/// One row of the landing menu: its shortcut key, label and what it does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SplashItem {
+    pub key: &'static str,
+    pub label: &'static str,
+    pub action: SplashChoice,
+}
+
+/// What a landing-menu row does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SplashChoice {
+    StartTyping,
+    Help,
+    Login,
+    /// Open the command line on `daily ` so the modes are listed.
+    Daily,
+    Leaderboard,
+}
+
+impl SplashChoice {
+    pub fn action(self) -> Action {
         match self {
-            SplashMenu::Offline => &[("tab", "start typing"), ("?", "help")],
-            SplashMenu::LoggedOut => &[("enter", "login with github"), ("tab", "start typing")],
-            SplashMenu::LoggedIn => &[
-                ("d", "today's daily"),
-                ("b", "leaderboard"),
-                ("tab", "start typing"),
-            ],
+            SplashChoice::StartTyping => Action::CloseSplash,
+            SplashChoice::Help => Action::ShowHelp,
+            SplashChoice::Login => Action::Login,
+            SplashChoice::Daily => Action::Daily,
+            SplashChoice::Leaderboard => Action::ShowLeaderboard,
+        }
+    }
+}
+
+const fn item(key: &'static str, label: &'static str, action: SplashChoice) -> SplashItem {
+    SplashItem { key, label, action }
+}
+
+const OFFLINE: [SplashItem; 2] = [
+    item("tab", "start typing", SplashChoice::StartTyping),
+    item("?", "help", SplashChoice::Help),
+];
+const LOGGED_OUT: [SplashItem; 2] = [
+    item("l", "login with github", SplashChoice::Login),
+    item("tab", "start typing", SplashChoice::StartTyping),
+];
+const LOGGED_IN: [SplashItem; 3] = [
+    item("d", "today's daily", SplashChoice::Daily),
+    item("b", "leaderboard", SplashChoice::Leaderboard),
+    item("tab", "start typing", SplashChoice::StartTyping),
+];
+
+impl SplashMenu {
+    /// The rows, the primary one first (highlighted at the start).
+    pub fn items(self) -> &'static [SplashItem] {
+        match self {
+            SplashMenu::Offline => &OFFLINE,
+            SplashMenu::LoggedOut => &LOGGED_OUT,
+            SplashMenu::LoggedIn => &LOGGED_IN,
         }
     }
 }
@@ -55,6 +100,8 @@ pub struct SplashFrame {
 pub struct Splash {
     started: Instant,
     skipped: bool,
+    /// The highlighted menu row; enter runs it.
+    pub selected: usize,
 }
 
 impl Splash {
@@ -62,6 +109,14 @@ impl Splash {
         Self {
             started,
             skipped: false,
+            selected: 0,
+        }
+    }
+
+    /// Move the highlight over `len` rows, wrapping.
+    pub fn move_by(&mut self, delta: isize, len: usize) {
+        if len > 0 {
+            self.selected = (self.selected as isize + delta).rem_euclid(len as isize) as usize;
         }
     }
 
@@ -148,6 +203,18 @@ impl App {
         }
     }
 
+    /// Enter on the landing menu: the highlighted row's action.
+    pub(super) fn splash_choice(&self) -> Action {
+        let items = self.splash_menu().items();
+        let i = self
+            .splash
+            .map_or(0, |s| s.selected)
+            .min(items.len().saturating_sub(1));
+        items
+            .get(i)
+            .map_or(Action::CloseSplash, |it| it.action.action())
+    }
+
     pub(super) fn close_splash(&mut self) {
         self.splash = None;
         if self.screen == Screen::Splash {
@@ -223,15 +290,32 @@ mod tests {
 
     #[test]
     fn menus_start_with_their_primary_action() {
-        assert_eq!(SplashMenu::LoggedOut.items()[0].0, "enter");
-        assert_eq!(SplashMenu::LoggedIn.items()[0].0, "d");
+        assert_eq!(SplashMenu::LoggedOut.items()[0].action, SplashChoice::Login);
+        assert_eq!(SplashMenu::LoggedIn.items()[0].action, SplashChoice::Daily);
         for m in [
             SplashMenu::Offline,
             SplashMenu::LoggedOut,
             SplashMenu::LoggedIn,
         ] {
-            assert!(m.items().iter().any(|(k, _)| *k == "tab"));
+            assert!(
+                m.items()
+                    .iter()
+                    .any(|it| it.action == SplashChoice::StartTyping)
+            );
         }
+    }
+
+    #[test]
+    fn the_highlight_wraps_and_picks_the_action() {
+        let mut s = Splash::new(Instant::now());
+        let items = SplashMenu::LoggedIn.items();
+        assert_eq!(s.selected, 0);
+        s.move_by(-1, items.len());
+        assert_eq!(items[s.selected].action, SplashChoice::StartTyping);
+        s.move_by(1, items.len());
+        s.move_by(1, items.len());
+        assert_eq!(items[s.selected].action.action(), Action::ShowLeaderboard);
+        assert_eq!(SplashChoice::Daily.action(), Action::Daily);
     }
 
     #[test]

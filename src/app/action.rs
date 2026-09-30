@@ -41,6 +41,10 @@ pub enum Action {
     SkipIntro,
     /// Leave the landing screen for the typing screen.
     CloseSplash,
+    /// Landing menu: move the highlight.
+    SplashMove(i8),
+    /// Landing menu: run the highlighted row.
+    SplashChoose,
 
     // Housekeeping
     Tick,

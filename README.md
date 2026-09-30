@@ -37,15 +37,18 @@ On the results screen: `tab` next test, `s` stats, `?` help.
 ttyp opens on a short intro: the logo typed out in big letters (under a
 second), then a few keys for where you might want to go:
 
-- logged out: `enter` (or `l`) logs in, `tab` starts typing
-- logged in: `d` today's daily, `b` leaderboard, `tab` starts typing
-- offline (`server = ""`): `tab` starts typing, `?` help
+- logged out: login with github (`l`), start typing (`tab`)
+- logged in: today's daily (`d`, lists the modes to pick from), leaderboard
+  (`b`), start typing (`tab`)
+- offline (`server = ""`): start typing (`tab`), help (`?`)
+
+`↑`/`↓` move the highlight and `enter` runs the highlighted row; the keys in
+brackets are shortcuts.
 
 You never have to wait for it: any other letter takes you straight to the
 words (it isn't typed, so the test starts with your next key). While the
 intro is still playing every letter does that, menu keys included, since
-they aren't on screen yet; other keys finish the intro. `esc`, `enter` (when
-not logging in) and `space` go to the typing screen too, `:` opens the
+they aren't on screen yet; other keys finish the intro. `esc` and `space` go to the typing screen too, `:` opens the
 command line. Turn it off with `:set splash off` (`splash = false` in the
 config).
 

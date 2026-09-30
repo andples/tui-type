@@ -551,6 +551,17 @@ impl App {
                 }
             }
             Action::CloseSplash => {}
+            Action::SplashMove(d) => {
+                let len = self.splash_menu().items().len();
+                if let Some(s) = &mut self.splash {
+                    s.move_by(d as isize, len);
+                }
+            }
+            Action::SplashChoose => {
+                let action = self.splash_choice();
+                self.dispatch(action);
+                return;
+            }
             Action::FontBigger => self.execute(Command::FontSize(Some(
                 self.config.font_size.saturating_add(1),
             ))),
@@ -637,7 +648,14 @@ impl App {
             Action::CancelLogin => self.cancel_login(),
             Action::Logout => self.logout(),
             Action::ShowLeaderboard => self.open_leaderboard(),
-            Action::Daily => self.open_daily(None),
+            // From the landing menu: list the modes rather than guess one.
+            Action::Daily => {
+                self.cmd_open = true;
+                self.cmdline.open(&self.completions);
+                for c in "daily ".chars() {
+                    self.cmdline.insert(c, &self.completions);
+                }
+            }
             Action::Board(a) => self.board_action(a),
             Action::User(a) => self.user_action(a),
             Action::Remote(ev) => self.remote_event(ev),

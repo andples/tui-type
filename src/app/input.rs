@@ -147,10 +147,14 @@ fn map_splash(key: KeyEvent, modified: bool, playing: bool, menu: SplashMenu) ->
         _ => {}
     }
     match (key.code, menu) {
-        (KeyCode::Enter | KeyCode::Char('l'), SplashMenu::LoggedOut) => Action::Login,
+        (KeyCode::Up, _) => Action::SplashMove(-1),
+        (KeyCode::Down, _) => Action::SplashMove(1),
+        // Enter runs whichever row is highlighted.
+        (KeyCode::Enter, _) => Action::SplashChoose,
+        (KeyCode::Char('l'), SplashMenu::LoggedOut) => Action::Login,
         (KeyCode::Char('d'), SplashMenu::LoggedIn) => Action::Daily,
         (KeyCode::Char('b'), SplashMenu::LoggedIn) => Action::ShowLeaderboard,
-        (KeyCode::Enter | KeyCode::Esc | KeyCode::Char(' '), _) => Action::CloseSplash,
+        (KeyCode::Esc | KeyCode::Char(' '), _) => Action::CloseSplash,
         (KeyCode::Char(_), _) => Action::CloseSplash,
         _ => Action::Nop,
     }
@@ -363,7 +367,18 @@ mod tests {
     fn splash_menu_keys_follow_login_state() {
         use SplashMenu as M;
         let ch = KeyCode::Char;
-        assert_eq!(splash(false, M::LoggedOut, KeyCode::Enter), Action::Login);
+        assert_eq!(
+            splash(false, M::LoggedOut, KeyCode::Enter),
+            Action::SplashChoose
+        );
+        assert_eq!(
+            splash(false, M::LoggedIn, KeyCode::Down),
+            Action::SplashMove(1)
+        );
+        assert_eq!(
+            splash(false, M::LoggedIn, KeyCode::Up),
+            Action::SplashMove(-1)
+        );
         assert_eq!(splash(false, M::LoggedOut, ch('l')), Action::Login);
         // A letter that isn't a menu key moves to the words, untyped.
         assert_eq!(splash(false, M::LoggedOut, ch('d')), Action::CloseSplash);
@@ -371,12 +386,8 @@ mod tests {
         assert_eq!(splash(false, M::LoggedIn, ch('b')), Action::ShowLeaderboard);
         assert_eq!(splash(false, M::LoggedIn, ch('l')), Action::CloseSplash);
         assert_eq!(
-            splash(false, M::LoggedIn, KeyCode::Enter),
-            Action::CloseSplash
-        );
-        assert_eq!(
             splash(false, M::Offline, KeyCode::Enter),
-            Action::CloseSplash
+            Action::SplashChoose
         );
         assert_eq!(splash(false, M::Offline, ch('l')), Action::CloseSplash);
         assert_eq!(splash(false, M::Offline, ch('?')), Action::ShowHelp);
