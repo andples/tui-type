@@ -92,8 +92,8 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
     }
 
     let hint = match panes::split(body, 2, MIN_PANE, PANE_GAP) {
-        Panes::SideBySide(_) => "enter graph · ↑↓ move · tab switch board · esc back",
-        Panes::Tabs(_) => "enter graph · ↑↓ move · tab other board · esc back",
+        Panes::SideBySide(_) => "enter graph · p profile · ↑↓ move · tab switch board · esc back",
+        Panes::Tabs(_) => "enter graph · p profile · ↑↓ move · tab other board · esc back",
     };
     hints::render(frame, area, col, p, hint);
 }
