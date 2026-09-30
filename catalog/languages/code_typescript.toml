@@ -1,0 +1,17 @@
+name = "code_typescript"
+display = "TypeScript (code)"
+words = [
+  "interface", "type", "enum", "namespace", "declare", "readonly", "abstract",
+  "implements", "private", "public", "protected", "string", "number", "boolean", "any",
+  "unknown", "never", "void", "null", "undefined", "object", "bigint", "symbol",
+  "function", "return", "const", "let", "if", "else", "for", "while", "switch", "case",
+  "break", "continue", "try", "catch", "finally", "throw", "class", "extends", "super",
+  "constructor", "new", "this", "static", "async", "await", "import", "export",
+  "default", "from", "as", "keyof", "typeof", "infer", "satisfies", "is", "asserts",
+  "Partial<T>", "Required<T>", "Readonly<T>", "ReturnType<T>", "NonNullable<T>",
+  "Promise<void>", "Array<string>", "Set<number>", "string[]", "number[]", "?:", "!",
+  "?.", "??", "=>", "===", "console.log()", "JSON.parse()", "Object.keys()", "map()",
+  "filter()", "reduce()", "forEach()", "find()", "includes()", "<T>", "<T", ">",
+  "unknown[]", "never[]", "T[]", "@Component()", "@Injectable()", "tsconfig.json",
+  "strict", "noImplicitAny"
+]

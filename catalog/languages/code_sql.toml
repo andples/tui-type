@@ -1,0 +1,15 @@
+name = "code_sql"
+display = "SQL (code)"
+words = [
+  "SELECT", "FROM", "WHERE", "AND", "OR", "NOT", "IN", "IS", "NULL", "LIKE", "BETWEEN",
+  "EXISTS", "DISTINCT", "AS", "ON", "INSERT", "INTO", "VALUES", "UPDATE", "SET",
+  "DELETE", "CREATE", "TABLE", "ALTER", "ADD", "DROP", "INDEX", "VIEW", "PRIMARY",
+  "KEY", "FOREIGN", "REFERENCES", "JOIN", "LEFT", "RIGHT", "INNER", "OUTER", "FULL",
+  "CROSS", "GROUP", "BY", "ORDER", "HAVING", "LIMIT", "OFFSET", "UNION", "ALL", "ASC",
+  "DESC", "COUNT(*)", "SUM()", "AVG()", "MIN()", "MAX()", "COALESCE()", "CAST()",
+  "CASE", "WHEN", "THEN", "ELSE", "END", "NOW()", "LOWER()", "UPPER()", "INTEGER",
+  "TEXT", "VARCHAR(255)", "BOOLEAN", "DATE", "TIMESTAMP", "REAL", "BLOB", "DEFAULT",
+  "UNIQUE", "CHECK", "BEGIN", "COMMIT", "ROLLBACK", "TRANSACTION", "WITH", "RECURSIVE",
+  "OVER", "PARTITION", "ROW_NUMBER()", "RANK()", "*", "=", "<>", "!=", "<=", ">=", ";",
+  "users", "id", "name", "email", "created_at", "user_id"
+]

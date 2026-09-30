@@ -1,0 +1,12 @@
+name = "code_perl"
+display = "Perl (code)"
+words = [
+  "#!/usr/bin/perl", "use", "strict;", "warnings;", "my", "our", "local", "sub",
+  "return", "if", "elsif", "else", "unless", "while", "until", "for", "foreach",
+  "last", "next", "redo", "print", "say", "printf", "chomp", "split", "join", "push",
+  "pop", "shift", "unshift", "keys", "values", "each", "exists", "delete", "defined",
+  "open", "close", "die", "warn", "eval", "ref", "bless", "scalar", "wantarray",
+  "length", "substr", "index", "lc", "uc", "sprintf", "sort", "map", "grep", "$x",
+  "@list", "%hash", "$_", "@_", "$0", "$!", "=~", "!~", "s///", "tr///", "qw()", "=>",
+  "->", "::", ".", ".=", "eq", "ne", "lt", "gt", "cmp", "<=>", "<STDIN>", "__END__"
+]

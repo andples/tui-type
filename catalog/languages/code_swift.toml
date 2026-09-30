@@ -1,0 +1,17 @@
+name = "code_swift"
+display = "Swift (code)"
+words = [
+  "func", "let", "var", "return", "if", "else", "guard", "switch", "case", "default:",
+  "for", "in", "while", "repeat", "break", "continue", "class", "struct", "enum",
+  "protocol", "extension", "init", "deinit", "self", "Self", "super", "import",
+  "public", "private", "internal", "fileprivate", "open", "static", "final", "lazy",
+  "weak", "unowned", "mutating", "inout", "throws", "throw", "try", "try?", "catch",
+  "do", "defer", "async", "await", "Int", "Double", "Float", "String", "Bool",
+  "Character", "Array", "Dictionary", "Set", "Optional", "Any", "AnyObject", "Void",
+  "nil", "true", "false", "some", "any", "where", "associatedtype", "typealias",
+  "print()", "count", "isEmpty", "append()", "remove()", "contains()", "map()",
+  "filter()", "reduce()", "forEach()", "sorted()", "??", "?.", "!", "->", "...", "..<",
+  "==", "!=", "\"\\(x)\"", "@State", "@Binding", "@Published", "@MainActor",
+  "@escaping", "@objc", "SwiftUI", "View", "body:", "Text()", "VStack", "HStack",
+  "Button()"
+]

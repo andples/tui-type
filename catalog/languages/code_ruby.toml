@@ -1,0 +1,16 @@
+name = "code_ruby"
+display = "Ruby (code)"
+words = [
+  "def", "end", "class", "module", "if", "elsif", "else", "unless", "case", "when",
+  "while", "until", "for", "in", "do", "begin", "rescue", "ensure", "raise", "return",
+  "yield", "self", "nil", "true", "false", "and", "or", "not", "require",
+  "require_relative", "include", "extend", "attr_accessor", "attr_reader", "puts",
+  "print", "p", "gets", "each", "map", "select", "reject", "reduce", "each_with_index",
+  "times", "upto", "inject", "length", "size", "empty?", "nil?", "include?", "push",
+  "pop", "first", "last", "sort", "sort_by", "reverse", "join", "split", "strip",
+  "to_s", "to_i", "to_sym", "@name", "@@count", ":symbol", "=>", "{}", "|x|", "|item|",
+  "\"#{x}\"", "Hash", "Array", "String", "Integer", "Proc", "lambda", "->", ".freeze",
+  ".dup", ".tap", "private", "protected", "initialize", "super", "Struct.new",
+  "Comparable", "Enumerable", "rails", "bundle", "gem", "Gemfile", "rspec", "describe",
+  "it", "expect().to", "eq()"
+]

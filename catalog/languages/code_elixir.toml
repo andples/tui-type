@@ -1,0 +1,13 @@
+name = "code_elixir"
+display = "Elixir (code)"
+words = [
+  "defmodule", "def", "defp", "do", "end", "fn", "->", "case", "cond", "with", "if",
+  "else", "unless", "when", "receive", "after", "try", "rescue", "catch", "raise",
+  "import", "alias", "require", "use", "quote", "unquote", "true", "false", "nil",
+  ":ok", ":error", "@moduledoc", "@doc", "@spec", "@impl", "|>", "<-", "=>", "++",
+  "<>", "=~", "&", "&1", "%{}", "[]", "{}", "~r//", "~s\"\"", "\"#{x}\"", "_", "^pin",
+  "Enum.map", "Enum.filter", "Enum.reduce", "Enum.each", "Enum.count", "Map.get",
+  "Map.put", "Map.merge", "List.first", "String.split", "IO.puts", "IO.inspect",
+  "Kernel", "spawn", "send", "self()", "GenServer", "Agent", "Task", "Supervisor",
+  "Ecto", "Phoenix", "mix", "iex"
+]

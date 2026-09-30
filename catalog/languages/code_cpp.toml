@@ -1,0 +1,22 @@
+name = "code_cpp"
+display = "C++ (code)"
+words = [
+  "#include", "<iostream>", "<vector>", "<string>", "<map>", "<memory>", "<algorithm>",
+  "<unordered_map>", "int", "main()", "return", "0;", "std::cout", "std::cin",
+  "std::endl", "std::string", "std::vector<int>", "std::map", "std::unique_ptr",
+  "std::shared_ptr", "std::make_unique", "std::move", "namespace", "using", "class",
+  "struct", "public:", "private:", "protected:", "virtual", "override", "final",
+  "const", "constexpr", "static", "inline", "template", "<typename", "T>", "auto",
+  "void", "bool", "char", "long", "double", "float", "unsigned", "size_t", "nullptr",
+  "true", "false", "new", "delete", "this", "operator", "friend", "explicit",
+  "mutable", "volatile", "noexcept", "enum", "typedef", "sizeof", "decltype", "if",
+  "else", "for", "while", "do", "switch", "case", "default:", "break;", "continue;",
+  "try", "catch", "throw", "std::sort", "std::find", "std::begin", "std::end",
+  "std::pair", "std::optional", "std::array", "std::thread", "std::mutex",
+  "push_back()", "emplace_back()", "size()", "empty()", "begin()", "end()", "clear()",
+  "insert()", "erase()", "find()", "at()", "front()", "back()", "const&", "&&", "->",
+  "::", "<<", ">>", "++i", "i++", "!=", "==", "<=", ">=", "&x", "*ptr", "ptr->",
+  "~Foo()", "Foo::Foo()", "#pragma", "once", "#define", "#ifdef", "#endif", "x", ":",
+  "std::string_view", "static_cast<int>", "dynamic_cast", "reinterpret_cast",
+  "const_cast"
+]

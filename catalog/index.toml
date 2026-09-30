@@ -1,6 +1,126 @@
 # Generated from the files in this directory: TTYP_BLESS=1 cargo test catalog_index
 
 [[languages]]
+name = "code_bash"
+display = "Bash (code)"
+words = 105
+
+[[languages]]
+name = "code_c"
+display = "C (code)"
+words = 110
+
+[[languages]]
+name = "code_cpp"
+display = "C++ (code)"
+words = 128
+
+[[languages]]
+name = "code_csharp"
+display = "C# (code)"
+words = 109
+
+[[languages]]
+name = "code_dart"
+display = "Dart (code)"
+words = 91
+
+[[languages]]
+name = "code_elixir"
+display = "Elixir (code)"
+words = 75
+
+[[languages]]
+name = "code_go"
+display = "Go (code)"
+words = 92
+
+[[languages]]
+name = "code_haskell"
+display = "Haskell (code)"
+words = 105
+
+[[languages]]
+name = "code_java"
+display = "Java (code)"
+words = 109
+
+[[languages]]
+name = "code_javascript"
+display = "JavaScript (code)"
+words = 114
+
+[[languages]]
+name = "code_kotlin"
+display = "Kotlin (code)"
+words = 100
+
+[[languages]]
+name = "code_lua"
+display = "Lua (code)"
+words = 66
+
+[[languages]]
+name = "code_ocaml"
+display = "OCaml (code)"
+words = 106
+
+[[languages]]
+name = "code_perl"
+display = "Perl (code)"
+words = 79
+
+[[languages]]
+name = "code_php"
+display = "PHP (code)"
+words = 95
+
+[[languages]]
+name = "code_python"
+display = "Python (code)"
+words = 157
+
+[[languages]]
+name = "code_r"
+display = "R (code)"
+words = 90
+
+[[languages]]
+name = "code_ruby"
+display = "Ruby (code)"
+words = 99
+
+[[languages]]
+name = "code_rust"
+display = "Rust (code)"
+words = 110
+
+[[languages]]
+name = "code_scala"
+display = "Scala (code)"
+words = 83
+
+[[languages]]
+name = "code_sql"
+display = "SQL (code)"
+words = 98
+
+[[languages]]
+name = "code_swift"
+display = "Swift (code)"
+words = 102
+
+[[languages]]
+name = "code_typescript"
+display = "TypeScript (code)"
+words = 95
+
+[[languages]]
+name = "code_zig"
+display = "Zig (code)"
+words = 68
+
+[[languages]]
 name = "dutch"
 display = "Dutch"
 words = 196

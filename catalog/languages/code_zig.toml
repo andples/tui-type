@@ -1,0 +1,13 @@
+name = "code_zig"
+display = "Zig (code)"
+words = [
+  "const", "var", "fn", "pub", "return", "if", "else", "while", "for", "switch",
+  "break", "continue", "defer", "errdefer", "try", "catch", "orelse", "unreachable",
+  "struct", "enum", "union", "error", "opaque", "comptime", "inline", "export",
+  "extern", "test", "and", "or", "null", "undefined", "true", "false", "u8", "u32",
+  "u64", "i32", "i64", "usize", "f32", "f64", "bool", "void", "anyerror", "anytype",
+  "type", "noreturn", "[]const", "?*T", "!void", "@import(\"std\")",
+  "std.debug.print()", "std.mem.Allocator", "std.ArrayList", "std.heap.page_allocator",
+  "allocator.alloc()", "allocator.free()", "@intCast()", "@as()", "@sizeOf()",
+  "@TypeOf()", ".{}", "=>", "|x|", "...", "zig", "build"
+]

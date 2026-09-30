@@ -1,0 +1,17 @@
+name = "code_php"
+display = "PHP (code)"
+words = [
+  "<?php", "?>", "echo", "print", "function", "return", "if", "else", "elseif",
+  "foreach", "as", "while", "for", "do", "switch", "case", "default:", "break;",
+  "class", "interface", "trait", "extends", "implements", "public", "private",
+  "protected", "static", "final", "abstract", "new", "$this", "$x", "$arr", "$_GET",
+  "$_POST", "$_SERVER", "$_SESSION", "self::", "parent::", "namespace", "use",
+  "require_once", "include", "null", "true", "false", "array()", "isset()", "empty()",
+  "unset()", "count()", "strlen()", "str_replace()", "explode()", "implode()",
+  "array_map()", "array_filter()", "array_keys()", "in_array()", "json_encode()",
+  "json_decode()", "var_dump()", "die()", "try", "catch", "finally", "throw",
+  "Exception", "PDO", "mysqli_query()", "header()", "session_start()", "=>", "->",
+  "::", ".", ".=", "===", "!==", "??", "?->", "fn()", "match", "readonly", "enum",
+  "string", "int", "float", "bool", "mixed", "void", "composer.json", "Laravel",
+  "Route::get()", "$request->input()"
+]

@@ -1,0 +1,16 @@
+name = "code_dart"
+display = "Dart (code)"
+words = [
+  "void", "main()", "return", "if", "else", "for", "in", "while", "do", "switch",
+  "case", "default:", "break;", "continue;", "try", "catch", "finally", "throw",
+  "class", "abstract", "extends", "implements", "with", "mixin", "enum", "extension",
+  "import", "export", "library", "part", "final", "const", "var", "late", "required",
+  "static", "factory", "get", "set", "async", "await", "yield", "sync*", "async*",
+  "int", "double", "num", "String", "bool", "List<int>", "Set", "dynamic", "Object",
+  "Future<void>", "Stream", "null", "true", "false", "print()", "length", "isEmpty",
+  "add()", "addAll()", "remove()", "contains()", "map()", "where()", "toList()",
+  "forEach()", "toString()", "this", "super", "new", "??", "?.", "!", "=>", "...",
+  "'$x'", "'${x}'", "@override", "Widget", "setState()", "StatelessWidget",
+  "StatefulWidget", "Text()", "Column()", "Row()", "Container()", "flutter",
+  "pubspec.yaml"
+]

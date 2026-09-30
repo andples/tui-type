@@ -1,0 +1,19 @@
+name = "code_csharp"
+display = "C# (code)"
+words = [
+  "using", "namespace", "class", "struct", "interface", "enum", "record", "public",
+  "private", "protected", "internal", "static", "readonly", "const", "void", "int",
+  "long", "double", "float", "decimal", "bool", "char", "string", "object", "var",
+  "dynamic", "return", "if", "else", "for", "foreach", "in", "while", "do", "switch",
+  "case", "default:", "break;", "continue;", "try", "catch", "finally", "throw", "new",
+  "this", "base", "null", "true", "false", "is", "as", "typeof", "sizeof", "nameof",
+  "async", "await", "yield", "get;", "set;", "init;", "virtual", "override",
+  "abstract", "sealed", "partial", "params", "ref", "out", "Console.WriteLine()",
+  "Console.ReadLine()", "string.Format()", "Math.Max()", "DateTime.Now",
+  "Guid.NewGuid()", "List<int>", "IEnumerable<T>", "Task<T>", "Action", "Func<T>",
+  "Span<T>", "IDisposable", "Add()", "Remove()", "Contains()", "Count", "Length",
+  "ToString()", "Equals()", "GetHashCode()", "ToList()", "ToArray()", "Where()",
+  "Select()", "OrderBy()", "FirstOrDefault()", "Any()", "All()", "Sum()", "GroupBy()",
+  "=>", "??", "?.", "!", "$\"{x}\"", "@\"\"", "[Serializable]", "[HttpGet]",
+  "Exception", "ArgumentNullException"
+]

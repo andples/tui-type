@@ -1,0 +1,25 @@
+name = "code_python"
+display = "Python (code)"
+words = [
+  "def", "return", "if", "elif", "else", "for", "while", "in", "not", "and", "or",
+  "is", "None", "True", "False", "import", "from", "as", "class", "self", "try",
+  "except", "finally", "raise", "with", "yield", "lambda", "pass", "break", "continue",
+  "global", "nonlocal", "assert", "del", "async", "await", "print()", "len()",
+  "range()", "enumerate()", "zip()", "map()", "filter()", "sorted()", "reversed()",
+  "sum()", "min()", "max()", "abs()", "round()", "int()", "float()", "str()", "bool()",
+  "list()", "dict()", "set()", "tuple()", "type()", "isinstance()", "hasattr()",
+  "getattr()", "setattr()", "open()", "input()", "super()", "iter()", "next()",
+  "any()", "all()", "__init__", "__name__", "__main__", "__repr__", "__str__",
+  "__eq__", "self.name", "self.value", "cls", "@property", "@staticmethod",
+  "@classmethod", "@dataclass", "append()", "extend()", "insert()", "pop()",
+  "remove()", "index()", "count()", "keys()", "values()", "items()", "get()",
+  "update()", "copy()", "split()", "join()", "strip()", "replace()", "format()",
+  "startswith()", "endswith()", "lower()", "upper()", "find()", "encode()", "decode()",
+  "os", "sys", "json", "re", "typing", "List", "Dict", "Optional", "Any", "Callable",
+  "Iterable", "os.path", "sys.argv", "json.loads", "json.dumps", "re.match",
+  "f\"{x}\"", "\"__main__\"", "==", "\"__main__\":", "args", "kwargs", "*args",
+  "**kwargs", "x", "ValueError", "TypeError", "KeyError", "IndexError", "Exception",
+  "StopIteration", "open(path)", "f:", "f.read()", "f.write()", "i", "range(n):",
+  "numpy", "np", "pandas", "pd", "pytest", "ValueError(\"bad\")", "->", "int", "str",
+  "x:", "=", "0"
+]

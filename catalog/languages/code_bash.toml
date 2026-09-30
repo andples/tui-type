@@ -1,0 +1,14 @@
+name = "code_bash"
+display = "Bash (code)"
+words = [
+  "#!/usr/bin/env", "bash", "set", "-euo", "pipefail", "if", "then", "elif", "else",
+  "fi", "for", "in", "do", "done", "while", "until", "case", "esac", "function",
+  "return", "echo", "printf", "read", "local", "export", "source", "exit", "shift",
+  "test", "$1", "$@", "$#", "$?", "$$", "\"$@\"", "${var}", "$(cmd)", "cd", "ls",
+  "pwd", "mkdir", "rm", "cp", "mv", "cat", "grep", "sed", "awk", "find", "xargs",
+  "sort", "uniq", "head", "tail", "wc", "cut", "tr", "tee", "chmod", "chown", "curl",
+  "wget", "tar", "ssh", "scp", "git", "sudo", "kill", "ps", "top", "df", "du", "which",
+  "env", "true", "false", "/dev/null", "2>&1", ">", ">>", "<", "|", "||", "&&", ";",
+  "-eq", "-ne", "-lt", "-gt", "-le", "-ge", "-z", "-n", "-f", "-d", "-e", "~/", "./",
+  "../", "*.txt", "$HOME", "$PATH", "$PWD", "IFS", "trap"
+]

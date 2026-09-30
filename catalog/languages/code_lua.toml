@@ -1,0 +1,13 @@
+name = "code_lua"
+display = "Lua (code)"
+words = [
+  "local", "function", "return", "end", "if", "then", "elseif", "else", "for", "in",
+  "do", "while", "repeat", "until", "break", "goto", "and", "or", "not", "nil", "true",
+  "false", "self", "require", "print()", "pairs()", "ipairs()", "type()", "tostring()",
+  "tonumber()", "pcall()", "error()", "assert()", "select()", "next()",
+  "setmetatable()", "string.format()", "string.sub()", "string.find()",
+  "string.gsub()", "table.insert()", "table.remove()", "table.concat()",
+  "table.sort()", "math.floor()", "math.max()", "math.random()", "os.time()",
+  "io.write()", "io.read()", "..", "~=", "==", "<=", ">=", "#", "{}", "[]", ":", "...",
+  "__index", "__newindex", "__call", "M.new()", "love.draw()", "vim.api"
+]

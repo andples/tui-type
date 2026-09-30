@@ -1,0 +1,15 @@
+name = "code_r"
+display = "R (code)"
+words = [
+  "function", "return", "if", "else", "for", "while", "repeat", "break", "next", "in",
+  "TRUE", "FALSE", "NULL", "NA", "NaN", "Inf", "library", "require", "<-", "->", "<<-",
+  "%>%", "|>", "%in%", "==", "!=", "<=", ">=", "&", "|", "!", "$", "@", "::", "c()",
+  "list()", "vector()", "matrix()", "data.frame()", "factor()", "seq()", "rep()",
+  "length()", "names()", "nrow()", "ncol()", "mean()", "median()", "sd()", "sum()",
+  "max()", "min()", "round()", "paste()", "paste0()", "print()", "cat()", "str()",
+  "summary()", "head()", "apply()", "lapply()", "sapply()", "mapply()", "tapply()",
+  "is.na()", "which()", "order()", "sort()", "unique()", "table()", "read.csv()",
+  "write.csv()", "ggplot()", "aes()", "geom_point()", "dplyr", "filter()", "mutate()",
+  "select()", "group_by()", "summarise()", "lm()", "glm()", "plot()", "hist()",
+  "set.seed()", "rnorm()", "runif()", "df$x"
+]

@@ -1,0 +1,16 @@
+name = "code_ocaml"
+display = "OCaml (code)"
+words = [
+  "let", "in", "rec", "and", "fun", "function", "match", "with", "|", "->", "if",
+  "then", "else", "begin", "end", "type", "of", "module", "struct", "sig", "open",
+  "include", "functor", "val", "mutable", "ref", "!", ":=", "when", "as", "try",
+  "raise", "exception", "assert", "lazy", "true", "false", "()", "unit", "int",
+  "float", "string", "bool", "char", "list", "array", "option", "Some", "None",
+  "List.map", "List.iter", "List.fold_left", "List.filter", "List.length", "List.rev",
+  "List.nth", "Array.make", "Array.length", "String.length", "String.concat",
+  "String.sub", "Printf.printf", "print_endline", "print_string", "print_int",
+  "Hashtbl.create", "Hashtbl.add", "Hashtbl.find", "Option.map", "Result", "Ok",
+  "Error", "failwith", "invalid_arg", "::", "@", "^", ";", ";;", "<>", "=", "==", "!=",
+  "<", ">", "<=", ">=", "+.", "*.", "/.", "-.", "|>", "@@", "fst", "snd", "not", "go",
+  "acc", "[]", "x", "xs", "M", "S", "dune", "opam", "utop"
+]

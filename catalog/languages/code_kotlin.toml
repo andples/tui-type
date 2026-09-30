@@ -1,0 +1,17 @@
+name = "code_kotlin"
+display = "Kotlin (code)"
+words = [
+  "fun", "val", "var", "return", "if", "else", "when", "for", "in", "while", "do",
+  "break", "continue", "class", "object", "interface", "enum", "data", "sealed",
+  "open", "abstract", "override", "private", "public", "internal", "protected",
+  "companion", "init", "constructor", "this", "super", "import", "package", "null",
+  "true", "false", "is", "as", "as?", "!in", "typealias", "suspend", "inline",
+  "reified", "lateinit", "by", "lazy", "Int", "Long", "Double", "Float", "Boolean",
+  "String", "Char", "Unit", "Any", "Nothing", "List<T>", "MutableList", "V>", "Set",
+  "listOf()", "mutableListOf()", "mapOf()", "setOf()", "println()", "print()",
+  "require()", "check()", "error()", "also", "apply", "let", "run", "with", "map",
+  "filter", "forEach", "first", "last", "size", "isEmpty()", "contains()",
+  "joinToString()", "toString()", "?.", "?:", "!!", "->", "::", "..", "$name",
+  "\"${x}\"", "@JvmStatic", "@Composable", "coroutineScope", "launch", "async",
+  "await()", "Flow"
+]

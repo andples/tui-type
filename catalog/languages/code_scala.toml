@@ -1,0 +1,14 @@
+name = "code_scala"
+display = "Scala (code)"
+words = [
+  "def", "val", "var", "lazy", "object", "class", "trait", "case", "sealed",
+  "abstract", "final", "override", "private", "protected", "implicit", "given",
+  "using", "extends", "with", "new", "this", "super", "import", "package", "if",
+  "else", "match", "for", "yield", "while", "do", "return", "throw", "try", "catch",
+  "finally", "Int", "Long", "Double", "Boolean", "String", "Unit", "Any", "Nothing",
+  "Option", "Some", "None", "List", "Seq", "Vector", "Map", "Set", "Future", "Either",
+  "map", "flatMap", "filter", "foldLeft", "foreach", "collect", "getOrElse",
+  "mkString", "toList", "size", "head", "tail", "isEmpty", "println()", "=>", "<-",
+  "->", "::", "++", "_", "???", "s\"$x\"", "@tailrec", "sbt", "Akka", "Spark",
+  "implicitly", "enum", "then"
+]

@@ -1,0 +1,15 @@
+name = "code_haskell"
+display = "Haskell (code)"
+words = [
+  "module", "where", "import", "qualified", "as", "hiding", "data", "type", "newtype",
+  "class", "instance", "deriving", "let", "in", "case", "of", "if", "then", "else",
+  "do", "return", "->", "<-", "=>", "::", "=", "|", "\\", "_", "Int", "Integer",
+  "Double", "Float", "Bool", "Char", "String", "Maybe", "Just", "Nothing", "Either",
+  "Left", "Right", "IO", "()", "True", "False", "map", "filter", "foldr", "foldl",
+  "zip", "zipWith", "head", "tail", "length", "reverse", "concat", "concatMap", "elem",
+  "sum", "product", "show", "read", "print", "putStrLn", "getLine", "mapM_", "forM_",
+  "pure", "fmap", "<$>", "<*>", ">>=", ">>", ".", "$", "++", "!!", "`div`", "`mod`",
+  "Functor", "Applicative", "Monad", "Show", "Eq", "Ord", "Num", "Monoid", "Semigroup",
+  "mempty", "<>", "Data.Map", "Data.List", "main", "xs", "x:xs", "[]", "[x]", "fst",
+  "snd", "id", "const", "flip", "undefined", "error"
+]

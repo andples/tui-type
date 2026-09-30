@@ -1,0 +1,17 @@
+name = "code_go"
+display = "Go (code)"
+words = [
+  "package", "main", "import", "func", "return", "var", "const", "type", "struct",
+  "interface", "map", "chan", "go", "defer", "select", "if", "else", "for", "range",
+  "switch", "case", "default:", "break", "continue", "fallthrough", "goto", "int",
+  "int64", "uint8", "float64", "string", "bool", "byte", "rune", "error", "any", "nil",
+  "true", "false", "iota", "make()", "new()", "len()", "cap()", "append()", "copy()",
+  "delete()", "panic()", "recover()", "close()", "print()", "fmt.Println()",
+  "fmt.Printf()", "fmt.Sprintf()", "fmt.Errorf()", "errors.New()", "os.Exit()",
+  "os.Args", "strings.Split()", "strings.Join()", "strconv.Itoa()", "strconv.Atoi()",
+  "time.Now()", "time.Sleep()", "context.Context", "ctx", "http.HandleFunc()",
+  "http.ListenAndServe()", "json.Marshal()", "json.Unmarshal()", "sync.WaitGroup",
+  "sync.Mutex", "io.Reader", "io.Writer", "bufio.NewScanner()", ":=", "<-", "...",
+  "!=", "==", "&&", "||", "err", "[]string", "map[string]int", "go.mod", "go.sum",
+  "run", "build", "test", "t.Fatal()", "t.Errorf()"
+]

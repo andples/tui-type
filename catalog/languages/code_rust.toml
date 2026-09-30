@@ -1,0 +1,17 @@
+name = "code_rust"
+display = "Rust (code)"
+words = [
+  "fn", "let", "mut", "const", "static", "struct", "enum", "impl", "trait", "pub",
+  "use", "mod", "crate", "self", "Self", "super", "match", "if", "else", "loop",
+  "while", "for", "in", "return", "break", "continue", "move", "ref", "as", "where",
+  "unsafe", "async", "await", "dyn", "i32", "i64", "u8", "u32", "u64", "usize", "f64",
+  "bool", "char", "str", "String", "Vec<T>", "Option<T>", "Box<dyn", "HashMap",
+  "BTreeMap", "Some", "None", "Ok()", "Err()", "true", "false", "unwrap()", "expect()",
+  "?", "clone()", "to_string()", "into()", "iter()", "collect()", "map()", "filter()",
+  "fold()", "len()", "push()", "pop()", "is_empty()", "contains()", "get()",
+  "insert()", "as_str()", "as_ref()", "println!()", "format!()", "vec![]",
+  "assert_eq!()", "panic!()", "todo!()", "unimplemented!()", "#[derive(Debug)]",
+  "#[test]", "&self", "&mut", "->", "=>", "::", "'a", "&'a", "impl<T>", "T:", "Clone",
+  "+", "Send", "Sync", "Rc<RefCell<T>>", "Arc<Mutex<T>>", "cargo", "build", "test",
+  "run", "std::io", "std::fs", "std::collections", "serde", "tokio", "anyhow"
+]
