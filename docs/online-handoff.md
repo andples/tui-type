@@ -40,6 +40,9 @@ Open items, none blocking:
   or the caller's own; private and unknown both 404), `GET`/`POST /account`
   (`public` flag). Client: `:user [login]`, `p` on a leaderboard row,
   `:account [public on|off]`. No migration: `users.public` was there.
+  Badges (1st/2nd/3rd on first-try boards of finished days, per language)
+  are computed from `results` when a profile is loaded, sharing the board's
+  filter and order (`leaderboard::FIRST_TRY`, `RANK_ORDER`); no table.
 
 Operating: `docker compose ps` on the owner's machine; `docker compose logs
 -f ttyp-server`; restore steps in `crates/ttyp-server/README.md`; release

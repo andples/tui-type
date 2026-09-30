@@ -6,7 +6,7 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use ttyp_core::api::ProfileRun;
+use ttyp_core::api::{Badges, ProfileRun};
 
 use super::style::{GUTTER, Palette, content_column};
 use super::widgets::{Cell, Column, Panes, Row, SelectTable, Selection, Width, hints, panes};
@@ -65,6 +65,16 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
         );
     }
 
+    // Badges: the sum, then each language.
+    let badge_area = Rect::new(col.x, col.y + 4, col.width, 2);
+    frame.render_widget(Paragraph::new(badge_lines(&profile.badges, p)), badge_area);
+    let body = Rect::new(
+        body.x,
+        body.y + 3,
+        body.width,
+        body.height.saturating_sub(3),
+    );
+
     let (bests_area, recent_area) = match panes::split(body, 2, MIN_PANE, PANE_GAP) {
         Panes::SideBySide(r) => (r[0], r[1]),
         Panes::Tabs(r) => {
@@ -104,6 +114,40 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
         p,
     );
     hints::render(frame, area, col, p, "enter graph · ↑↓ move · esc back");
+}
+
+/// `badges  1st 3  2nd 1  3rd 0`, then `english 2·1·0  english_1k 1·0·0`.
+fn badge_lines(badges: &[Badges], p: &Palette) -> Vec<Line<'static>> {
+    let label = Span::styled("badges   ", p.sub());
+    if badges.is_empty() {
+        return vec![Line::from(vec![
+            label,
+            Span::styled(
+                "none yet · finish top 3 on a daily's first-try board",
+                p.sub(),
+            ),
+        ])];
+    }
+    let sum = Badges::sum(badges);
+    let total = Line::from(vec![
+        label,
+        Span::styled(format!("1st {}", sum.first), p.main_bold()),
+        Span::styled(format!("   2nd {}", sum.second), p.fg()),
+        Span::styled(format!("   3rd {}", sum.third), p.fg()),
+        Span::styled(format!("   ({} total)", sum.total()), p.sub()),
+    ]);
+    let mut per = vec![Span::raw("         ")];
+    for (i, b) in badges.iter().enumerate() {
+        if i > 0 {
+            per.push(Span::raw("   "));
+        }
+        per.push(Span::styled(format!("{} ", b.language), p.sub()));
+        per.push(Span::styled(
+            format!("{}·{}·{}", b.first, b.second, b.third),
+            p.fg(),
+        ));
+    }
+    vec![total, Line::from(per)]
 }
 
 /// One titled table of runs; `recent` adds the attempt column and puts the

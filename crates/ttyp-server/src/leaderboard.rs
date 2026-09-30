@@ -8,10 +8,15 @@ use sqlx::sqlite::{SqlitePool, SqliteRow};
 use sqlx::{AssertSqlSafe, Row};
 use ttyp_core::api::{Board, LeaderboardRow};
 
+/// Which `results r` rows are on the first-try board (plus `r.valid = 1`).
+pub const FIRST_TRY: &str = "r.attempt = 1 AND r.first_eligible = 1";
+/// How every board orders its rows.
+pub const RANK_ORDER: &str = "r.wpm DESC, r.acc DESC, r.created_at ASC";
+
 /// The ranked rows of one board as a common table expression `board`.
 fn board_cte(board: Board) -> String {
     let filter = match board {
-        Board::First => "r.attempt = 1 AND r.first_eligible = 1",
+        Board::First => FIRST_TRY,
         // Each user's best run: the one that sorts first among theirs.
         Board::Best => {
             "r.id = (SELECT b.id FROM results b \
@@ -23,7 +28,7 @@ fn board_cte(board: Board) -> String {
         "WITH board AS (\
            SELECT r.id AS result_id, r.user_id, u.github_login AS user, \
                   r.wpm, r.raw, r.acc, r.consistency, \
-                  ROW_NUMBER() OVER (ORDER BY r.wpm DESC, r.acc DESC, r.created_at ASC) AS rank \
+                  ROW_NUMBER() OVER (ORDER BY {RANK_ORDER}) AS rank \
            FROM results r JOIN users u ON u.id = r.user_id \
            WHERE r.daily_id = ?1 AND r.valid = 1 AND {filter}) "
     )
