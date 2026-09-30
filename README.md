@@ -193,6 +193,14 @@ ttyp. `:set server …` changes it live.
   attempt only) and *best*. The results screen shows both ranks. If the
   server can't be reached the result is queued and sent on the next start,
   as long as the daily's UTC day hasn't ended.
+- An attempt counts from your first keystroke: ttyp tells the server the
+  run has started, so restarting or quitting still uses up that attempt. A
+  run the server didn't see start (typed while logged out or offline) is
+  still ranked on *best* but can't be a first try.
+- While a daily is under way, `tab`, `:restart` and commands that would
+  start a new test wait until it's finished, so you can't throw a run away
+  by accident. Turn that off with `:set daily_lock off` (`daily_lock = false`
+  in the config).
 - `:leaderboard` shows both boards side by side (or behind `tab` on narrow
   terminals): `↑↓`/`jk` move, `g`/`G` top/bottom, `←→` mode, `l` language,
   `[` `]` day, `enter` opens that run's wpm graph, `esc` goes back. Your own

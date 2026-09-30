@@ -61,6 +61,13 @@ mod tests {
     use super::*;
 
     #[test]
+    fn queue_files_from_before_starts_still_load() {
+        let old = r#"{"date":"2026-09-29","request":{"daily_id":7,"keylog":[]}}"#;
+        let q: Queued = serde_json::from_str(old).unwrap();
+        assert_eq!(q.request.start_id, None);
+    }
+
+    #[test]
     fn queue_round_trip() {
         let dir = std::env::temp_dir().join(format!("ttyp-queue-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
@@ -70,6 +77,7 @@ mod tests {
             request: SubmitRequest {
                 daily_id: 7,
                 keylog: vec![],
+                start_id: Some(3),
             },
         };
         let path = save(&dir, &q).unwrap();

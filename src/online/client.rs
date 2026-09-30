@@ -6,7 +6,7 @@ use std::time::Duration;
 use serde::de::DeserializeOwned;
 use ttyp_core::api::{
     AuthRequest, AuthResponse, Board, Daily, DailySummary, ErrorBody, Leaderboard, ResultDetail,
-    SubmitRequest, SubmitResponse,
+    StartResponse, SubmitRequest, SubmitResponse,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -122,6 +122,11 @@ impl Client {
 
     pub fn daily(&self, id: i64) -> Result<Daily, OnlineError> {
         self.get(&format!("/dailies/{id}"))
+    }
+
+    /// Tell the server a daily run began; it counts as an attempt.
+    pub fn start(&self, daily_id: i64) -> Result<StartResponse, OnlineError> {
+        self.call(&format!("/dailies/{daily_id}/start"), Some(&()))
     }
 
     pub fn submit(&self, req: &SubmitRequest) -> Result<SubmitResponse, OnlineError> {

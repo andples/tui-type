@@ -15,9 +15,14 @@ end to end with the owner's GitHub account: `:login`, `:daily`, ranking,
 
 Open items, none blocking:
 
-- **Restart loophole.** Fetching a daily and quitting shows its words before
-  a "first try". Fix would be server-side (count the first fetch as attempt
-  0 or record fetch time); not built.
+- **Restart loophole: closed in 1.2.2** for restarting mid-run. The first
+  keystroke sends `POST /dailies/{id}/start` (table `starts`, migration
+  0002); every start uses an attempt number, results carry `start_id`, and
+  only results with a start (or from before 0002, `first_eligible` defaults
+  to 1) can be a first try. `daily_lock` (default on) blocks restart during
+  a daily. Still open: the words are visible before the first keystroke, so
+  fetching a daily and quitting previews it; closing that means counting
+  the fetch instead.
 - **Responsiveness audit** (done 2026-09-29, findings in that session's
   report, not applied): kitty startup 100 ms is 75 ms of fontdue parsing the
   system Nerd Font (default to the bundled font or switch to ttf-parser);
@@ -46,9 +51,9 @@ Resolutions noted while building (no secrets):
   (`ttyp-core/src/test/keylog.rs`, tested both ways).
 - `GET /dailies?date=YYYY-MM-DD` was added so the leaderboard can switch
   days (§5 lists only `/dailies/today`). Other days are not backfilled.
-- Restarting (`tab`) during a daily leaves it; the daily's words can be
-  seen before a "first try" by fetching and quitting. Server-side
-  prevention (counting the first fetch) is out of scope; noted as open.
+- Restarting during a daily is blocked by `daily_lock` and, either way,
+  counted by the server from the first keystroke (see the open items). The
+  words can still be seen before a first try by fetching and quitting.
 - The backup sidecar runs as root so it can write the host-mounted
   `./backups`; the server container stays unprivileged.
 - `results::render_chart` takes `(raw, wpm)` series; errors aren't drawn,

@@ -91,5 +91,9 @@ the public hostname is in `src/config/mod.rs` by the owner's decision.
    Homebrew and crates.io builds use the built-in public server.
 
 Compatibility to keep across releases: the wire format in `ttyp-core/src/api.rs` and the
-keylog (`Key` serde shape), the `daily_schedule`/`results` schema (migrations only add),
-and `TestRecord::SCHEMA` (old history lines must keep parsing).
+keylog (`Key` serde shape), the `daily_schedule`/`results`/`starts` schema (migrations only
+add), and `TestRecord::SCHEMA` (old history lines must keep parsing). Daily attempts: the
+first keystroke calls `POST /dailies/{id}/start`, the submission carries its `start_id`
+(optional on the wire, so pre-1.2.2 clients still submit), and the first-try board needs
+`first_eligible = 1` (a start, or a row from before starts existed). The server needs
+rebuilding whenever `ttyp-core` changes (replay, word lists).

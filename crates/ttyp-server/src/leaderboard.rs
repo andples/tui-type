@@ -1,4 +1,5 @@
-//! The two boards of a daily. *First try* ranks each user's attempt 1;
+//! The two boards of a daily. *First try* ranks each user's attempt 1
+//! (when the server saw it start, see `api::start`);
 //! *best* ranks each user's highest-wpm valid run. Both order by wpm, then
 //! accuracy, then who got there first.
 
@@ -10,7 +11,7 @@ use ttyp_core::api::{Board, LeaderboardRow};
 /// The ranked rows of one board as a common table expression `board`.
 fn board_cte(board: Board) -> String {
     let filter = match board {
-        Board::First => "r.attempt = 1",
+        Board::First => "r.attempt = 1 AND r.first_eligible = 1",
         // Each user's best run: the one that sorts first among theirs.
         Board::Best => {
             "r.id = (SELECT b.id FROM results b \

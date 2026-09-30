@@ -115,6 +115,10 @@ pub struct Config {
     /// Not a profile setting.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub github_client_id: Option<String>,
+    /// Keep a daily run from being thrown away mid-way: while one is under
+    /// way, restart and test-changing commands wait until it's done. Not a
+    /// profile setting.
+    pub daily_lock: bool,
     /// Where `:install` fetches languages and themes: a base URL or a
     /// local directory. Unset means `catalog::BUILT_IN_CATALOG`; empty
     /// turns the catalogue off. Not a profile setting.
@@ -356,6 +360,7 @@ impl Default for Config {
             server: Some(BUILT_IN_SERVER.to_string()),
             github_client_id: Some(BUILT_IN_GITHUB_CLIENT_ID.to_string()),
             catalog: None,
+            daily_lock: true,
         }
     }
 }
@@ -416,6 +421,7 @@ impl Config {
             "punctuation" => self.punctuation = parse_bool(value)?,
             "numbers" => self.numbers = parse_bool(value)?,
             "zen" => self.zen = parse_bool(value)?,
+            "daily_lock" => self.daily_lock = parse_bool(value)?,
             "fullscreen" | "full" => self.fullscreen = parse_bool(value)?,
             "lines" => self.set_lines(parse_range(value, LINES_RANGE)?),
             "font" => self.font = value.to_string(),
@@ -632,6 +638,9 @@ mod tests {
         assert_eq!(c.catalog_source(), Some("/tmp/cat"));
         c.set("catalog", "off").unwrap();
         assert_eq!(c.catalog_source(), None);
+        assert!(Config::default().daily_lock, "on by default");
+        c.set("daily_lock", "off").unwrap();
+        assert!(!c.daily_lock);
         assert!(c.set("graphics", "sixel").is_err());
     }
 }

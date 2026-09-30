@@ -13,7 +13,7 @@ use sqlx::Row;
 use sqlx::sqlite::SqlitePool;
 use ttyp_core::api::{
     AuthRequest, AuthResponse, Board, Daily, DailySummary, ErrorBody, Leaderboard, ResultDetail,
-    SubmitRequest, SubmitResponse,
+    StartResponse, SubmitRequest, SubmitResponse,
 };
 use ttyp_core::language::LanguageRegistry;
 use ttyp_core::test::{Rejected, replay};
@@ -21,7 +21,7 @@ use ttyp_core::test::{Rejected, replay};
 use crate::auth::{self, User};
 use crate::{daily, leaderboard};
 
-/// Submissions per user per daily.
+/// Attempts (starts and submissions) per user per daily.
 const MAX_ATTEMPTS: i64 = 30;
 const MAX_PAGE: u32 = 200;
 
@@ -51,6 +51,7 @@ pub fn router(state: AppState) -> Router {
         .route("/dailies", get(dailies_on))
         .route("/dailies/today", get(dailies_today))
         .route("/dailies/{id}", get(daily_by_id))
+        .route("/dailies/{id}/start", post(start))
         .route("/results", post(submit))
         .route("/results/{id}", get(result_by_id))
         .route("/leaderboard/{daily_id}", get(leaderboard))
@@ -146,6 +147,58 @@ async fn daily_by_id(State(state): State<AppState>, Path(id): Path<i64>) -> ApiR
         .ok_or(ApiError::NotFound)
 }
 
+/// The attempt number the user's next start or submission on `daily_id`
+/// gets: one past every attempt so far, started or submitted. Call inside
+/// the write transaction.
+async fn next_attempt(
+    tx: &mut sqlx::SqliteConnection,
+    user_id: i64,
+    daily_id: i64,
+) -> Result<i64, ApiError> {
+    let last: i64 = sqlx::query_scalar(
+        "SELECT max( \
+           (SELECT coalesce(max(attempt), 0) FROM starts WHERE user_id = ?1 AND daily_id = ?2), \
+           (SELECT coalesce(max(attempt), 0) FROM results WHERE user_id = ?1 AND daily_id = ?2))",
+    )
+    .bind(user_id)
+    .bind(daily_id)
+    .fetch_one(&mut *tx)
+    .await?;
+    if last >= MAX_ATTEMPTS {
+        return Err(ApiError::TooMany);
+    }
+    Ok(last + 1)
+}
+
+/// The first key of a daily was typed: that's an attempt, whether or not
+/// a result ever arrives. Restarting can't hide a bad first try.
+async fn start(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<i64>,
+) -> ApiResult<StartResponse> {
+    let user = require_user(&state, &headers).await?;
+    daily::get(&state.pool, id)
+        .await?
+        .ok_or(ApiError::NotFound)?;
+    let mut tx = state.pool.begin_with("BEGIN IMMEDIATE").await?;
+    let attempt = next_attempt(&mut tx, user.id, id).await?;
+    let done = sqlx::query(
+        "INSERT INTO starts (user_id, daily_id, attempt, created_at) VALUES (?1, ?2, ?3, ?4)",
+    )
+    .bind(user.id)
+    .bind(id)
+    .bind(attempt)
+    .bind(crate::db::now())
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(Json(StartResponse {
+        start_id: done.last_insert_rowid(),
+        attempt: attempt as u32,
+    }))
+}
+
 async fn submit(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -174,22 +227,37 @@ async fn submit(
         |m| serde_json::to_string(&m.chars).unwrap_or_default(),
     );
 
-    // Attempt numbering and the insert happen under one write lock.
+    // Attempt numbering and the insert happen under one write lock. A run
+    // with a start takes that start's number; one without (logged out while
+    // typing, or an old client) gets the next number and can't be a first
+    // try, since nothing proves earlier tries weren't thrown away.
     let mut tx = state.pool.begin_with("BEGIN IMMEDIATE").await?;
-    let previous: i64 =
-        sqlx::query_scalar("SELECT count(*) FROM results WHERE user_id = ?1 AND daily_id = ?2")
+    let (attempt, first_eligible) = match req.start_id {
+        Some(start_id) => {
+            let row: Option<(i64, i64)> = sqlx::query_as(
+                "SELECT s.attempt, (SELECT count(*) FROM results r WHERE r.start_id = s.id) \
+                 FROM starts s WHERE s.id = ?1 AND s.user_id = ?2 AND s.daily_id = ?3",
+            )
+            .bind(start_id)
             .bind(user.id)
             .bind(daily.id)
-            .fetch_one(&mut *tx)
+            .fetch_optional(&mut *tx)
             .await?;
-    if previous >= MAX_ATTEMPTS {
-        return Err(ApiError::TooMany);
-    }
-    let attempt = previous + 1;
+            match row {
+                None => return Err(ApiError::BadRequest("unknown start".into())),
+                Some((_, used)) if used > 0 => {
+                    return Err(ApiError::BadRequest("run already submitted".into()));
+                }
+                Some((attempt, _)) => (attempt, true),
+            }
+        }
+        None => (next_attempt(&mut tx, user.id, daily.id).await?, false),
+    };
     let done = sqlx::query(
         "INSERT INTO results (user_id, daily_id, attempt, wpm, raw, acc, consistency, chars, \
-         wpm_per_second, raw_per_second, errors_per_second, keylog, valid, created_at) \
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+         wpm_per_second, raw_per_second, errors_per_second, keylog, valid, created_at, \
+         start_id, first_eligible) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
     )
     .bind(user.id)
     .bind(daily.id)
@@ -205,13 +273,15 @@ async fn submit(
     .bind(keylog)
     .bind(i64::from(metrics.is_some()))
     .bind(crate::db::now())
+    .bind(req.start_id)
+    .bind(i64::from(first_eligible))
     .execute(&mut *tx)
     .await?;
     tx.commit().await?;
     let result_id = done.last_insert_rowid();
 
     let (rank_first, rank_best) = if metrics.is_some() {
-        let first = if attempt == 1 {
+        let first = if attempt == 1 && first_eligible {
             leaderboard::me(&state.pool, daily.id, Board::First, user.id).await?
         } else {
             None
@@ -452,6 +522,16 @@ mod tests {
         (Metrics::from_engine(&e), e.keylog().unwrap().to_vec())
     }
 
+    async fn start(app: &Router, token: &str, daily_id: i64) -> StartResponse {
+        let (status, body) = call(
+            app,
+            post(&format!("/dailies/{daily_id}/start"), Some(token), &()),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        serde_json::from_value(body).unwrap()
+    }
+
     /// A stand-in for api.github.com on a local port: one known token.
     async fn mock_github() -> String {
         async fn user(headers: HeaderMap) -> Response {
@@ -506,6 +586,7 @@ mod tests {
         let req = SubmitRequest {
             daily_id: list[0].id,
             keylog: vec![],
+            start_id: None,
         };
         let (status, _) = call(&app, post("/results", Some(&auth.token), &req)).await;
         assert_eq!(
@@ -567,9 +648,18 @@ mod tests {
 
         // No token: refused.
         let (shown, keylog) = type_daily(&daily, 120, true);
+        let (status, _) = call(
+            &app,
+            post(&format!("/dailies/{}/start", daily.id), None, &()),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        let start_alice = start(&app, &alice, daily.id).await;
+        assert_eq!(start_alice.attempt, 1);
         let req = SubmitRequest {
             daily_id: daily.id,
             keylog: keylog.clone(),
+            start_id: Some(start_alice.start_id),
         };
         let (status, _) = call(&app, post("/results", None, &req)).await;
         assert_eq!(status, StatusCode::UNAUTHORIZED);
@@ -590,6 +680,7 @@ mod tests {
 
         // Bob types faster: takes both #1 spots.
         let (_, fast) = type_daily(&daily, 80, false);
+        let start_bob = start(&app, &bob, daily.id).await;
         let (_, body) = call(
             &app,
             post(
@@ -598,6 +689,7 @@ mod tests {
                 &SubmitRequest {
                     daily_id: daily.id,
                     keylog: fast,
+                    start_id: Some(start_bob.start_id),
                 },
             ),
         )
@@ -615,6 +707,7 @@ mod tests {
                 &SubmitRequest {
                     daily_id: daily.id,
                     keylog: faster,
+                    start_id: Some(start(&app, &alice, daily.id).await.start_id),
                 },
             ),
         )
@@ -632,6 +725,7 @@ mod tests {
                 &SubmitRequest {
                     daily_id: daily.id,
                     keylog: keylog[..3].to_vec(),
+                    start_id: None,
                 },
             ),
         )
@@ -679,5 +773,67 @@ mod tests {
         assert_eq!(d.daily.id, daily.id);
         assert_eq!(d.wpm_per_second.len(), d.raw_per_second.len());
         assert!(!d.wpm_per_second.is_empty());
+    }
+
+    #[tokio::test]
+    async fn restarting_cannot_hide_a_first_try() {
+        let (app, state) = app().await;
+        let (_, body) = call(&app, get("/dailies/today", None)).await;
+        let list: Vec<DailySummary> = serde_json::from_value(body).unwrap();
+        let (_, body) = call(&app, get(&format!("/dailies/{}", list[0].id), None)).await;
+        let daily: Daily = serde_json::from_value(body).unwrap();
+        let (_, alice) = auth::issue(&state.pool, 1, "alice").await.unwrap();
+        let (_, bob) = auth::issue(&state.pool, 2, "bob").await.unwrap();
+        let (_, carol) = auth::issue(&state.pool, 3, "carol").await.unwrap();
+        let submit = |token: String, start_id: Option<i64>| {
+            let app = app.clone();
+            let (_, keylog) = type_daily(&daily, 90, false);
+            let req = SubmitRequest {
+                daily_id: daily.id,
+                keylog,
+                start_id,
+            };
+            async move { call(&app, post("/results", Some(&token), &req)).await }
+        };
+
+        // Alice starts, restarts (nothing submitted), then finishes a run:
+        // that run is attempt 2 and not on the first-try board.
+        let abandoned = start(&app, &alice, daily.id).await;
+        assert_eq!(abandoned.attempt, 1);
+        let second = start(&app, &alice, daily.id).await;
+        assert_eq!(second.attempt, 2);
+        let (status, body) = submit(alice.clone(), Some(second.start_id)).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        let r: SubmitResponse = serde_json::from_value(body).unwrap();
+        assert_eq!((r.attempt, r.rank_first), (2, None));
+        assert!(r.rank_best.is_some(), "still on the best board");
+
+        // A start is used once, and only by its owner.
+        let (status, _) = submit(alice.clone(), Some(second.start_id)).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        let (status, _) = submit(bob.clone(), Some(abandoned.start_id)).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+
+        // No start (logged out while typing, or an old client): counted,
+        // but never a first try.
+        let (_, body) = submit(bob.clone(), None).await;
+        let r: SubmitResponse = serde_json::from_value(body).unwrap();
+        assert_eq!((r.attempt, r.rank_first), (1, None));
+        // Starts and start-less runs share one sequence.
+        assert_eq!(start(&app, &bob, daily.id).await.attempt, 2);
+
+        // Carol does it properly: her first start is her first try.
+        let s = start(&app, &carol, daily.id).await;
+        let (_, body) = submit(carol.clone(), Some(s.start_id)).await;
+        let r: SubmitResponse = serde_json::from_value(body).unwrap();
+        assert_eq!((r.attempt, r.rank_first), (1, Some(1)));
+        let (_, body) = call(
+            &app,
+            get(&format!("/leaderboard/{}?board=first", daily.id), None),
+        )
+        .await;
+        let lb: Leaderboard = serde_json::from_value(body).unwrap();
+        let names: Vec<&str> = lb.rows.iter().map(|r| r.user.as_str()).collect();
+        assert_eq!(names, ["carol"]);
     }
 }

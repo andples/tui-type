@@ -10,7 +10,8 @@ use std::thread;
 use std::time::Duration;
 
 use ttyp_core::api::{
-    Board, Daily, DailySummary, Leaderboard, ResultDetail, SubmitRequest, SubmitResponse,
+    Board, Daily, DailySummary, Leaderboard, ResultDetail, StartResponse, SubmitRequest,
+    SubmitResponse,
 };
 
 use super::client::{Client, OnlineError};
@@ -24,6 +25,8 @@ pub enum Request {
     /// The dailies of another UTC day (leaderboard day switching).
     DailiesFor(String),
     Daily(i64),
+    /// The first key of this daily was typed.
+    Start(i64),
     Submit {
         body: SubmitRequest,
         /// UTC date of the daily, so a failed submission can be queued.
@@ -59,6 +62,10 @@ pub enum RemoteEvent {
         result: Result<Vec<DailySummary>, OnlineError>,
     },
     Daily(Result<Daily, OnlineError>),
+    Started {
+        daily_id: i64,
+        result: Result<StartResponse, OnlineError>,
+    },
     Submitted {
         body: SubmitRequest,
         date: String,
@@ -166,6 +173,12 @@ impl Online {
             Request::Daily(id) => {
                 thread::spawn(move || {
                     let _ = tx.send(RemoteEvent::Daily(client.daily(id)));
+                });
+            }
+            Request::Start(daily_id) => {
+                thread::spawn(move || {
+                    let result = client.start(daily_id);
+                    let _ = tx.send(RemoteEvent::Started { daily_id, result });
                 });
             }
             Request::Submit { body, date, queued } => {

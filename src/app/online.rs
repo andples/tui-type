@@ -6,7 +6,7 @@ use std::path::Path;
 use ttyp_core::api::{Daily, SubmitRequest};
 use ttyp_core::test::{FixedGenerator, Mode, TestEngine};
 
-use super::{App, DailyOutcome, DailyStatus, Screen};
+use super::{App, DailyOutcome, DailyStart, DailyStatus, Screen};
 use crate::config::{Config, Paths};
 use crate::online::{Client, Online, OnlineError, RemoteEvent, Request, queue, token};
 
@@ -114,6 +114,7 @@ impl App {
             }
             RemoteEvent::Daily(Ok(d)) => self.start_daily(d),
             RemoteEvent::Daily(Err(e)) => self.notify(format!("daily: {e}")),
+            RemoteEvent::Started { daily_id, result } => self.started(daily_id, result),
             RemoteEvent::Submitted {
                 body,
                 date,
@@ -134,6 +135,9 @@ impl App {
     /// `:daily [mode]`: today's daily for the current language, fetching
     /// the day's list first if needed.
     pub(super) fn open_daily(&mut self, mode: Option<Mode>) {
+        if self.refuse_if_daily_locked() {
+            return;
+        }
         let Some(online) = &mut self.online else {
             self.notify("offline: set server in config");
             return;
@@ -197,11 +201,18 @@ impl App {
         engine.record_keys();
         self.engine = engine;
         self.outcome = None;
+        self.daily_start = DailyStart::None;
+        let logged_in = self.online.as_ref().is_some_and(|o| o.logged_in());
         self.notify(format!(
-            "daily · {} · {} · {}",
+            "daily · {} · {} · {}{}",
             daily.mode.label(),
             daily.language,
-            daily.date
+            daily.date,
+            if logged_in {
+                ""
+            } else {
+                " · not logged in, so this can't count as a first try"
+            }
         ));
         self.daily = Some(daily);
         self.screen = Screen::Typing;
@@ -210,26 +221,103 @@ impl App {
     }
 
     /// Send the finished daily's keylog; queue it if that can't happen now.
+    /// The first key of a daily was typed: tell the server, which counts
+    /// it as an attempt whether or not the run is finished.
+    pub(super) fn daily_began(&mut self) {
+        let Some(daily) = &self.daily else {
+            return;
+        };
+        self.daily_start = match &mut self.online {
+            Some(o) if o.logged_in() => {
+                o.request(Request::Start(daily.id));
+                DailyStart::Pending { daily_id: daily.id }
+            }
+            _ => DailyStart::None,
+        };
+    }
+
     pub(super) fn submit_daily(&mut self, daily: &Daily) -> DailyOutcome {
+        let start_id = match self.daily_start {
+            DailyStart::Started { daily_id, start_id } if daily_id == daily.id => Some(start_id),
+            _ => None,
+        };
         let body = SubmitRequest {
             daily_id: daily.id,
             keylog: self.engine.keylog().map(<[_]>::to_vec).unwrap_or_default(),
+            start_id,
         };
-        let status = match &mut self.online {
+        // Finished before the server confirmed the start: send once it does.
+        if self.daily_start == (DailyStart::Pending { daily_id: daily.id }) {
+            self.held_submission = Some((body, daily.date.clone()));
+            return DailyOutcome {
+                daily_id: daily.id,
+                status: DailyStatus::Submitting,
+            };
+        }
+        let status = self.send_submission(body, &daily.date);
+        DailyOutcome {
+            daily_id: daily.id,
+            status,
+        }
+    }
+
+    fn send_submission(&mut self, body: SubmitRequest, date: &str) -> DailyStatus {
+        match &mut self.online {
             Some(o) if o.logged_in() => {
                 o.request(Request::Submit {
                     body,
-                    date: daily.date.clone(),
+                    date: date.to_string(),
                     queued: None,
                 });
                 DailyStatus::Submitting
             }
-            Some(_) => self.queue_submission(&daily.date, body, "not logged in (:login)"),
+            Some(_) => self.queue_submission(date, body, "not logged in (:login)"),
             None => DailyStatus::Failed("offline".into()),
+        }
+    }
+
+    /// The server's answer to a start: remember it for the submission, and
+    /// send a submission that was waiting on it.
+    fn started(
+        &mut self,
+        daily_id: i64,
+        result: Result<ttyp_core::api::StartResponse, OnlineError>,
+    ) {
+        let current = self.daily_start == (DailyStart::Pending { daily_id });
+        let start_id = match result {
+            Ok(r) => {
+                if current {
+                    self.daily_start = DailyStart::Started {
+                        daily_id,
+                        start_id: r.start_id,
+                    };
+                }
+                Some(r.start_id)
+            }
+            Err(e) => {
+                if current {
+                    self.daily_start = DailyStart::None;
+                }
+                self.notify(format!(
+                    "daily start not recorded ({e}): this run can't be a first try"
+                ));
+                None
+            }
         };
-        DailyOutcome {
-            daily_id: daily.id,
-            status,
+        if let Some((mut body, date)) = self
+            .held_submission
+            .take_if(|(b, _)| b.daily_id == daily_id)
+        {
+            body.start_id = start_id;
+            let status = self.send_submission(body, &date);
+            if let Some(d) = self
+                .outcome
+                .as_mut()
+                .and_then(|o| o.daily.as_mut())
+                .filter(|d| d.daily_id == daily_id)
+            {
+                d.status = status;
+            }
         }
     }
 

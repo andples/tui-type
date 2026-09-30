@@ -44,6 +44,19 @@ pub struct Daily {
 pub struct SubmitRequest {
     pub daily_id: i64,
     pub keylog: Vec<KeyEvent>,
+    /// From `POST /dailies/{id}/start`, sent when the run began. A run
+    /// without one still counts as an attempt but can't be a first try.
+    /// Absent from clients before 1.2.2.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_id: Option<i64>,
+}
+
+/// `POST /dailies/{id}/start`: the client typed the first key of a daily.
+/// Every start uses up an attempt, whether or not a result follows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StartResponse {
+    pub start_id: i64,
+    pub attempt: u32,
 }
 
 /// What the server made of a submission. Ranks are 1-based and only

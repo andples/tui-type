@@ -111,6 +111,20 @@ pub struct DailyOutcome {
     pub status: DailyStatus,
 }
 
+/// Whether the server knows the current daily run has begun.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DailyStart {
+    /// Not begun, or begun without a login.
+    None,
+    Pending {
+        daily_id: i64,
+    },
+    Started {
+        daily_id: i64,
+        start_id: i64,
+    },
+}
+
 pub enum DailyStatus {
     Submitting,
     Ranked(SubmitResponse),
@@ -150,6 +164,11 @@ pub struct App {
     pub daily: Option<Daily>,
     /// `:daily` waiting for today's list: (language, mode).
     pending_daily: Option<(String, Mode)>,
+    /// The server's record that the current daily run began.
+    daily_start: DailyStart,
+    /// A finished daily run waiting for its start to be confirmed:
+    /// (request, date).
+    held_submission: Option<(ttyp_core::api::SubmitRequest, String)>,
     /// The leaderboard screen, while open.
     pub board: Option<BoardView>,
     /// The run shown on the graph screen.
@@ -256,6 +275,8 @@ impl App {
             login_prompt: None,
             daily: None,
             pending_daily: None,
+            daily_start: DailyStart::None,
+            held_submission: None,
             board: None,
             graph: None,
             graph_loading: false,
@@ -509,7 +530,11 @@ impl App {
 
             Action::TypeChar(c) => {
                 let was_finished = self.engine.is_finished();
+                let was_idle = self.engine.status() == Status::Idle;
                 self.engine.type_char(c);
+                if was_idle && self.engine.status() != Status::Idle {
+                    self.daily_began();
+                }
                 if self.engine.is_finished() && !was_finished {
                     self.finish_test();
                 }
@@ -616,9 +641,29 @@ impl App {
         self.cmdline.clear();
     }
 
+    /// A daily run is under way and `daily_lock` keeps it from being thrown
+    /// away. (Abandoning still counts as an attempt on the server; this
+    /// guards against doing it by accident.)
+    fn daily_locked(&self) -> bool {
+        self.config.daily_lock && self.daily.is_some() && self.engine.status() == Status::Running
+    }
+
+    /// Refuse, with a notice, when a daily run is locked.
+    fn refuse_if_daily_locked(&mut self) -> bool {
+        if self.daily_locked() {
+            self.notify("daily in progress: finish it first (daily_lock is on)");
+            return true;
+        }
+        false
+    }
+
     /// A fresh random test; leaves any daily in progress.
     fn restart(&mut self) {
+        if self.refuse_if_daily_locked() {
+            return;
+        }
         self.daily = None;
+        self.daily_start = DailyStart::None;
         self.engine = Self::build_engine(&self.config, &self.languages);
         self.outcome = None;
         self.screen = Screen::Typing;
@@ -630,8 +675,13 @@ impl App {
     /// and install screens the new test waits underneath instead of taking
     /// over.
     fn rebuild_test(&mut self) {
+        if self.daily_locked() {
+            self.notify_more("applies after the daily");
+            return;
+        }
         if matches!(self.screen, Screen::Profiles | Screen::Catalog) {
             self.daily = None;
+            self.daily_start = DailyStart::None;
             self.engine = Self::build_engine(&self.config, &self.languages);
             self.outcome = None;
             self.previous_screen = Screen::Typing;
@@ -861,6 +911,7 @@ impl App {
                         | "server"
                         | "github_client_id"
                         | "catalog"
+                        | "daily_lock"
                 ) && !key.starts_with("results.");
             }
         }
