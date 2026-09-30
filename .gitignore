@@ -11,3 +11,6 @@ backups/
 cloudflared/
 *.cfargotunnel.json
 cert.pem
+
+# Claude Code agent worktrees
+.claude/worktrees/
