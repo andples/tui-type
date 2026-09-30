@@ -1,50 +1,77 @@
 # Handoff: daily tests, server and leaderboards
 
-Status: **shipped.** Merged to `main`, released as v1.0.0 and v1.1.0
-(GitHub release, Homebrew tap `andples/ttyp`, crates.io `ttyp` +
-`ttyp-core`), server live behind the Cloudflare tunnel. This brief is
-self-contained: read it, then `CLAUDE.md` and `README.md` at the repo root.
-Decisions marked **decided** came from the project owner; don't re-litigate
-them. Anything marked *open* is yours to settle and note here.
+Status: **shipped.** Latest release **v1.3.1** (2026-09-30) on GitHub
+(prebuilt binaries), the Homebrew tap `andples/ttyp` and crates.io (`ttyp`
+1.3.1, `ttyp-core` 1.3.0); the server runs 1.3.0's core behind the
+Cloudflare tunnel. This brief is self-contained: read it, then `CLAUDE.md`
+and `README.md` at the repo root. Decisions marked **decided** came from the
+project owner; don't re-litigate them. Anything marked *open* is yours to
+settle and note here.
 
-## Handoff (2026-09-30)
+## Handoff (2026-10-01)
 
-Everything in the phases below is implemented, tested and live. Verified
-end to end with the owner's GitHub account: `:login`, `:daily`, ranking,
-`:leaderboard`, public `/health` through the tunnel.
+**Unreleased on `main`:** `0180db8` landing menu: `↑`/`↓` highlight, `enter`
+runs the highlighted row, "today's daily" opens the command line on
+`daily ` so the modes are listed. Tested; the owner chose not to ship it yet.
+App-only: shipping is `scripts/release.sh patch` then `cargo publish -p ttyp`
+(no server rebuild, `ttyp-core` unchanged).
 
-Open items, none blocking:
+What shipped since 1.1.0, in order (details in README and CLAUDE.md):
 
-- **Restart loophole: closed in 1.2.2** for restarting mid-run. The first
-  keystroke sends `POST /dailies/{id}/start` (table `starts`, migration
-  0002); every start uses an attempt number, results carry `start_id`, and
-  only results with a start (or from before 0002, `first_eligible` defaults
-  to 1) can be a first try. `daily_lock` (default on) blocks restart during
-  a daily. Still open: the words are visible before the first keystroke, so
-  fetching a daily and quitting previews it; closing that means counting
-  the fetch instead.
-- **Responsiveness audit** (done 2026-09-29, findings in that session's
-  report, not applied): kitty startup 100 ms is 75 ms of fontdue parsing the
-  system Nerd Font (default to the bundled font or switch to ttf-parser);
-  `fc-list` spawned on every start (make lazy); timer ticks 10×/s while only
-  the second counter changes (tick on second boundaries, exact finish time);
-  resize re-uploads every glyph image; no event coalescing under key
-  repeat. Separate branch if picked up.
-- **Distribution.** AUR registration was down; `cargo install ttyp` and the
-  Homebrew tap (works on Linux too) are the paths. Prebuilt binaries on
-  GitHub Releases (musl + aarch64) would unlock `cargo binstall` / `ubi`.
-- **Backup sidecar runs as root** to write the host-mounted `./backups`;
-  the server container is unprivileged. Off-machine copy of `./backups` is
-  recommended, not built.
-- **Public profiles: built in 1.3.0** (§8). `GET /users/{login}` (public,
-  or the caller's own; private and unknown both 404), `GET`/`POST /account`
-  (`public` flag). Client: `:user [login]`, `p` on a leaderboard row,
-  `:account [public on|off]`. No migration: `users.public` was there.
-  Medals: 1st/2nd/3rd on first-try boards of finished days, gold/silver/
-  bronze on the main dailies (`api::MEDAL_DAILIES`: english time 15/30/60),
-  one `other` count for every other daily. Computed from `results` when a
-  profile loads, sharing the board's filter and order
-  (`leaderboard::FIRST_TRY`, `RANK_ORDER`); no table.
+- **1.2.0** language/theme catalogue (`:install`, `catalog/` fetched from
+  raw GitHub `main`, so catalogue edits go live on push); only `english`,
+  `english_1k` and the `default` theme are built in.
+- **1.2.1** prebuilt binaries: `.github/workflows/release.yml` builds macOS
+  arm64/x86_64 and Linux musl arm64/x86_64 on each tag; `release.sh` waits
+  for it and writes the tap formula from the checksums.
+- **1.2.2** daily attempts count from the first keystroke (`POST
+  /dailies/{id}/start`, migration 0002) and `daily_lock` (default on);
+  palette enter takes the highlighted preset; timed tests end exactly at the
+  limit (chart 0s to Ns); no lone "i" in the English lists.
+- **1.3.0** public profiles, medals, landing screen (`splash`), 25
+  `code_*` languages (Lean 4 uses editor abbreviations like `\all`, `\R`,
+  checked against vscode-lean4's `abbreviations.json`).
+- **1.3.1** landing screen: a letter goes to the words without being typed.
+
+Decided by the owner along the way:
+
+- Medals only on the first-try boards of **english time 15/30/60**
+  (`api::MEDAL_DAILIES`), gold/silver/bronze at the top of the profile; a
+  top-3 on any other daily adds to one `other` count. Awarded once the
+  daily's UTC day is over.
+- A start counts as an attempt; runs without a server-recorded start
+  (logged out, offline, pre-1.2.2 clients) rank on *best* but never *first
+  try*. Existing results kept their eligibility (`first_eligible` default 1).
+- Landing screen: any non-menu letter goes to the words untyped; menu
+  letters (`l`, `d`, `b`) stay as shortcuts.
+- Monkeytype-derived themes (25 in `catalog/themes/`) keep GPL-3.0 and are
+  credited in `catalog/themes/MONKEYTYPE.md` and the README.
+- The owner allowed `cargo publish` explicitly (2026-09-30); releases and
+  pushes to `main` are done on the owner's say-so.
+
+Open items:
+
+- **Login white bar** (reported, not reproduced): a white bar of pixels
+  about a third down, left of centre, when logging in. A simulated Ghostty
+  replay of every kitty image command through typing → `:login` → back left
+  no stray placements. Needs the owner's terminal, a screenshot, when it
+  appears, and whether `:set graphics off` makes it go away.
+- **Daily word preview:** the words are visible before the first
+  keystroke, so opening a daily and backing out previews it without using
+  an attempt. Closing it means counting the fetch instead (stricter than
+  the owner asked for; offered, not chosen).
+- **README install section** still only says `cargo install --path .`: add
+  `brew tap andples/ttyp`, `brew trust andples/ttyp` (Homebrew 6+ refuses
+  untrusted taps), `brew install ttyp`, and `cargo install ttyp`. Users have
+  reported not being able to install.
+- **Off-machine backups:** `./backups` is on the same disk as the database.
+- **Responsiveness audit** (2026-09-29, not applied): kitty startup spends
+  ~75 ms parsing the system Nerd Font (default to the bundled font or use
+  ttf-parser); `fc-list` spawned on every start (make lazy); resize
+  re-uploads every glyph image; no event coalescing under key repeat.
+- **Backup sidecar runs as root** to write the host-mounted `./backups`.
+- **Distribution:** AUR registration was down. Prebuilt binaries now exist,
+  so `cargo binstall` metadata would be a small addition.
 
 Operating: `docker compose ps` on the owner's machine; `docker compose logs
 -f ttyp-server`; restore steps in `crates/ttyp-server/README.md`; release
