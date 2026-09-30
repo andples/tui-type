@@ -661,11 +661,12 @@ arena.deinit() .deinit() .init() .items .len .ptr .{} .? .* x.* &x
 Self self main() zig build build.zig build.zig.zon
 """)
 
-# Symbols are written as the editor abbreviations Lean users type
-# (\R for ℝ, \forall for ∀, \to for →): the symbols themselves aren't on a keyboard.
+# Symbols are written as the editor abbreviations Lean users type (\R for
+# ℝ, \all or \forall for ∀, \r or \to for →; from vscode-lean4's
+# abbreviations.json): the symbols themselves aren't on a keyboard.
 lang("lean", "Lean 4", r"""
 def theorem lemma example abbrev structure inductive instance class namespace section end
-variable open where match with fun \fun let have show calc by do if then else return mutual
+variable open where match with fun \fun \la let have show calc by do if then else return mutual
 deriving extends private protected noncomputable partial unsafe
 universe import at for in mut termination_by decreasing_by
 set_option
@@ -678,7 +679,7 @@ repeat sorry exact? apply? absurd <;> \.
 Nat Int Prop Type Type* Sort List Array Option IO String Bool True False Unit
 DecidableEq Inhabited Repr
 ToString BEq Monad Eq Iff And Or Not Exists
-\N \Z \R \a \b \forall \exists \to \iff \and \or \not \ne \le \ge \<> <|> <| |> \l := => -> <- <-> /\ \/ \x \in
+\N \Z \R \a \b \forall \all \exists \ex \to \r \iff \and \or \not \ne \le \ge \<> <|> <| |> \l := => -> <- <-> /\ \/ \x \in
 >>= <$> <*> ++ :: == != && || ! _ ?_
 none some zero succ .none .some Nat.succ Nat.zero n+1 x::xs []
 #[] ih h h.1 h.2 .mp .mpr Iff.intro And.intro Or.inl Or.inr
