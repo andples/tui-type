@@ -32,6 +32,22 @@ error, like monkeytype.
 
 On the results screen: `tab` next test, `s` stats, `?` help.
 
+### Landing screen
+
+ttyp opens on a short intro: the logo typed out in big letters (under a
+second), then a few keys for where you might want to go:
+
+- logged out: `enter` (or `l`) logs in, `tab` starts typing
+- logged in: `d` today's daily, `b` leaderboard, `tab` starts typing
+- offline (`server = ""`): `tab` starts typing, `?` help
+
+You never have to wait for it. Any other character starts the test with
+that character already typed, and while the intro is still playing every
+character does (the keys above aren't on screen yet, so they're typing
+too); other keys finish the intro. `esc`, `enter` (when not logging in) and
+`space` go to the typing screen, `:` opens the command line. Turn it off
+with `:set splash off` (`splash = false` in the config).
+
 ## Commands
 
 Press `esc`, start typing, and the palette fuzzy-filters as you go.

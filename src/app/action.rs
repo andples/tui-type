@@ -36,6 +36,12 @@ pub enum Action {
     ScrollDown,
     ScrollUp,
 
+    // Landing screen
+    /// Finish the intro animation at once.
+    SkipIntro,
+    /// Leave the landing screen for the typing screen.
+    CloseSplash,
+
     // Housekeeping
     Tick,
     Redraw,
@@ -65,6 +71,8 @@ pub enum Action {
     CancelLogin,
     Logout,
     ShowLeaderboard,
+    /// `:daily` with the configured mode.
+    Daily,
     Board(BoardAction),
     /// Keys on a user's profile screen.
     User(UserAction),

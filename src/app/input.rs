@@ -4,6 +4,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use super::Screen;
 use super::action::{Action, BoardAction, CatalogAction, ProfileAction, UserAction};
+use super::splash::SplashMenu;
 use crate::test::Status;
 
 /// Context needed to interpret a key.
@@ -16,6 +17,10 @@ pub struct InputContext {
     pub profile_menu: ProfileInput,
     /// The install screen is asking whether to remove something.
     pub catalog_confirm: bool,
+    /// The landing screen's intro is still being typed out.
+    pub splash_playing: bool,
+    /// What the landing screen offers.
+    pub splash_menu: SplashMenu,
 }
 
 /// Which part of the profile screen has the keyboard.
@@ -57,6 +62,7 @@ pub fn map_key(key: KeyEvent, ctx: InputContext) -> Action {
 
     match ctx.screen {
         Screen::Typing => map_typing(key, ctrl, alt, ctx.test_status),
+        Screen::Splash => map_splash(key, ctrl || alt, ctx.splash_playing, ctx.splash_menu),
         Screen::Results => match key.code {
             KeyCode::Tab | KeyCode::Enter => Action::Restart,
             KeyCode::Esc | KeyCode::Char(':') => Action::OpenCommandLine,
@@ -119,6 +125,36 @@ fn map_typing(key: KeyEvent, ctrl: bool, alt: bool, status: Status) -> Action {
         KeyCode::Char(':') if status != Status::Running => Action::OpenCommandLine,
         KeyCode::Char('?') if status != Status::Running => Action::ShowHelp,
         KeyCode::Char(c) if !ctrl && !alt => Action::TypeChar(c),
+        _ => Action::Nop,
+    }
+}
+
+/// The landing screen. While the intro plays the keys aren't on screen
+/// yet, so a character is the start of a test; once they show, their
+/// letters are taken and every other character still starts the test.
+/// Other keys finish the intro first.
+fn map_splash(key: KeyEvent, modified: bool, playing: bool, menu: SplashMenu) -> Action {
+    if modified {
+        return Action::Nop;
+    }
+    match key.code {
+        KeyCode::Tab => return Action::CloseSplash,
+        KeyCode::Char(':') => return Action::OpenCommandLine,
+        KeyCode::Char('?') => return Action::ShowHelp,
+        _ if playing => {
+            return match key.code {
+                KeyCode::Char(c) if c != ' ' => Action::TypeChar(c),
+                _ => Action::SkipIntro,
+            };
+        }
+        _ => {}
+    }
+    match (key.code, menu) {
+        (KeyCode::Enter | KeyCode::Char('l'), SplashMenu::LoggedOut) => Action::Login,
+        (KeyCode::Char('d'), SplashMenu::LoggedIn) => Action::Daily,
+        (KeyCode::Char('b'), SplashMenu::LoggedIn) => Action::ShowLeaderboard,
+        (KeyCode::Enter | KeyCode::Esc | KeyCode::Char(' '), _) => Action::CloseSplash,
+        (KeyCode::Char(c), _) => Action::TypeChar(c),
         _ => Action::Nop,
     }
 }
@@ -291,7 +327,77 @@ mod tests {
             test_status: status,
             profile_menu: ProfileInput::List,
             catalog_confirm: false,
+            splash_playing: false,
+            splash_menu: SplashMenu::Offline,
         }
+    }
+
+    fn splash(playing: bool, menu: SplashMenu, code: KeyCode) -> Action {
+        let mut c = ctx(Screen::Splash, false, Status::Idle);
+        c.splash_playing = playing;
+        c.splash_menu = menu;
+        map_key(key(code, KeyModifiers::NONE), c)
+    }
+
+    #[test]
+    fn splash_intro_letters_start_the_test() {
+        use SplashMenu as M;
+        // The menu isn't showing yet: its letters are typing too.
+        assert_eq!(
+            splash(true, M::LoggedOut, KeyCode::Char('l')),
+            Action::TypeChar('l')
+        );
+        assert_eq!(
+            splash(true, M::LoggedIn, KeyCode::Char('d')),
+            Action::TypeChar('d')
+        );
+        for code in [
+            KeyCode::Enter,
+            KeyCode::Esc,
+            KeyCode::Char(' '),
+            KeyCode::Up,
+        ] {
+            assert_eq!(splash(true, M::LoggedOut, code), Action::SkipIntro);
+        }
+        assert_eq!(splash(true, M::Offline, KeyCode::Tab), Action::CloseSplash);
+        assert_eq!(
+            splash(true, M::Offline, KeyCode::Char(':')),
+            Action::OpenCommandLine
+        );
+    }
+
+    #[test]
+    fn splash_menu_keys_follow_login_state() {
+        use SplashMenu as M;
+        let ch = KeyCode::Char;
+        assert_eq!(splash(false, M::LoggedOut, KeyCode::Enter), Action::Login);
+        assert_eq!(splash(false, M::LoggedOut, ch('l')), Action::Login);
+        assert_eq!(splash(false, M::LoggedOut, ch('d')), Action::TypeChar('d'));
+        assert_eq!(splash(false, M::LoggedIn, ch('d')), Action::Daily);
+        assert_eq!(splash(false, M::LoggedIn, ch('b')), Action::ShowLeaderboard);
+        assert_eq!(splash(false, M::LoggedIn, ch('l')), Action::TypeChar('l'));
+        assert_eq!(
+            splash(false, M::LoggedIn, KeyCode::Enter),
+            Action::CloseSplash
+        );
+        assert_eq!(
+            splash(false, M::Offline, KeyCode::Enter),
+            Action::CloseSplash
+        );
+        assert_eq!(splash(false, M::Offline, ch('l')), Action::TypeChar('l'));
+        assert_eq!(splash(false, M::Offline, ch('?')), Action::ShowHelp);
+        assert_eq!(splash(false, M::Offline, KeyCode::Esc), Action::CloseSplash);
+        assert_eq!(splash(false, M::Offline, KeyCode::Backspace), Action::Nop);
+        let mut c = ctx(Screen::Splash, false, Status::Idle);
+        c.splash_menu = M::LoggedIn;
+        assert_eq!(
+            map_key(key(KeyCode::Char('d'), KeyModifiers::CONTROL), c),
+            Action::Nop
+        );
+        assert_eq!(
+            map_key(key(KeyCode::Char('c'), KeyModifiers::CONTROL), c),
+            Action::Quit
+        );
     }
 
     #[test]

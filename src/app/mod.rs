@@ -6,6 +6,7 @@ mod catalog;
 pub mod input;
 mod online;
 mod profiles;
+pub mod splash;
 mod user;
 
 use std::io::Write;
@@ -31,6 +32,7 @@ use crate::ui;
 use crate::ui::style::content_column;
 use action::Action;
 use input::InputContext;
+use splash::Splash;
 use ttyp_core::api::{Daily, ResultDetail, SubmitResponse};
 
 /// How long a transient notice stays on the bottom line.
@@ -55,6 +57,8 @@ pub enum Screen {
     Graph,
     /// A player's profile.
     User,
+    /// The landing screen played on start (`splash = true`).
+    Splash,
 }
 
 /// Which config value a slider edits.
@@ -157,6 +161,8 @@ pub struct App {
     pub completions: Completions,
     pub notice: Option<(String, Instant)>,
     pub scroll: usize,
+    /// The landing screen's intro, while it's showing.
+    pub splash: Option<Splash>,
     pub should_quit: bool,
     pub gfx: Gfx,
     /// Present only when `server` is configured.
@@ -260,6 +266,7 @@ impl App {
         let summary = Summary::from_records(store.all());
         let online = Self::connect(&config, &paths);
         let fetcher = Self::catalog_fetcher(&config);
+        let splash = config.splash.then(|| Splash::new(Instant::now()));
         let mut app = Self {
             config,
             paths,
@@ -273,13 +280,18 @@ impl App {
             outcome: None,
             stats: Box::new(store),
             summary,
-            screen: Screen::Typing,
+            screen: if splash.is_some() {
+                Screen::Splash
+            } else {
+                Screen::Typing
+            },
             cmdline: CommandLine::new(),
             cmd_open: false,
             slider: None,
             completions,
             notice: None,
             scroll: 0,
+            splash,
             should_quit: false,
             gfx,
             online,
@@ -416,6 +428,10 @@ impl App {
     }
 
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
+        // The intro's clock starts with the first frame, not with loading.
+        if let Some(s) = &mut self.splash {
+            *s = Splash::new(Instant::now());
+        }
         let result = self.event_loop(terminal);
         self.gfx.clear(terminal.backend_mut())?;
         result
@@ -479,6 +495,12 @@ impl App {
         if timed_running {
             return Some(TIMER_TICK);
         }
+        // The intro wakes for its next frame and stops once it's done.
+        if self.screen == Screen::Splash
+            && let Some(next) = self.splash.and_then(|s| s.next_change_at(Instant::now()))
+        {
+            return Some(next.max(Duration::from_millis(1)));
+        }
         if self.online.as_ref().is_some_and(Online::busy)
             || self.fetcher.as_ref().is_some_and(Fetcher::busy)
         {
@@ -499,11 +521,16 @@ impl App {
             test_status: self.engine.status(),
             profile_menu: self.profile_input(),
             catalog_confirm: self.catalog_menu.confirm_remove,
+            splash_playing: !self.splash_frame().done,
+            splash_menu: self.splash_menu(),
         }
     }
 
     pub fn dispatch(&mut self, action: Action) {
         self.fresh_notice = false;
+        if self.screen == Screen::Splash && splash::leaves_splash(&action) {
+            self.close_splash();
+        }
         match action {
             Action::Nop => return,
             Action::Tick => {
@@ -518,6 +545,12 @@ impl App {
                 }
             }
             Action::Redraw => {}
+            Action::SkipIntro => {
+                if let Some(s) = &mut self.splash {
+                    s.skip();
+                }
+            }
+            Action::CloseSplash => {}
             Action::FontBigger => self.execute(Command::FontSize(Some(
                 self.config.font_size.saturating_add(1),
             ))),
@@ -604,6 +637,7 @@ impl App {
             Action::CancelLogin => self.cancel_login(),
             Action::Logout => self.logout(),
             Action::ShowLeaderboard => self.open_leaderboard(),
+            Action::Daily => self.open_daily(None),
             Action::Board(a) => self.board_action(a),
             Action::User(a) => self.user_action(a),
             Action::Remote(ev) => self.remote_event(ev),
@@ -936,6 +970,7 @@ impl App {
                         | "github_client_id"
                         | "catalog"
                         | "daily_lock"
+                        | "splash"
                 ) && !key.starts_with("results.");
             }
         }

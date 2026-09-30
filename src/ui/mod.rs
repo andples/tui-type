@@ -12,6 +12,7 @@ pub mod login;
 pub mod profiles;
 pub mod results;
 pub mod slider;
+pub mod splash;
 pub mod stats;
 pub mod style;
 pub mod typing;
@@ -34,10 +35,10 @@ pub fn render(frame: &mut Frame, app: &App) -> Vec<ImageLine> {
     frame.render_widget(Block::default().style(p.base()), area);
 
     // Brand mark, top-left of the content column (hidden in zen and
-    // fullscreen).
+    // fullscreen, and on the landing screen, which draws it big).
     let col = content_column(area, app.screen_width());
     let bare = app.config.zen || app.config.fullscreen;
-    if !(bare && app.screen == Screen::Typing) {
+    if !(bare && app.screen == Screen::Typing) && app.screen != Screen::Splash {
         frame.render_widget(
             Paragraph::new(Line::from(vec![
                 Span::styled("t", p.main_bold()),
@@ -61,6 +62,7 @@ pub fn render(frame: &mut Frame, app: &App) -> Vec<ImageLine> {
         Screen::Leaderboard => leaderboard::render(frame, app, body, &p),
         Screen::Graph => graph::render(frame, app, body, &p),
         Screen::User => user::render(frame, app, body, &p),
+        Screen::Splash => splash::render(frame, app, body, &p),
     }
 
     if app.slider.is_some() {

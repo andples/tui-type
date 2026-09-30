@@ -124,6 +124,9 @@ pub struct Config {
     /// turns the catalogue off. Not a profile setting.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub catalog: Option<String>,
+    /// Play the short landing screen (logo, login/daily hints) on start.
+    /// Not a profile setting.
+    pub splash: bool,
 }
 
 /// How font sizes above 1 are drawn. Only set in the config file; there is
@@ -213,6 +216,11 @@ impl FontSize {
             5 => Some((BlockSet::Half, 2)),
             n => Some((BlockSet::Sextant, n as u16 - 2)),
         })
+    }
+
+    /// A block set at any scale, numbered size or not.
+    pub fn blocks(set: BlockSet, scale: u16) -> Self {
+        FontSize(Some((set, scale.max(1))))
     }
 
     pub fn is_native(self) -> bool {
@@ -361,6 +369,7 @@ impl Default for Config {
             github_client_id: Some(BUILT_IN_GITHUB_CLIENT_ID.to_string()),
             catalog: None,
             daily_lock: true,
+            splash: true,
         }
     }
 }
@@ -422,6 +431,7 @@ impl Config {
             "numbers" => self.numbers = parse_bool(value)?,
             "zen" => self.zen = parse_bool(value)?,
             "daily_lock" => self.daily_lock = parse_bool(value)?,
+            "splash" => self.splash = parse_bool(value)?,
             "fullscreen" | "full" => self.fullscreen = parse_bool(value)?,
             "lines" => self.set_lines(parse_range(value, LINES_RANGE)?),
             "font" => self.font = value.to_string(),
@@ -641,6 +651,12 @@ mod tests {
         assert!(Config::default().daily_lock, "on by default");
         c.set("daily_lock", "off").unwrap();
         assert!(!c.daily_lock);
+        assert!(Config::default().splash, "on by default");
+        c.set("splash", "off").unwrap();
+        assert!(!c.splash);
+        assert!(c.set("splash", "later").is_err());
+        // Older config files without the key keep the landing screen.
+        assert!(Config::parse("theme = \"default\"").unwrap().splash);
         assert!(c.set("graphics", "sixel").is_err());
     }
 }
