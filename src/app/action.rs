@@ -47,6 +47,8 @@ pub enum Action {
     SplashMove(i8),
     /// Landing menu: run the highlighted row.
     SplashChoose,
+    /// A key while the screensaver types: crumble it.
+    IdleWake,
 
     // Housekeeping
     Tick,

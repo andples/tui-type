@@ -3,6 +3,7 @@
 pub mod action;
 mod board;
 mod catalog;
+pub mod idle;
 pub mod input;
 mod online;
 mod profiles;
@@ -32,6 +33,7 @@ use crate::ui;
 use crate::ui::style::content_column;
 use crate::ui::widgets::Selection;
 use action::{Action, ListMove};
+use idle::Screensaver;
 use input::InputContext;
 use splash::Splash;
 use ttyp_core::api::{Daily, ResultDetail, SubmitResponse};
@@ -166,6 +168,8 @@ pub struct App {
     pub history: Selection,
     /// The landing screen's intro, while it's showing.
     pub splash: Option<Splash>,
+    /// The landing screen's screensaver.
+    pub idle: Screensaver,
     pub should_quit: bool,
     pub gfx: Gfx,
     /// Present only when `server` is configured.
@@ -296,6 +300,7 @@ impl App {
             scroll: 0,
             history: Selection::clamped(0),
             splash,
+            idle: Screensaver::new(Instant::now()),
             should_quit: false,
             gfx,
             online,
@@ -493,6 +498,21 @@ impl App {
     /// Only wake up on a timer when something on screen is time-dependent
     /// or a network reply is expected.
     fn poll_timeout(&self) -> Option<Duration> {
+        let rest = self.poll_timeout_rest();
+        if !self.idle_allowed() {
+            return rest;
+        }
+        let idle = self.idle.next_change_at(Instant::now());
+        Some(rest.map_or(idle, |r| r.min(idle)))
+    }
+
+    /// The landing screen is up, done with its intro and not covered by
+    /// the command line: the screensaver may run.
+    fn idle_allowed(&self) -> bool {
+        self.screen == Screen::Splash && !self.cmd_open && self.splash_frame().done
+    }
+
+    fn poll_timeout_rest(&self) -> Option<Duration> {
         let timed_running = self.engine.status() == Status::Running
             && matches!(self.engine.mode(), Mode::Time(_))
             && self.screen == Screen::Typing;
@@ -526,12 +546,22 @@ impl App {
             profile_menu: self.profile_input(),
             catalog_confirm: self.catalog_menu.confirm_remove,
             splash_playing: !self.splash_frame().done,
+            splash_idle: self.screen == Screen::Splash && self.idle.typing(),
             splash_menu: self.splash_menu(),
         }
     }
 
     pub fn dispatch(&mut self, action: Action) {
         self.fresh_notice = false;
+        // Any key on the landing screen starts its quiet time over.
+        if self.screen == Screen::Splash
+            && !matches!(
+                action,
+                Action::Tick | Action::Nop | Action::Redraw | Action::IdleWake
+            )
+        {
+            self.idle.touch(Instant::now());
+        }
         if self.screen == Screen::Splash && splash::leaves_splash(&action) {
             self.close_splash();
         }
@@ -539,6 +569,10 @@ impl App {
             Action::Nop => return,
             Action::Tick => {
                 let now = Instant::now();
+                if self.idle_allowed() {
+                    let lang = self.languages.get_or_default(&self.config.language);
+                    self.idle.tick(now, || &lang.words);
+                }
                 if self.engine.tick(now) {
                     self.finish_test();
                 }
@@ -549,6 +583,7 @@ impl App {
                 }
             }
             Action::Redraw => {}
+            Action::IdleWake => self.idle.wake(Instant::now()),
             Action::SkipIntro => {
                 if let Some(s) = &mut self.splash {
                     s.skip();

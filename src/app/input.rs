@@ -21,6 +21,8 @@ pub struct InputContext {
     pub splash_playing: bool,
     /// What the landing screen offers.
     pub splash_menu: SplashMenu,
+    /// The landing screen's screensaver is typing.
+    pub splash_idle: bool,
 }
 
 /// Which part of the profile screen has the keyboard.
@@ -62,6 +64,7 @@ pub fn map_key(key: KeyEvent, ctx: InputContext) -> Action {
 
     match ctx.screen {
         Screen::Typing => map_typing(key, ctrl, alt, ctx.test_status),
+        Screen::Splash if ctx.splash_idle => Action::IdleWake,
         Screen::Splash => map_splash(key, ctrl || alt, ctx.splash_playing, ctx.splash_menu),
         Screen::Results => match key.code {
             KeyCode::Tab | KeyCode::Enter => Action::Restart,
@@ -344,6 +347,21 @@ mod tests {
             catalog_confirm: false,
             splash_playing: false,
             splash_menu: SplashMenu::Offline,
+            splash_idle: false,
+        }
+    }
+
+    #[test]
+    fn any_key_wakes_the_screensaver() {
+        let mut c = ctx(Screen::Splash, false, Status::Idle);
+        c.splash_idle = true;
+        for code in [
+            KeyCode::Char('d'),
+            KeyCode::Tab,
+            KeyCode::Enter,
+            KeyCode::Esc,
+        ] {
+            assert_eq!(map_key(key(code, KeyModifiers::NONE), c), Action::IdleWake);
         }
     }
 

@@ -2979,6 +2979,7 @@ dependencies = [
  "flate2",
  "fontdue",
  "nucleo-matcher",
+ "rand 0.10.2",
  "ratatui",
  "serde",
  "serde_json",
