@@ -1,8 +1,8 @@
 # Handoff: daily tests, server and leaderboards
 
-Status: **shipped.** Latest release **v1.4.1** (2026-10-01) on GitHub
+Status: **shipped.** Latest release **v1.5.0** (2026-10-01) on GitHub
 (prebuilt binaries), the Homebrew tap `andples/ttyp` and crates.io (`ttyp`
-1.4.1, `ttyp-core` 1.3.0); the server runs 1.3.0's core behind the
+1.5.0, `ttyp-core` 1.3.0); the server runs 1.3.0's core behind the
 Cloudflare tunnel. This brief is self-contained: read it, then `CLAUDE.md`
 and `README.md` at the repo root. Decisions marked **decided** came from the
 project owner; don't re-litigate them. Anything marked *open* is yours to
@@ -35,6 +35,9 @@ What shipped since 1.1.0, in order (details in README and CLAUDE.md):
   `Palette::selected`); the history screen has a cursor.
 - **1.4.1** leaderboard key line lists `p profile` (the key existed since
   1.3.0).
+- **1.5.0** profiles public by default (server migration 0003, deployed);
+  landing screensaver (`app/idle.rs`, crumbles on a key); logo capped at 8
+  rows in fullscreen too; `:install` type-to-search (shortcuts on ctrl).
 
 Decided by the owner along the way:
 
@@ -59,8 +62,8 @@ Open items:
   row), public API and a headless client all show distinct words;
   `daily::tests::every_daily_has_its_own_words` guards it. Waiting on the
   owner for which dailies looked alike and where.
-- **Public profiles:** live, but every account is still private
-  (`:account public on`).
+- **Public profiles:** public by default since 2026-10-01 (owner's
+  decision); existing accounts, including iiKillish, were flipped.
 
 - **Login white bar** (reported, not reproduced): a white bar of pixels
   about a third down, left of centre, when logging in. A simulated Ghostty
