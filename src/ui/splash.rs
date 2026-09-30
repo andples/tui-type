@@ -9,6 +9,7 @@ use ratatui::widgets::Paragraph;
 
 use super::bigtext;
 use super::style::{Palette, content_column, vcenter};
+use super::widgets::cursor;
 use crate::app::App;
 use crate::app::splash::LOGO;
 use crate::config::{BlockSet, FontSize};
@@ -99,24 +100,24 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
         return;
     }
     y += 1;
-    // `› label   key`: the marker and highlight follow the selection
-    // (enter runs it); the key is the shortcut.
+    // `› label   key`: the selection look follows the cursor (enter runs
+    // it); the key is the shortcut.
     let selected = app.splash.map_or(0, |s| s.selected);
     let label_w = items.iter().map(|it| it.label.len()).max().unwrap_or(0);
     let key_w = items.iter().map(|it| it.key.len()).max().unwrap_or(0);
-    let menu_w = (2 + label_w + 3 + key_w) as u16;
+    let menu_w = cursor::SELECTED_GUTTER + (label_w + 3 + key_w) as u16;
     let x = col.x + col.width.saturating_sub(menu_w) / 2;
     for (i, it) in items.iter().enumerate() {
         let on = i == selected;
         let row = Rect::new(x, y, menu_w.min(col.width), 1).intersection(area);
         frame.render_widget(
             Paragraph::new(Line::from(vec![
-                Span::styled(if on { "› " } else { "  " }, p.main()),
+                cursor::lead(p, on),
                 Span::styled(
                     format!("{:<label_w$}   ", it.label),
-                    if on { p.selected() } else { p.fg() },
+                    cursor::style(p, on, p.fg()),
                 ),
-                Span::styled(it.key, p.sub()),
+                Span::styled(it.key, cursor::style(p, on, p.sub())),
             ])),
             row,
         );

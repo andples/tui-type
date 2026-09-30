@@ -7,7 +7,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
 use super::style::{Palette, content_column};
-use super::widgets::hints;
+use super::widgets::{Cell, Column, Row, SelectTable, Width, hints};
 use crate::app::App;
 use crate::test::Mode;
 
@@ -47,43 +47,54 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
             bests.iter().map(|(k, v)| (k.as_str(), v.clone())).collect();
         lines.push(kv_row(p, &refs));
         lines.push(Line::default());
-
-        lines.push(Line::from(Span::styled(
-            format!(
-                "{:<12} {:<10} {:<12} {:>5} {:>5} {:>5} {:>5}",
-                "when", "mode", "language", "wpm", "raw", "acc", "con"
-            ),
-            p.sub(),
-        )));
-        let visible = area.height.saturating_sub(8) as usize;
-        let total = records.len();
-        let start = app.scroll.min(total.saturating_sub(1));
-        for r in records.iter().rev().skip(start).take(visible.max(1)) {
-            let when = r.ts.with_timezone(&Local).format("%m-%d %H:%M").to_string();
-            let mut mode = r.mode.label();
-            if r.punctuation {
-                mode.push_str(" p");
-            }
-            if r.numbers {
-                mode.push_str(" n");
-            }
-            lines.push(Line::from(vec![
-                Span::styled(format!("{when:<12} "), p.sub()),
-                Span::styled(format!("{mode:<10} "), p.fg()),
-                Span::styled(format!("{:<12} ", truncate(&r.language, 12)), p.fg()),
-                Span::styled(format!("{:>5.0} ", r.wpm), p.main()),
-                Span::styled(format!("{:>5.0} ", r.raw), p.fg()),
-                Span::styled(format!("{:>4.0}% ", r.acc), p.fg()),
-                Span::styled(format!("{:>4.0}%", r.consistency), p.fg()),
-            ]));
-        }
     }
 
-    frame.render_widget(
-        Paragraph::new(lines),
-        Rect::new(col.x, col.y + 1, col.width, col.height),
-    );
-    hints::render(frame, area, col, p, "j/k  scroll   ·   esc  back");
+    // Summary on top, then the runs, newest first.
+    let top = Rect::new(col.x, col.y + 1, col.width, col.height);
+    let used = lines.len() as u16;
+    frame.render_widget(Paragraph::new(lines), top);
+    if !records.is_empty() {
+        let table = Rect::new(
+            col.x,
+            top.y + used,
+            col.width,
+            top.height.saturating_sub(used + 2),
+        );
+        let columns = [
+            Column::new("when", Width::Fixed(11)),
+            Column::new("mode", Width::Min(9)),
+            Column::new("language", Width::Min(8)),
+            Column::new("wpm", Width::Fixed(5)).right(),
+            Column::new("raw", Width::Fixed(5)).right(),
+            Column::new("acc", Width::Fixed(5)).right(),
+            Column::new("con", Width::Fixed(5)).right(),
+        ];
+        let rows = records
+            .iter()
+            .rev()
+            .map(|r| {
+                let when = r.ts.with_timezone(&Local).format("%m-%d %H:%M").to_string();
+                let mut mode = r.mode.label();
+                if r.punctuation {
+                    mode.push_str(" p");
+                }
+                if r.numbers {
+                    mode.push_str(" n");
+                }
+                Row::new(vec![
+                    Cell::dim(when),
+                    Cell::normal(mode),
+                    Cell::normal(r.language.clone()),
+                    Cell::accent(format!("{:.0}", r.wpm)),
+                    Cell::normal(format!("{:.0}", r.raw)),
+                    Cell::normal(format!("{:.0}%", r.acc)),
+                    Cell::normal(format!("{:.0}%", r.consistency)),
+                ])
+            })
+            .collect();
+        SelectTable::new(&columns, rows, &app.history).render(frame, table, p);
+    }
+    hints::render(frame, area, col, p, "↑↓ move · g/G top/bottom · esc back");
 }
 
 fn kv_row<'a>(p: &Palette, items: &[(&str, String)]) -> Line<'a> {
@@ -96,12 +107,4 @@ fn kv_row<'a>(p: &Palette, items: &[(&str, String)]) -> Line<'a> {
         spans.push(Span::styled(v.clone(), p.fg()));
     }
     Line::from(spans)
-}
-
-fn truncate(s: &str, n: usize) -> String {
-    if s.chars().count() <= n {
-        s.to_string()
-    } else {
-        s.chars().take(n - 1).chain(std::iter::once('…')).collect()
-    }
 }

@@ -1,6 +1,6 @@
 //! A themed table with a cursor: thin layer over ratatui's `Table` that adds
-//! column specs, cell style roles, `…` truncation, the `›` marker and a row
-//! pinned to the bottom when it scrolls out of view.
+//! column specs, cell style roles, `…` truncation, the shared selected-row
+//! look (`cursor`) and a row pinned to the bottom when it scrolls out of view.
 
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Rect};
@@ -8,11 +8,11 @@ use ratatui::style::{Color, Style};
 use ratatui::text::{Span, Text};
 use ratatui::widgets::{HighlightSpacing, Row as TableRow, Table, TableState};
 
-use super::Selection;
+use super::{Selection, cursor};
 use crate::ui::style::Palette;
 
-/// Columns of the marker (`› `) in front of every row.
-const MARKER_WIDTH: u16 = 2;
+/// Columns of the marker gutter in front of every row.
+const MARKER_WIDTH: u16 = cursor::GUTTER;
 const SPACING: u16 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,8 +34,6 @@ pub struct Column {
     pub header: String,
     pub width: Width,
     pub align: Align,
-    /// Drawn in the selection style on the selected row (the row's name).
-    pub highlight: bool,
 }
 
 impl Column {
@@ -44,17 +42,11 @@ impl Column {
             header: header.into(),
             width,
             align: Align::Left,
-            highlight: false,
         }
     }
 
     pub fn right(mut self) -> Self {
         self.align = Align::Right;
-        self
-    }
-
-    pub fn highlight(mut self) -> Self {
-        self.highlight = true;
         self
     }
 }
@@ -198,11 +190,16 @@ impl<'a> SelectTable<'a> {
             .map(|(i, r)| table_row(r, self.columns, &widths, p, selected == Some(i)));
         let mut table = Table::new(rows, constraints(&widths))
             .column_spacing(SPACING)
-            .highlight_symbol(Span::styled("› ", p.main()))
+            // The row's own left-aligned cells add the third column of
+            // ` › `, so the selected row moves right (`cursor::lead`).
+            .highlight_symbol(Span::styled(" ›", p.main()))
             .highlight_spacing(HighlightSpacing::Always);
         if header {
             let cells = self.columns.iter().enumerate().map(|(i, c)| {
-                let text = truncate(&c.header, widths[i] as usize);
+                let mut text = truncate(&c.header, widths[i].saturating_sub(NUDGE) as usize);
+                if c.align == Align::Right {
+                    text.push(' ');
+                }
                 aligned(text, c.align)
             });
             table = table.header(TableRow::new(cells).style(p.sub()));
@@ -235,11 +232,16 @@ fn constraints(widths: &[u16]) -> Vec<Constraint> {
     widths.iter().map(|w| Constraint::Length(*w)).collect()
 }
 
+/// Spare column every column keeps for the selected row's nudge.
+const NUDGE: u16 = 1;
+
 /// Column widths for `total` columns: fixed ones as asked, the rest shared
-/// equally by the `Min` columns (each at least its minimum).
+/// equally by the `Min` columns (each at least its minimum). Each gets one
+/// more for the nudge, so a selected row moves whole and isn't cut short.
 fn resolve_widths(columns: &[Column], total: u16) -> Vec<u16> {
     let spacing = SPACING * columns.len().saturating_sub(1) as u16;
-    let mut free = total.saturating_sub(MARKER_WIDTH + spacing);
+    let nudges = NUDGE * columns.len() as u16;
+    let mut free = total.saturating_sub(MARKER_WIDTH + spacing + nudges);
     let mut flexible = 0u16;
     for c in columns {
         match c.width {
@@ -254,13 +256,16 @@ fn resolve_widths(columns: &[Column], total: u16) -> Vec<u16> {
     let mut extra = free.checked_rem(flexible).unwrap_or(0);
     columns
         .iter()
-        .map(|c| match c.width {
-            Width::Fixed(w) => w,
-            Width::Min(w) => {
-                let bonus = u16::from(extra > 0);
-                extra = extra.saturating_sub(1);
-                w + share + bonus
-            }
+        .map(|c| {
+            NUDGE
+                + match c.width {
+                    Width::Fixed(w) => w,
+                    Width::Min(w) => {
+                        let bonus = u16::from(extra > 0);
+                        extra = extra.saturating_sub(1);
+                        w + share + bonus
+                    }
+                }
         })
         .collect()
 }
@@ -280,10 +285,17 @@ fn table_row<'b>(
         // A spanning cell also gets the spacing between the columns it covers.
         let width: u16 = widths[col..col + span].iter().sum::<u16>() + SPACING * (span as u16 - 1);
         let column = &columns[col.min(columns.len().saturating_sub(1))];
-        let highlight = selected && (column.highlight || span > 1);
-        let style = cell_style(cell.role, row.accent, highlight, p);
+        let style = cell_style(cell.role, row.accent, selected, p);
         col += span;
-        ratatui::widgets::Cell::new(aligned(truncate(&cell.text, width as usize), column.align))
+        // The spare column sits before the text on the selected row and
+        // after it otherwise, so the whole row moves right by one.
+        let text = truncate(&cell.text, width.saturating_sub(NUDGE) as usize);
+        let text = match (selected, column.align) {
+            (true, Align::Left) => format!(" {text}"),
+            (false, Align::Right) => format!("{text} "),
+            _ => text,
+        };
+        ratatui::widgets::Cell::new(aligned(text, column.align))
             .style(style)
             .column_span(span as u16)
     });
@@ -292,7 +304,7 @@ fn table_row<'b>(
 
 fn cell_style(role: Role, accent_row: bool, highlight: bool, p: &Palette) -> Style {
     match role {
-        Role::Normal | Role::Dim if highlight => p.selected(),
+        Role::Normal | Role::Dim | Role::Accent if highlight => p.selected(),
         Role::Normal if accent_row => p.main(),
         Role::Normal => p.fg(),
         Role::Dim => p.sub(),
@@ -331,9 +343,10 @@ mod tests {
             Column::new("", Width::Min(4)),
             Column::new("", Width::Min(0)),
         ];
-        // 40 − marker 2 − spacing 2 − fixed 1 − mins 4 = 31 to share.
-        assert_eq!(resolve_widths(&cols, 40), vec![1, 20, 15]);
-        assert_eq!(resolve_widths(&cols, 3), vec![1, 4, 0]);
+        // 40 − marker 2 − spacing 2 − nudges 3 − fixed 1 − mins 4 = 28 to
+        // share; each column keeps its spare nudge column.
+        assert_eq!(resolve_widths(&cols, 40), vec![2, 19, 15]);
+        assert_eq!(resolve_widths(&cols, 3), vec![2, 5, 1]);
     }
 
     #[test]

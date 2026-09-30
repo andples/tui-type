@@ -57,7 +57,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
     let name_w = items.iter().map(|i| i.name.len()).max().unwrap_or(0).max(8) as u16;
     let mut columns = vec![
         Column::new("", Width::Fixed(1)),
-        Column::new("", Width::Fixed(name_w + 1)).highlight(),
+        Column::new("", Width::Fixed(name_w + 1)),
     ];
     match tab {
         Kind::Language => columns.push(Column::new("", Width::Min(0))),

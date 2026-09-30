@@ -7,7 +7,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
 use super::style::{Palette, content_column};
-use super::widgets::{Cell, Column, Row, SelectTable, Selection, Width, hints};
+use super::widgets::{Cell, Column, Row, SelectTable, Selection, Width, cursor, hints};
 use crate::app::App;
 use crate::profile::{Editor, ProfileMenu, SettingKey};
 
@@ -28,10 +28,6 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
         }
     };
     hints::render(frame, area, col, p, hints);
-}
-
-fn marker(p: &Palette, selected: bool) -> Span<'static> {
-    Span::styled(if selected { "› " } else { "  " }, p.main())
 }
 
 /// Heading, the profile table and a line about the highlighted row.
@@ -62,7 +58,7 @@ fn list(
     let name_w = reg.names().map(str::len).max().unwrap_or(0).max(8);
     let columns = [
         Column::new("", Width::Fixed(1)),
-        Column::new("", Width::Fixed(name_w as u16 + 1)).highlight(),
+        Column::new("", Width::Fixed(name_w as u16 + 1)),
         Column::new("", Width::Min(0)),
     ];
     let mut rows: Vec<Row> = reg
@@ -147,13 +143,16 @@ fn editor<'a>(
     ];
 
     let mut name = vec![
-        marker(p, e.on_name()),
-        Span::styled("name  ", if e.on_name() { p.selected() } else { p.sub() }),
+        cursor::lead(p, e.on_name()),
+        Span::styled("name  ", cursor::style(p, e.on_name(), p.sub())),
     ];
     if e.name.is_empty() && !e.on_name() {
         name.push(Span::styled("(unnamed)", p.error()));
     } else {
-        name.push(Span::styled(e.name.clone(), p.fg()));
+        name.push(Span::styled(
+            e.name.clone(),
+            cursor::style(p, e.on_name(), p.fg()),
+        ));
     }
     if e.on_name() {
         name.push(Span::styled(" ", p.caret()));
@@ -180,28 +179,29 @@ fn editor<'a>(
     {
         let is_sel = e.row == i + 1;
         let live = k.show(&app.config);
-        let mut row = vec![marker(p, is_sel)];
+        let mut row = vec![cursor::lead(p, is_sel)];
         match e.settings.show(k) {
             Some(value) => {
                 row.push(Span::styled("[x] ", p.main()));
                 row.push(Span::styled(
                     format!("{:<label_w$}  ", k.label()),
-                    if is_sel { p.selected() } else { p.fg() },
+                    cursor::style(p, is_sel, p.fg()),
+                ));
+                row.push(Span::styled(
+                    value.clone(),
+                    cursor::style(p, is_sel, p.fg()),
                 ));
                 if value != live {
-                    row.push(Span::styled(value, p.fg()));
                     row.push(Span::styled(format!("  (now {live})"), p.sub()));
-                } else {
-                    row.push(Span::styled(value, p.fg()));
                 }
             }
             None => {
                 row.push(Span::styled("[ ] ", p.sub()));
                 row.push(Span::styled(
                     format!("{:<label_w$}  ", k.label()),
-                    if is_sel { p.selected() } else { p.sub() },
+                    cursor::style(p, is_sel, p.sub()),
                 ));
-                row.push(Span::styled(live, p.sub()));
+                row.push(Span::styled(live, cursor::style(p, is_sel, p.sub())));
             }
         }
         lines.push(Line::from(row));

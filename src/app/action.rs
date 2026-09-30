@@ -35,6 +35,8 @@ pub enum Action {
     ShowHelp,
     ScrollDown,
     ScrollUp,
+    /// History screen: move the selected run.
+    History(ListMove),
 
     // Landing screen
     /// Finish the intro animation at once.
@@ -86,6 +88,15 @@ pub enum Action {
 
     Quit,
     Nop,
+}
+
+/// Cursor movement in a plain list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ListMove {
+    By(isize),
+    Page(isize),
+    Home,
+    End,
 }
 
 /// Keys on the leaderboard screen and its graph view.

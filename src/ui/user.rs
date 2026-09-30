@@ -174,7 +174,7 @@ fn table(
         return;
     }
     let mut columns = vec![
-        Column::new("language", Width::Min(8)).highlight(),
+        Column::new("language", Width::Min(8)),
         Column::new("mode", Width::Fixed(8)),
         Column::new("wpm", Width::Fixed(4)).right(),
         Column::new("acc", Width::Fixed(4)).right(),

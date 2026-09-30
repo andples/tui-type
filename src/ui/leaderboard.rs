@@ -101,7 +101,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
 fn columns() -> [Column; 5] {
     [
         Column::new("#", Width::Fixed(3)).right(),
-        Column::new("name", Width::Min(8)).highlight(),
+        Column::new("name", Width::Min(8)),
         Column::new("wpm", Width::Fixed(5)).right(),
         Column::new("acc", Width::Fixed(6)).right(),
         Column::new("con", Width::Fixed(4)).right(),

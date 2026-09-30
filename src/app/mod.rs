@@ -30,7 +30,8 @@ use crate::test::{Metrics, Mode, Modifiers, RandomGenerator, Status, TestEngine}
 use crate::theme::{Theme, ThemeRegistry};
 use crate::ui;
 use crate::ui::style::content_column;
-use action::Action;
+use crate::ui::widgets::Selection;
+use action::{Action, ListMove};
 use input::InputContext;
 use splash::Splash;
 use ttyp_core::api::{Daily, ResultDetail, SubmitResponse};
@@ -161,6 +162,8 @@ pub struct App {
     pub completions: Completions,
     pub notice: Option<(String, Instant)>,
     pub scroll: usize,
+    /// The selected run on the history screen (newest first).
+    pub history: Selection,
     /// The landing screen's intro, while it's showing.
     pub splash: Option<Splash>,
     pub should_quit: bool,
@@ -291,6 +294,7 @@ impl App {
             completions,
             notice: None,
             scroll: 0,
+            history: Selection::clamped(0),
             splash,
             should_quit: false,
             gfx,
@@ -636,6 +640,7 @@ impl App {
             }
             Action::ShowStats => {
                 self.summary = Summary::from_records(self.stats.all());
+                self.history = Selection::clamped(self.stats.all().len());
                 self.push_screen(Screen::Stats);
             }
             Action::ShowHelp => self.push_screen(Screen::Help),
@@ -661,6 +666,12 @@ impl App {
             Action::Remote(ev) => self.remote_event(ev),
             Action::ScrollDown => self.scroll += 1,
             Action::ScrollUp => self.scroll = self.scroll.saturating_sub(1),
+            Action::History(m) => match m {
+                ListMove::By(n) => self.history.move_by(n),
+                ListMove::Page(n) => self.history.page(n),
+                ListMove::Home => self.history.home(),
+                ListMove::End => self.history.end(),
+            },
         }
         self.dirty = true;
     }

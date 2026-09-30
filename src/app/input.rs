@@ -3,7 +3,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use super::Screen;
-use super::action::{Action, BoardAction, CatalogAction, ProfileAction, UserAction};
+use super::action::{Action, BoardAction, CatalogAction, ListMove, ProfileAction, UserAction};
 use super::splash::SplashMenu;
 use crate::test::Status;
 
@@ -101,7 +101,21 @@ pub fn map_key(key: KeyEvent, ctx: InputContext) -> Action {
             KeyCode::Char(':') => Action::OpenCommandLine,
             _ => Action::Nop,
         },
-        Screen::Stats | Screen::Help => match key.code {
+        Screen::Stats => match key.code {
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Tab | KeyCode::Enter => Action::Back,
+            KeyCode::Char(':') => Action::OpenCommandLine,
+            KeyCode::Down | KeyCode::Char('j') => Action::History(ListMove::By(1)),
+            KeyCode::Up | KeyCode::Char('k') => Action::History(ListMove::By(-1)),
+            KeyCode::PageDown => Action::History(ListMove::Page(1)),
+            KeyCode::PageUp => Action::History(ListMove::Page(-1)),
+            KeyCode::Char('d') if ctrl => Action::History(ListMove::Page(1)),
+            KeyCode::Char('u') if ctrl => Action::History(ListMove::Page(-1)),
+            KeyCode::Home | KeyCode::Char('g') => Action::History(ListMove::Home),
+            KeyCode::End | KeyCode::Char('G') => Action::History(ListMove::End),
+            KeyCode::Char('?') => Action::ShowHelp,
+            _ => Action::Nop,
+        },
+        Screen::Help => match key.code {
             KeyCode::Esc | KeyCode::Char('q') | KeyCode::Tab | KeyCode::Enter => Action::Back,
             KeyCode::Char(':') => Action::OpenCommandLine,
             KeyCode::Down | KeyCode::Char('j') => Action::ScrollDown,

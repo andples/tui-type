@@ -6,6 +6,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
 use super::style::{Palette, content_column};
+use super::widgets::cursor;
 use crate::app::App;
 
 /// First row the command line and its suggestions occupy.
@@ -30,12 +31,16 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
     for (i, s) in cl.suggestions.iter().take(n).enumerate() {
         let y = bottom.y - n as u16 + i as u16;
         let selected = i == cl.selected;
-        let marker = if selected { "› " } else { "  " };
-        let label_style = if selected { p.selected() } else { p.fg() };
         let line = Line::from(vec![
-            Span::styled(marker, p.main()),
-            Span::styled(format!("{:<label_w$}", s.label), label_style),
-            Span::styled(format!("   {}", s.detail), p.sub()),
+            cursor::lead(p, selected),
+            Span::styled(
+                format!("{:<label_w$}", s.label),
+                cursor::style(p, selected, p.fg()),
+            ),
+            Span::styled(
+                format!("   {}", s.detail),
+                cursor::style(p, selected, p.sub()),
+            ),
         ]);
         frame.render_widget(
             Paragraph::new(line),

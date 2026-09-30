@@ -215,4 +215,31 @@ mod tests {
             .unwrap();
         assert_eq!(ensure(&pool, &langs, date).await.unwrap(), 1);
     }
+
+    #[tokio::test]
+    async fn every_daily_has_its_own_words() {
+        let pool = crate::db::open_memory().await;
+        let langs = LanguageRegistry::builtin();
+        let date = NaiveDate::from_ymd_opt(2026, 9, 29).unwrap();
+        ensure(&pool, &langs, date).await.unwrap();
+        let mut dailies = Vec::new();
+        for d in list(&pool, date).await.unwrap() {
+            dailies.push(get(&pool, d.id).await.unwrap().unwrap());
+        }
+        // Not the same seed stretched to each length: no daily opens with
+        // another's first ten words.
+        for (i, a) in dailies.iter().enumerate() {
+            for b in &dailies[i + 1..] {
+                assert_ne!(
+                    a.words[..10],
+                    b.words[..10],
+                    "{} {} and {} {} share a start",
+                    a.language,
+                    a.mode.label(),
+                    b.language,
+                    b.mode.label()
+                );
+            }
+        }
+    }
 }
