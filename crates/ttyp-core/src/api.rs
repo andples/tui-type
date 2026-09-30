@@ -163,34 +163,34 @@ pub struct Profile {
     pub bests: Vec<ProfileRun>,
     /// Latest valid runs, newest first.
     pub recent: Vec<ProfileRun>,
-    /// Top-three finishes on first-try boards of finished dailies, per
-    /// language. Absent from servers before 1.3.0.
+    /// Top-three finishes on first-try boards of finished dailies.
+    /// Absent from servers before 1.3.0.
     #[serde(default)]
-    pub badges: Vec<Badges>,
+    pub badges: Badges,
 }
 
-/// How often a player finished 1st, 2nd and 3rd on a language's dailies.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+/// The main dailies: medals are only awarded on these.
+pub const MEDAL_DAILIES: [(&str, Mode); 3] = [
+    ("english", Mode::Time(15)),
+    ("english", Mode::Time(30)),
+    ("english", Mode::Time(60)),
+];
+
+/// A player's top-three finishes on first-try boards of finished dailies:
+/// gold, silver and bronze on the main dailies (`MEDAL_DAILIES`), and
+/// every other daily's top-three finishes lumped together.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Badges {
-    pub language: String,
-    pub first: u32,
-    pub second: u32,
-    pub third: u32,
+    pub gold: u32,
+    pub silver: u32,
+    pub bronze: u32,
+    /// Top-three finishes on any other daily.
+    pub other: u32,
 }
 
 impl Badges {
-    pub fn total(&self) -> u32 {
-        self.first + self.second + self.third
-    }
-
-    /// Every language's badges added up.
-    pub fn sum<'a>(all: impl IntoIterator<Item = &'a Badges>) -> Badges {
-        all.into_iter().fold(Badges::default(), |acc, b| Badges {
-            language: String::new(),
-            first: acc.first + b.first,
-            second: acc.second + b.second,
-            third: acc.third + b.third,
-        })
+    pub fn medals(&self) -> u32 {
+        self.gold + self.silver + self.bronze
     }
 }
 

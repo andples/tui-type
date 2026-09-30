@@ -65,7 +65,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
         );
     }
 
-    // Badges: the sum, then each language.
+    // Medals, then the other dailies' top-three finishes.
     let badge_area = Rect::new(col.x, col.y + 4, col.width, 2);
     frame.render_widget(Paragraph::new(badge_lines(&profile.badges, p)), badge_area);
     let body = Rect::new(
@@ -116,38 +116,30 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
     hints::render(frame, area, col, p, "enter graph · ↑↓ move · esc back");
 }
 
-/// `badges  1st 3  2nd 1  3rd 0`, then `english 2·1·0  english_1k 1·0·0`.
-fn badge_lines(badges: &[Badges], p: &Palette) -> Vec<Line<'static>> {
-    let label = Span::styled("badges   ", p.sub());
-    if badges.is_empty() {
-        return vec![Line::from(vec![
-            label,
-            Span::styled(
-                "none yet · finish top 3 on a daily's first-try board",
-                p.sub(),
-            ),
-        ])];
-    }
-    let sum = Badges::sum(badges);
-    let total = Line::from(vec![
-        label,
-        Span::styled(format!("1st {}", sum.first), p.main_bold()),
-        Span::styled(format!("   2nd {}", sum.second), p.fg()),
-        Span::styled(format!("   3rd {}", sum.third), p.fg()),
-        Span::styled(format!("   ({} total)", sum.total()), p.sub()),
-    ]);
-    let mut per = vec![Span::raw("         ")];
-    for (i, b) in badges.iter().enumerate() {
-        if i > 0 {
-            per.push(Span::raw("   "));
-        }
-        per.push(Span::styled(format!("{} ", b.language), p.sub()));
-        per.push(Span::styled(
-            format!("{}·{}·{}", b.first, b.second, b.third),
-            p.fg(),
-        ));
-    }
-    vec![total, Line::from(per)]
+/// Medals from the main dailies (english time 15/30/60) on top; every
+/// other daily's top-three finishes as one number underneath.
+fn badge_lines(b: &Badges, p: &Palette) -> Vec<Line<'static>> {
+    let medal = |name: &str, n: u32, style| {
+        vec![
+            Span::styled(format!("{name} "), p.sub()),
+            Span::styled(n.to_string(), style),
+            Span::raw("    "),
+        ]
+    };
+    let mut top: Vec<Span> = [
+        medal("gold", b.gold, p.main_bold()),
+        medal("silver", b.silver, p.fg()),
+        medal("bronze", b.bronze, p.fg()),
+    ]
+    .concat();
+    top.push(Span::styled("english time 15 · 30 · 60", p.sub()));
+    let aside = match (b.medals(), b.other) {
+        (0, 0) => "no medals yet · finish top 3 on a first try to earn one".to_string(),
+        (_, 0) => String::new(),
+        (_, 1) => "+ 1 top-3 finish on other dailies".to_string(),
+        (_, n) => format!("+ {n} top-3 finishes on other dailies"),
+    };
+    vec![Line::from(top), Line::from(Span::styled(aside, p.sub()))]
 }
 
 /// One titled table of runs; `recent` adds the attempt column and puts the

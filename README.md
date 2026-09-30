@@ -211,10 +211,11 @@ ttyp. `:set server …` changes it live.
   `:user` alone shows yours. Profiles are private until you run
   `:account public on`; `:account` shows which it is. Leaderboards list your
   GitHub login either way.
-- Badges: finishing 1st, 2nd or 3rd on a daily's *first try* board earns a
-  badge once that daily's UTC day is over. They're counted per language, and
-  the profile shows the total and each language (`english 2·1·0` is two 1sts,
-  one 2nd, no 3rds).
+- Medals: the main dailies are `english` time 15, 30 and 60. Finishing 1st,
+  2nd or 3rd on one of their *first try* boards earns gold, silver or bronze
+  once that daily's UTC day is over; profiles show them at the top. A top-3
+  finish on any other daily adds to a single "other dailies" count shown
+  underneath.
 
 Daily runs also land in your local history, marked with the daily's id.
 Only daily results ever leave your machine.

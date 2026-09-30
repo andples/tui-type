@@ -6,7 +6,7 @@ use anyhow::Result;
 use chrono::NaiveDate;
 use sqlx::sqlite::{SqlitePool, SqliteRow};
 use sqlx::{AssertSqlSafe, Row};
-use ttyp_core::api::{Account, Badges, Profile, ProfileRun};
+use ttyp_core::api::{Account, Badges, MEDAL_DAILIES, Profile, ProfileRun};
 
 use crate::daily;
 use crate::leaderboard::{FIRST_TRY, RANK_ORDER};
@@ -112,34 +112,36 @@ pub async fn load(
 }
 
 /// Top-three places on the first-try board of every daily whose UTC day
-/// is over (so standings are final), per language. Ranked exactly like
-/// `leaderboard::page`'s first-try board.
-async fn badges(pool: &SqlitePool, user_id: i64, today: NaiveDate) -> Result<Vec<Badges>> {
-    let sql = format!(
+/// is over (so standings are final), ranked exactly like
+/// `leaderboard::page`'s first-try board: medals on the main dailies
+/// (`MEDAL_DAILIES`), one count for every other daily.
+async fn badges(pool: &SqlitePool, user_id: i64, today: NaiveDate) -> Result<Badges> {
+    let rows = sqlx::query(AssertSqlSafe(format!(
         "WITH ranked AS ( \
-           SELECT r.user_id, d.language, \
+           SELECT r.user_id, d.language, d.mode_kind, d.mode_value, \
                   ROW_NUMBER() OVER (PARTITION BY r.daily_id ORDER BY {RANK_ORDER}) AS rank \
            FROM results r JOIN daily_tests d ON d.id = r.daily_id \
            WHERE r.valid = 1 AND {FIRST_TRY} AND d.date < ?2) \
-         SELECT language, \
-                sum(rank = 1) AS first, sum(rank = 2) AS second, sum(rank = 3) AS third \
-         FROM ranked WHERE user_id = ?1 AND rank <= 3 \
-         GROUP BY language ORDER BY language"
-    );
-    let rows = sqlx::query(AssertSqlSafe(sql))
-        .bind(user_id)
-        .bind(today.to_string())
-        .fetch_all(pool)
-        .await?;
-    Ok(rows
-        .iter()
-        .map(|r| Badges {
-            language: r.get("language"),
-            first: r.get::<i64, _>("first") as u32,
-            second: r.get::<i64, _>("second") as u32,
-            third: r.get::<i64, _>("third") as u32,
-        })
-        .collect())
+         SELECT language, mode_kind, mode_value, rank FROM ranked \
+         WHERE user_id = ?1 AND rank <= 3"
+    )))
+    .bind(user_id)
+    .bind(today.to_string())
+    .fetch_all(pool)
+    .await?;
+    let mut b = Badges::default();
+    for row in &rows {
+        let language: String = row.get("language");
+        let mode = daily::mode_from(row.get("mode_kind"), row.get("mode_value"));
+        let main = mode.is_some_and(|m| MEDAL_DAILIES.contains(&(language.as_str(), m)));
+        match (main, row.get::<i64, _>("rank")) {
+            (true, 1) => b.gold += 1,
+            (true, 2) => b.silver += 1,
+            (true, _) => b.bronze += 1,
+            (false, _) => b.other += 1,
+        }
+    }
+    Ok(b)
 }
 
 fn run(row: &SqliteRow) -> Option<ProfileRun> {
@@ -191,14 +193,16 @@ mod tests {
             .unwrap();
     }
 
-    async fn daily(pool: &SqlitePool, id: i64, date: &str, language: &str) {
+    async fn daily(pool: &SqlitePool, id: i64, date: &str, language: &str, mode: (&str, i64)) {
         sqlx::query(
             "INSERT INTO daily_tests (id, date, language, mode_kind, mode_value, words, seed, source, created_at) \
-             VALUES (?1, ?2, ?3, 'time', 30, '[]', 0, 'test', ?2)",
+             VALUES (?1, ?2, ?3, ?4, ?5, '[]', 0, 'test', ?2)",
         )
         .bind(id)
         .bind(date)
         .bind(language)
+        .bind(mode.0)
+        .bind(mode.1)
         .execute(pool)
         .await
         .unwrap();
@@ -228,52 +232,48 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn badges_count_top_three_per_language_on_finished_dailies() {
+    async fn medals_on_the_main_dailies_and_one_count_for_the_rest() {
         let pool = crate::db::open_memory().await;
         for (id, login) in [(1, "ann"), (2, "bo"), (3, "cy"), (4, "di")] {
             user(&pool, id, login).await;
         }
-        daily(&pool, 1, "2026-09-29", "english").await;
-        daily(&pool, 2, "2026-09-29", "english_1k").await;
-        daily(&pool, 3, "2026-09-28", "english").await;
-        daily(&pool, 4, "2026-09-30", "english").await; // today: not final yet
-        // Yesterday, english: ann 1st, bo 2nd, cy 3rd, di 4th.
+        daily(&pool, 1, "2026-09-29", "english", ("time", 30)).await; // main
+        daily(&pool, 2, "2026-09-29", "english_1k", ("time", 30)).await; // other
+        daily(&pool, 3, "2026-09-28", "english", ("time", 15)).await; // main
+        daily(&pool, 5, "2026-09-28", "english", ("words", 25)).await; // other
+        daily(&pool, 4, "2026-09-30", "english", ("time", 60)).await; // today: not final
+        // english time 30: ann gold, bo silver, cy bronze, di nothing.
         for (u, wpm) in [(1, 100.0), (2, 90.0), (3, 80.0), (4, 70.0)] {
             result(&pool, u, 1, 1, wpm, true).await;
         }
         // A faster second attempt doesn't count: first tries only.
         result(&pool, 4, 1, 2, 200.0, true).await;
-        // Yesterday, english_1k: bo 1st, ann 2nd.
+        // english_1k: bo 1st, ann 2nd, both "other".
         result(&pool, 2, 2, 1, 95.0, true).await;
         result(&pool, 1, 2, 1, 85.0, true).await;
-        // Two days ago, english: ann 1st; cy's run never started, so it's
-        // not on the board and bo moves up to 2nd.
+        // english time 15: cy's run never started, so it's not on the
+        // board; ann gold, bo silver.
         result(&pool, 3, 3, 1, 150.0, false).await;
         result(&pool, 1, 3, 1, 99.0, true).await;
         result(&pool, 2, 3, 1, 50.0, true).await;
-        // Today: ann would be 1st, but the day isn't over.
+        // english words 25: cy 1st, "other".
+        result(&pool, 3, 5, 1, 70.0, true).await;
+        // Today: ann would win, but the day isn't over.
         result(&pool, 1, 4, 1, 120.0, true).await;
 
         let today = "2026-09-30".parse().unwrap();
-        let ann = badges(&pool, 1, today).await.unwrap();
-        let b = |language: &str, first, second, third| Badges {
-            language: language.into(),
-            first,
-            second,
-            third,
+        let b = |gold, silver, bronze, other| Badges {
+            gold,
+            silver,
+            bronze,
+            other,
         };
-        assert_eq!(ann, [b("english", 2, 0, 0), b("english_1k", 0, 1, 0)]);
-        assert_eq!(Badges::sum(&ann).total(), 3);
-        let bo = badges(&pool, 2, today).await.unwrap();
-        assert_eq!(bo, [b("english", 0, 2, 0), b("english_1k", 1, 0, 0)]);
-        assert_eq!(
-            badges(&pool, 3, today).await.unwrap(),
-            [b("english", 0, 0, 1)]
-        );
-        assert!(
-            badges(&pool, 4, today).await.unwrap().is_empty(),
-            "4th earns nothing"
-        );
+        let ann = badges(&pool, 1, today).await.unwrap();
+        assert_eq!(ann, b(2, 0, 0, 1));
+        assert_eq!(ann.medals(), 2);
+        assert_eq!(badges(&pool, 2, today).await.unwrap(), b(0, 2, 0, 1));
+        assert_eq!(badges(&pool, 3, today).await.unwrap(), b(0, 0, 1, 1));
+        assert_eq!(badges(&pool, 4, today).await.unwrap(), b(0, 0, 0, 0));
         let profile = load(&pool, "ann", None, today).await.unwrap().unwrap();
         assert_eq!(profile.badges, ann);
     }
