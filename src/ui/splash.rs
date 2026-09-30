@@ -119,10 +119,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
     }
     // The key line, centred like the rest of the screen.
     let hint = fitting(
-        &[
-            "or just start typing · : commands · ? help",
-            "or just start typing",
-        ],
+        &["any key to start · : commands · ? help", "any key to start"],
         col.width,
     );
     let (w, row) = centred(hint, area.bottom().saturating_sub(2));

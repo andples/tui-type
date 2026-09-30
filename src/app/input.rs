@@ -141,12 +141,9 @@ fn map_splash(key: KeyEvent, modified: bool, playing: bool, menu: SplashMenu) ->
         KeyCode::Tab => return Action::CloseSplash,
         KeyCode::Char(':') => return Action::OpenCommandLine,
         KeyCode::Char('?') => return Action::ShowHelp,
-        _ if playing => {
-            return match key.code {
-                KeyCode::Char(c) if c != ' ' => Action::TypeChar(c),
-                _ => Action::SkipIntro,
-            };
-        }
+        // Any letter just takes you to the words; it isn't typed.
+        KeyCode::Char(c) if playing && c != ' ' => return Action::CloseSplash,
+        _ if playing => return Action::SkipIntro,
         _ => {}
     }
     match (key.code, menu) {
@@ -154,7 +151,7 @@ fn map_splash(key: KeyEvent, modified: bool, playing: bool, menu: SplashMenu) ->
         (KeyCode::Char('d'), SplashMenu::LoggedIn) => Action::Daily,
         (KeyCode::Char('b'), SplashMenu::LoggedIn) => Action::ShowLeaderboard,
         (KeyCode::Enter | KeyCode::Esc | KeyCode::Char(' '), _) => Action::CloseSplash,
-        (KeyCode::Char(c), _) => Action::TypeChar(c),
+        (KeyCode::Char(_), _) => Action::CloseSplash,
         _ => Action::Nop,
     }
 }
@@ -340,17 +337,13 @@ mod tests {
     }
 
     #[test]
-    fn splash_intro_letters_start_the_test() {
+    fn splash_intro_letters_go_to_the_words() {
         use SplashMenu as M;
-        // The menu isn't showing yet: its letters are typing too.
-        assert_eq!(
-            splash(true, M::LoggedOut, KeyCode::Char('l')),
-            Action::TypeChar('l')
-        );
-        assert_eq!(
-            splash(true, M::LoggedIn, KeyCode::Char('d')),
-            Action::TypeChar('d')
-        );
+        // The menu isn't showing yet: any letter, menu letters included,
+        // just moves to the typing screen without being typed.
+        for (menu, c) in [(M::LoggedOut, 'l'), (M::LoggedIn, 'd'), (M::Offline, 'x')] {
+            assert_eq!(splash(true, menu, KeyCode::Char(c)), Action::CloseSplash);
+        }
         for code in [
             KeyCode::Enter,
             KeyCode::Esc,
@@ -372,10 +365,11 @@ mod tests {
         let ch = KeyCode::Char;
         assert_eq!(splash(false, M::LoggedOut, KeyCode::Enter), Action::Login);
         assert_eq!(splash(false, M::LoggedOut, ch('l')), Action::Login);
-        assert_eq!(splash(false, M::LoggedOut, ch('d')), Action::TypeChar('d'));
+        // A letter that isn't a menu key moves to the words, untyped.
+        assert_eq!(splash(false, M::LoggedOut, ch('d')), Action::CloseSplash);
         assert_eq!(splash(false, M::LoggedIn, ch('d')), Action::Daily);
         assert_eq!(splash(false, M::LoggedIn, ch('b')), Action::ShowLeaderboard);
-        assert_eq!(splash(false, M::LoggedIn, ch('l')), Action::TypeChar('l'));
+        assert_eq!(splash(false, M::LoggedIn, ch('l')), Action::CloseSplash);
         assert_eq!(
             splash(false, M::LoggedIn, KeyCode::Enter),
             Action::CloseSplash
@@ -384,7 +378,7 @@ mod tests {
             splash(false, M::Offline, KeyCode::Enter),
             Action::CloseSplash
         );
-        assert_eq!(splash(false, M::Offline, ch('l')), Action::TypeChar('l'));
+        assert_eq!(splash(false, M::Offline, ch('l')), Action::CloseSplash);
         assert_eq!(splash(false, M::Offline, ch('?')), Action::ShowHelp);
         assert_eq!(splash(false, M::Offline, KeyCode::Esc), Action::CloseSplash);
         assert_eq!(splash(false, M::Offline, KeyCode::Backspace), Action::Nop);

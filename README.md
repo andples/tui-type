@@ -41,12 +41,13 @@ second), then a few keys for where you might want to go:
 - logged in: `d` today's daily, `b` leaderboard, `tab` starts typing
 - offline (`server = ""`): `tab` starts typing, `?` help
 
-You never have to wait for it. Any other character starts the test with
-that character already typed, and while the intro is still playing every
-character does (the keys above aren't on screen yet, so they're typing
-too); other keys finish the intro. `esc`, `enter` (when not logging in) and
-`space` go to the typing screen, `:` opens the command line. Turn it off
-with `:set splash off` (`splash = false` in the config).
+You never have to wait for it: any other letter takes you straight to the
+words (it isn't typed, so the test starts with your next key). While the
+intro is still playing every letter does that, menu keys included, since
+they aren't on screen yet; other keys finish the intro. `esc`, `enter` (when
+not logging in) and `space` go to the typing screen too, `:` opens the
+command line. Turn it off with `:set splash off` (`splash = false` in the
+config).
 
 ## Commands
 
