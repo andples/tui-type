@@ -16,7 +16,9 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::config::{Config, FONT_SIZE_RANGE, LINES_RANGE, Pace, WORDS_PER_LINE_RANGE};
+use crate::config::{
+    Config, FONT_SIZE_RANGE, Keyboard, LINES_RANGE, Pace, PbEffect, WORDS_PER_LINE_RANGE,
+};
 use crate::test::mode::Mode;
 
 pub use menu::{Editor, ProfileMenu};
@@ -70,9 +72,12 @@ pub struct ProfileSettings {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub font: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub celebrate: Option<bool>,
+    #[serde(alias = "celebrate")]
+    pub pb_effect: Option<PbEffect>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pace: Option<Pace>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub keyboard: Option<Keyboard>,
     #[serde(skip_serializing_if = "ResultsSettings::is_empty")]
     pub results: ResultsSettings,
 }
@@ -107,6 +112,18 @@ impl Show for u8 {
 impl Show for Pace {
     fn show(&self) -> String {
         self.label()
+    }
+}
+
+impl Show for Keyboard {
+    fn show(&self) -> String {
+        self.label().into()
+    }
+}
+
+impl Show for PbEffect {
+    fn show(&self) -> String {
+        self.label().into()
     }
 }
 
@@ -216,7 +233,8 @@ settings! {
     Fullscreen, "fullscreen" => fullscreen;
     Font, "font" => font;
     Pace, "pace" => pace;
-    Celebrate, "celebrate" => celebrate;
+    PbEffect, "pb effect" => pb_effect;
+    Keyboard, "keyboard" => keyboard;
     ResultsChart, "results chart" => results.chart;
     ResultsBreakdown, "results breakdown" => results.char_breakdown;
     ResultsConsistency, "results consistency" => results.consistency;
@@ -310,13 +328,13 @@ pub struct Profile {
 /// Profile names double as file names, so keep them to a safe charset.
 pub fn validate_name(name: &str) -> Result<(), String> {
     if name.is_empty() {
-        return Err("profile needs a name".into());
+        return Err("config needs a name".into());
     }
     if name.len() > 32 {
-        return Err("profile name is too long (32 max)".into());
+        return Err("config name is too long (32 max)".into());
     }
     if !name.chars().all(is_name_char) {
-        return Err("profile names use letters, digits, - and _".into());
+        return Err("config names use letters, digits, - and _".into());
     }
     Ok(())
 }
@@ -368,7 +386,7 @@ impl ProfileRegistry {
                         },
                     );
                 }
-                Err(e) => warn(format!("profile {name}: {e}")),
+                Err(e) => warn(format!("config {name}: {e}")),
             }
         }
         reg
@@ -407,7 +425,7 @@ impl ProfileRegistry {
             return Err("pick at least one setting".into());
         }
         if replacing != Some(profile.name.as_str()) && self.profiles.contains_key(&profile.name) {
-            return Err(format!("profile `{}` already exists", profile.name));
+            return Err(format!("config `{}` already exists", profile.name));
         }
         let text = toml::to_string_pretty(&profile.settings).map_err(|e| e.to_string())?;
         fs::create_dir_all(&self.dir).map_err(|e| format!("{}: {e}", self.dir.display()))?;
@@ -449,7 +467,7 @@ impl ProfileRegistry {
     pub fn activate(&self, name: &str, config: &mut Config) -> Result<Vec<String>, String> {
         let profile = self
             .get(name)
-            .ok_or_else(|| format!("unknown profile `{name}`"))?;
+            .ok_or_else(|| format!("unknown config `{name}`"))?;
         let replaced: Vec<String> = self
             .conflicts(profile, &config.profiles)
             .into_iter()

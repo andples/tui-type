@@ -73,7 +73,8 @@ pub fn map_key(key: KeyEvent, ctx: InputContext) -> Action {
             KeyCode::Esc | KeyCode::Char(':') => Action::OpenCommandLine,
             KeyCode::Char('s') => Action::ShowStats,
             KeyCode::Char('?') => Action::ShowHelp,
-            KeyCode::Char('q') => Action::Quit,
+            // Back to the words, like `:q` here; quitting is from there.
+            KeyCode::Char('q') => Action::Restart,
             // Any other key just ends the confetti.
             _ if ctx.celebrating => Action::EndCelebration,
             _ => Action::Nop,

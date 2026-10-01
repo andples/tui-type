@@ -40,13 +40,13 @@ fn list(
     body: Rect,
 ) -> &'static str {
     let mut top = vec![
-        Line::from(Span::styled("profiles", p.main_bold())),
+        Line::from(Span::styled("configs", p.main_bold())),
         Line::default(),
     ];
     let reg = &app.profiles;
     if reg.is_empty() {
         top.push(Line::from(Span::styled(
-            "  no profiles yet — a profile saves any subset of your settings",
+            "  no configs yet — a config saves any subset of your settings",
             p.sub(),
         )));
         top.push(Line::default());
@@ -78,7 +78,7 @@ fn list(
             Row::new(vec![dot, name, Cell::dim(profile.settings.summary())])
         })
         .collect();
-    rows.push(Row::new(vec![Cell::dim("+ new profile").span(3)]));
+    rows.push(Row::new(vec![Cell::dim("+ new config").span(3)]));
 
     // Leave a blank line and one for the note below the table.
     let want = SelectTable::height_for(&columns, rows.len());
@@ -135,7 +135,7 @@ fn editor<'a>(
 ) -> (Vec<Line<'a>>, &'static str) {
     let title = match &e.original {
         Some(n) => format!("edit {n}"),
-        None => "new profile".into(),
+        None => "new config".into(),
     };
     let mut lines = vec![
         Line::from(Span::styled(title, p.main_bold())),

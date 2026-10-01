@@ -60,7 +60,7 @@ fn rgb(c: Color, fallback: Rgb) -> Rgb {
     }
 }
 
-fn to_glyph((ch, st): Cell, p: &Palette) -> Glyph {
+pub(super) fn to_glyph((ch, st): Cell, p: &Palette) -> Glyph {
     let fg = rgb(p.fg, [255; 3]);
     Glyph {
         ch,

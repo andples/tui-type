@@ -11,6 +11,9 @@ use rand::seq::IndexedRandom;
 
 /// Quiet time on the landing screen before the ghost starts typing.
 pub const IDLE_AFTER: Duration = Duration::from_secs(5);
+/// Quiet time on any other screen before ttyp goes back to the landing
+/// screen (only when `splash` is on and nothing is under way).
+pub const HOME_AFTER: Duration = Duration::from_secs(30);
 /// How long the crumble plays before the landing screen is back.
 pub const CRUMBLE: Duration = Duration::from_millis(1600);
 /// Frame interval while something moves.

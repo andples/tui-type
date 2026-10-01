@@ -119,6 +119,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
             table_bottom.saturating_sub(top.y + used),
         );
         let columns = [
+            Column::new("", Width::Fixed(1)),
             Column::new("when", Width::Fixed(11)),
             Column::new("mode", Width::Min(9)),
             Column::new("language", Width::Min(8)),
@@ -139,14 +140,26 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
                 if r.numbers {
                     mode.push_str(" n");
                 }
+                // Runs that don't count: marked, and their numbers dimmed.
+                let (mark, num): (Cell, fn(String) -> Cell) = if r.counts() {
+                    (Cell::dim(""), Cell::normal)
+                } else {
+                    (Cell::error("✗"), Cell::dim)
+                };
+                let wpm = format!("{:.0}", r.wpm);
                 Row::new(vec![
+                    mark,
                     Cell::dim(when),
                     Cell::normal(mode),
                     Cell::normal(r.language.clone()),
-                    Cell::accent(format!("{:.0}", r.wpm)),
-                    Cell::normal(format!("{:.0}", r.raw)),
-                    Cell::normal(format!("{:.0}%", r.acc)),
-                    Cell::normal(format!("{:.0}%", r.consistency)),
+                    if r.counts() {
+                        Cell::accent(wpm)
+                    } else {
+                        Cell::dim(wpm)
+                    },
+                    num(format!("{:.0}", r.raw)),
+                    num(format!("{:.0}%", r.acc)),
+                    num(format!("{:.0}%", r.consistency)),
                 ])
             })
             .collect();

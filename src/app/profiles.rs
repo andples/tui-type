@@ -82,7 +82,7 @@ impl App {
     fn toggle_profile(&mut self, name: &str) {
         if self.config.profiles.iter().any(|n| n == name) {
             self.config.profiles.retain(|n| n != name);
-            self.notify(format!("profile {name} off"));
+            self.notify(format!("config {name} off"));
             self.save_config();
         } else {
             self.activate_profile(name);
@@ -93,13 +93,13 @@ impl App {
     /// active profile that sets any of the same settings.
     pub(super) fn activate_profile(&mut self, name: &str) {
         let Some(profile) = self.profiles.get(name) else {
-            self.notify(format!("unknown profile `{name}`"));
+            self.notify(format!("unknown config `{name}`"));
             return;
         };
         let s = &profile.settings;
         if let Some(t) = s.theme.as_ref().filter(|t| self.themes.get(t).is_none()) {
             self.notify(format!(
-                "profile {name}: theme `{t}` isn't installed (:install {t})"
+                "config {name}: theme `{t}` isn't installed (:install {t})"
             ));
             return;
         }
@@ -109,7 +109,7 @@ impl App {
             .filter(|l| self.languages.get(l).is_none())
         {
             self.notify(format!(
-                "profile {name}: language `{l}` isn't installed (:install {l})"
+                "config {name}: language `{l}` isn't installed (:install {l})"
             ));
             return;
         }
@@ -122,10 +122,10 @@ impl App {
             }
         };
         if replaced.is_empty() {
-            self.notify(format!("profile {name} on"));
+            self.notify(format!("config {name} on"));
         } else {
             self.notify(format!(
-                "profile {name} on · replaced {}",
+                "config {name} on · replaced {}",
                 replaced.join(", ")
             ));
         }
@@ -176,7 +176,7 @@ impl App {
             }
             self.activate_profile(&name);
         } else {
-            self.notify(format!("profile {name} saved"));
+            self.notify(format!("config {name} saved"));
         }
     }
 
@@ -198,7 +198,7 @@ impl App {
             selected.set_len(len + 1);
             selected.select(selected.selected.min(len.saturating_sub(1)));
         }
-        self.notify(format!("profile {name} deleted"));
+        self.notify(format!("config {name} deleted"));
         self.save_config();
     }
 

@@ -2,6 +2,7 @@
 //! only implementation today appends JSON lines to a local file.
 
 pub mod activity;
+pub mod validity;
 
 use std::collections::HashMap;
 use std::fs::{self, OpenOptions};
@@ -15,6 +16,7 @@ use crate::test::mode::Mode;
 use crate::test::{CharCounts, Metrics};
 
 pub use activity::Activity;
+pub use validity::Invalid;
 
 #[derive(Debug, thiserror::Error)]
 pub enum StatsError {
@@ -64,11 +66,15 @@ pub struct TestRecord {
     /// The server's daily this run was for (schema 2; absent before).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub daily_id: Option<i64>,
+    /// Why the run doesn't count (schema 3; absent when it does). Kept in
+    /// the history, left out of bests, pace and the stats.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub invalid: Option<Invalid>,
 }
 
 impl TestRecord {
-    /// 1: initial. 2: optional `daily_id`.
-    pub const SCHEMA: u8 = 2;
+    /// 1: initial. 2: optional `daily_id`. 3: optional `invalid`.
+    pub const SCHEMA: u8 = 3;
 
     pub fn new(
         metrics: &Metrics,
@@ -91,7 +97,13 @@ impl TestRecord {
             chars: metrics.chars.into(),
             duration_s: metrics.duration.as_secs_f64(),
             daily_id: None,
+            invalid: validity::check(metrics),
         }
+    }
+
+    /// The run counts towards bests, pace and the stats.
+    pub fn counts(&self) -> bool {
+        self.invalid.is_none()
     }
 }
 
@@ -188,6 +200,8 @@ pub struct Summary {
 
 impl Summary {
     pub fn from_records(records: &[TestRecord]) -> Self {
+        let records: Vec<TestRecord> = records.iter().filter(|r| r.counts()).cloned().collect();
+        let records = records.as_slice();
         let n = records.len();
         if n == 0 {
             return Self::default();
@@ -219,7 +233,7 @@ impl Summary {
 pub fn personal_best(records: &[TestRecord], mode: Mode, language: &str) -> Option<f64> {
     records
         .iter()
-        .filter(|r| r.mode == mode && r.language == language)
+        .filter(|r| r.counts() && r.mode == mode && r.language == language)
         .map(|r| r.wpm)
         .fold(None, |acc, w| Some(acc.map_or(w, |a: f64| a.max(w))))
 }
@@ -248,6 +262,7 @@ mod tests {
             },
             duration_s: 30.0,
             daily_id: None,
+            invalid: None,
         }
     }
 

@@ -10,6 +10,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::test::mode::Mode;
 
+mod keyboard;
+pub use keyboard::Keyboard;
+
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
     #[error("could not read {path}: {source}")]
@@ -132,11 +135,15 @@ pub struct Config {
     /// Play the short landing screen (logo, login/daily hints) on start.
     /// Not a profile setting.
     pub splash: bool,
-    /// Throw a short burst of confetti on the results screen when a test
-    /// sets a new personal best.
-    pub celebrate: bool,
+    /// What the results screen does when a test sets a new personal best:
+    /// confetti, a trophy by the score, both or neither. Older files'
+    /// `celebrate = true/false` read as both/off.
+    #[serde(alias = "celebrate")]
+    pub pb_effect: PbEffect,
     /// The pace caret (see `Pace`).
     pub pace: Pace,
+    /// The layout the results screen's missed-keys keyboard is drawn in.
+    pub keyboard: Keyboard,
 }
 
 /// How font sizes above 1 are drawn. Only set in the config file; there is
@@ -160,6 +167,78 @@ impl Graphics {
             "off" | "blocks" => Ok(Graphics::Off),
             _ => Err(format!("expected kitty or off, got `{s}`")),
         }
+    }
+}
+
+/// The new-best effect on the results screen. In the config a word, or a
+/// bool from before there was a choice.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(try_from = "PbEffectValue", into = "PbEffectValue")]
+pub enum PbEffect {
+    Off,
+    Confetti,
+    Trophy,
+    #[default]
+    Both,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(untagged)]
+enum PbEffectValue {
+    Flag(bool),
+    Name(String),
+}
+
+impl TryFrom<PbEffectValue> for PbEffect {
+    type Error = String;
+    fn try_from(v: PbEffectValue) -> Result<Self, String> {
+        match v {
+            PbEffectValue::Flag(true) => Ok(PbEffect::Both),
+            PbEffectValue::Flag(false) => Ok(PbEffect::Off),
+            PbEffectValue::Name(s) => PbEffect::parse(&s),
+        }
+    }
+}
+
+impl From<PbEffect> for PbEffectValue {
+    fn from(e: PbEffect) -> Self {
+        PbEffectValue::Name(e.label().into())
+    }
+}
+
+impl PbEffect {
+    pub const ALL: [PbEffect; 4] = [
+        PbEffect::Both,
+        PbEffect::Confetti,
+        PbEffect::Trophy,
+        PbEffect::Off,
+    ];
+
+    pub fn parse(s: &str) -> Result<Self, String> {
+        match s.trim() {
+            "both" | "on" | "true" | "yes" | "all" => Ok(PbEffect::Both),
+            "confetti" => Ok(PbEffect::Confetti),
+            "trophy" => Ok(PbEffect::Trophy),
+            "off" | "false" | "no" | "none" => Ok(PbEffect::Off),
+            _ => Err(format!("expected both, confetti, trophy or off, got `{s}`")),
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            PbEffect::Off => "off",
+            PbEffect::Confetti => "confetti",
+            PbEffect::Trophy => "trophy",
+            PbEffect::Both => "both",
+        }
+    }
+
+    pub fn confetti(self) -> bool {
+        matches!(self, PbEffect::Confetti | PbEffect::Both)
+    }
+
+    pub fn trophy(self) -> bool {
+        matches!(self, PbEffect::Trophy | PbEffect::Both)
     }
 }
 
@@ -470,8 +549,9 @@ impl Default for Config {
             catalog: None,
             daily_lock: true,
             splash: true,
-            celebrate: true,
+            pb_effect: PbEffect::Both,
             pace: Pace::Off,
+            keyboard: Keyboard::Qwerty,
         }
     }
 }
@@ -534,8 +614,9 @@ impl Config {
             "zen" => self.zen = parse_bool(value)?,
             "daily_lock" => self.daily_lock = parse_bool(value)?,
             "splash" => self.splash = parse_bool(value)?,
-            "celebrate" => self.celebrate = parse_bool(value)?,
+            "pb_effect" | "pbeffect" | "celebrate" => self.pb_effect = PbEffect::parse(value)?,
             "pace" => self.pace = Pace::parse(value)?,
+            "keyboard" | "layout" => self.keyboard = Keyboard::parse(value)?,
             "fullscreen" | "full" => self.fullscreen = parse_bool(value)?,
             "lines" => self.set_lines(parse_range(value, LINES_RANGE)?),
             "font" => self.font = value.to_string(),
@@ -821,12 +902,25 @@ mod tests {
     }
 
     #[test]
-    fn celebrate_and_keys_default_on() {
+    fn pb_effect_and_keys_default_on() {
         let old = Config::parse("theme = \"default\"\n[results]\nchart = false\n").unwrap();
-        assert!(old.celebrate && old.results.keys, "older files get them");
+        assert!(
+            old.pb_effect == PbEffect::Both && old.results.keys,
+            "older files get them"
+        );
+        let off = Config::parse("celebrate = false\n").unwrap();
+        assert_eq!(off.pb_effect, PbEffect::Off, "the old bool still reads");
+        let on = Config::parse("celebrate = true\n").unwrap();
+        assert_eq!(on.pb_effect, PbEffect::Both);
+        let trophy = Config::parse("pb_effect = \"trophy\"\n").unwrap();
+        assert_eq!(trophy.pb_effect, PbEffect::Trophy);
+        let text = toml::to_string_pretty(&trophy).unwrap();
+        assert!(text.contains("pb_effect = \"trophy\""), "{text}");
         let mut c = Config::default();
         c.set("celebrate", "off").unwrap();
-        assert!(!c.celebrate);
+        assert_eq!(c.pb_effect, PbEffect::Off);
+        c.set("pb_effect", "confetti").unwrap();
+        assert!(c.pb_effect.confetti() && !c.pb_effect.trophy());
         c.set("results.keys", "off").unwrap();
         assert!(!c.results.keys);
         assert_eq!(c.results.get("keys"), Some(false));

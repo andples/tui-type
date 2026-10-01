@@ -3,7 +3,7 @@
 //! one-row text logo when no block size fits. When nobody types for a
 //! while, the screensaver (`app::idle`) takes over the same space.
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use ratatui::Frame;
 use ratatui::buffer::Buffer;
@@ -12,17 +12,20 @@ use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
-use super::bigtext;
 use super::style::{Palette, content_column, vcenter};
 use super::widgets::cursor;
+use super::{bigtext, typing};
 use crate::app::App;
 use crate::app::idle::{CRUMBLE, GhostFrame, IdleView};
 use crate::app::splash::LOGO;
-use crate::config::{BlockSet, FontSize};
+use crate::config::{BlockSet, FONT_SIZE_RANGE, FontSize};
+use crate::gfx::ImageLine;
 
 const TAGLINE: &str = "a minimal typing test for the terminal";
 /// Tallest logo, in rows, fullscreen or not: calm, not a billboard.
 const LOGO_ROWS: u16 = 8;
+/// How many font sizes above the typing text the screensaver draws.
+const IDLE_GROW: u8 = 3;
 
 /// The largest block size at which the logo (plus a caret slot) fits in
 /// `width` × `rows`; `None` when only the terminal font does.
@@ -43,7 +46,9 @@ fn text_size(slots: u16, width: u16, rows: u16) -> Option<FontSize> {
         })
 }
 
-pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
+/// Draws the landing screen. Returns the screensaver's text as real-font
+/// images when the terminal shows them (empty otherwise).
+pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) -> Vec<ImageLine> {
     let state = app.splash_frame();
     let items = app.splash_menu().items();
     let col = if app.config.fullscreen {
@@ -74,8 +79,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
         show_menu = false;
     }
     if let Some(view) = app.idle.view_at(Instant::now()) {
-        draw_idle(frame, usable, col, &view, p);
-        return;
+        return draw_idle(frame, app, usable, col, &view, p);
     }
     let below = below(show_tagline, show_menu);
     let size = logo_size(
@@ -91,7 +95,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
         None => draw_text_logo(frame, logo_area, state.letters, p),
     }
     if !state.done {
-        return;
+        return Vec::new();
     }
 
     let centred = |text: &'static str, y: u16| {
@@ -110,7 +114,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
         y += 2;
     }
     if !show_menu {
-        return;
+        return Vec::new();
     }
     y += 1;
     // `› label   key`: the selection look follows the cursor (enter runs
@@ -146,6 +150,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
     );
     let (w, row) = centred(hint, area.bottom().saturating_sub(2));
     frame.render_widget(w, row);
+    Vec::new()
 }
 
 /// The first of `options` that fits in `width` columns, else nothing.
@@ -172,19 +177,91 @@ fn draw_big_logo(frame: &mut Frame, area: Rect, size: FontSize, letters: usize, 
     bigtext::draw_glyph(buf, clip, caret_x, area.y, '|', p.main(), size);
 }
 
-/// The screensaver: the ghost's phrase in the big font, or that frame
-/// falling apart.
-fn draw_idle(frame: &mut Frame, usable: Rect, col: Rect, view: &IdleView, p: &Palette) {
+/// The screensaver's text size: the typing screen's font a few sizes up,
+/// as large as fits `slots` glyphs in `width` × `rows`.
+fn idle_size(app: &App, slots: u16, width: u16, rows: u16) -> FontSize {
+    let top = (app.config.font_size + IDLE_GROW).min(FONT_SIZE_RANGE.1);
+    (FONT_SIZE_RANGE.0..=top)
+        .rev()
+        .map(FontSize::from_level)
+        .find(|f| f.cell_dims().1 <= rows && app.glyph_cols(*f) * slots as f32 <= width as f32)
+        .unwrap_or(FontSize::from_level(1))
+}
+
+/// The ghost's cells, styled like the typing screen: typed letters, a typo
+/// in the error colour, the block caret, then the rest dimmed.
+fn ghost_cells(g: &GhostFrame, p: &Palette) -> Vec<(char, Style)> {
+    let chars: Vec<char> = g.phrase.chars().collect();
+    let caret = g.typed + usize::from(g.wrong.is_some());
+    (0..=chars.len())
+        .map(|i| {
+            if i < g.typed {
+                (chars[i], p.correct())
+            } else if i == g.typed && g.wrong.is_some() {
+                (g.wrong.unwrap_or(' '), p.error())
+            } else if i == caret {
+                (chars.get(i).copied().unwrap_or(' '), p.caret())
+            } else {
+                (chars.get(i).copied().unwrap_or(' '), p.sub())
+            }
+        })
+        .collect()
+}
+
+/// When glyph or cell `h` lets go in the crumble and where it has got to
+/// `t` in: (seconds falling, rows fallen, columns drifted); `None` while it
+/// still hangs on.
+fn crumble_at(h: u32, t: Duration) -> Option<(f32, f32, f32)> {
+    let delay = (h % 450) as f32 / 1000.0;
+    let s = t.as_secs_f32() - delay;
+    if s <= 0.0 {
+        return None;
+    }
+    let drift = ((h >> 9) % 5) as f32 - 2.0;
+    Some((s, 0.5 * 60.0 * s * s, drift * s * 2.5))
+}
+
+/// Dimmed once a falling piece is well on its way.
+fn crumble_faded(s: f32) -> bool {
+    s > CRUMBLE.as_secs_f32() * 0.3
+}
+
+/// The screensaver: the ghost's phrase drawn like the typing text, a few
+/// sizes larger, or that frame falling apart. Real-font images when the
+/// terminal shows them, else the same cells the typing screen would use.
+fn draw_idle(
+    frame: &mut Frame,
+    app: &App,
+    usable: Rect,
+    col: Rect,
+    view: &IdleView,
+    p: &Palette,
+) -> Vec<ImageLine> {
     let (ghost, t) = match view {
         IdleView::Typing(g) => (g, None),
         IdleView::Crumbling { frame, t } => (frame, Some(*t)),
     };
-    let slots = ghost.phrase.chars().count() as u16 + 1;
-    let size = text_size(slots, col.width, usable.height.min(LOGO_ROWS));
-    let h = size.map_or(1, |f| f.cell_dims().1);
-    let row = vcenter(Rect::new(col.x, usable.y, col.width, usable.height), h);
+    let cells = ghost_cells(ghost, p);
+    let slots = cells.len() as u16;
+    let size = idle_size(app, slots, col.width, usable.height);
+    let (gw, gh) = size.cell_dims();
+    let row = vcenter(Rect::new(col.x, usable.y, col.width, usable.height), gh);
+    if app.gfx.metrics(size).is_some() {
+        return idle_images(frame.area(), app, size, row, &cells, t, p);
+    }
+    let width = slots * gw;
+    let x0 = row.x + row.width.saturating_sub(width) / 2;
     let mut scratch = Buffer::empty(row);
-    paint_ghost(&mut scratch, size, ghost, p);
+    for (i, (ch, style)) in cells.iter().enumerate() {
+        let x = x0 + i as u16 * gw;
+        if size.is_native() {
+            if let Some(c) = scratch.cell_mut((x, row.y)) {
+                c.set_char(*ch).set_style(*style);
+            }
+        } else {
+            bigtext::draw_glyph(&mut scratch, row, x, row.y, *ch, *style, size);
+        }
+    }
     let screen = frame.area();
     let buf = frame.buffer_mut();
     for y in row.top()..row.bottom() {
@@ -193,26 +270,15 @@ fn draw_idle(frame: &mut Frame, usable: Rect, col: Rect, view: &IdleView, p: &Pa
             if cell.symbol() == " " && cell.bg == Color::Reset {
                 continue;
             }
-            let Some(t) = t else {
+            // Each piece lets go after its own delay, then falls and
+            // drifts a little, dimming as it goes.
+            let Some((s, fall, drift)) = t.and_then(|t| crumble_at(hash(x, y), t)) else {
                 if let Some(c) = buf.cell_mut((x, y)) {
                     *c = cell.clone();
                 }
                 continue;
             };
-            // Each piece lets go after its own delay, then falls and
-            // drifts a little, dimming as it goes.
-            let h = hash(x, y);
-            let delay = (h % 450) as f32 / 1000.0;
-            let s = t.as_secs_f32() - delay;
-            if s <= 0.0 {
-                if let Some(c) = buf.cell_mut((x, y)) {
-                    *c = cell.clone();
-                }
-                continue;
-            }
-            let fall = 0.5 * 60.0 * s * s;
-            let drift = ((h >> 9) % 5) as f32 - 2.0;
-            let (nx, ny) = (x as f32 + drift * s * 2.5, y as f32 + fall);
+            let (nx, ny) = (x as f32 + drift, y as f32 + fall);
             if nx < screen.left() as f32
                 || ny >= screen.bottom() as f32
                 || nx >= screen.right() as f32
@@ -220,13 +286,13 @@ fn draw_idle(frame: &mut Frame, usable: Rect, col: Rect, view: &IdleView, p: &Pa
                 continue;
             }
             const CRUMBS: [char; 7] = ['▘', '▝', '▖', '▗', '▪', '·', '.'];
-            let crumb = CRUMBS[(h >> 4) as usize % CRUMBS.len()];
+            let crumb = CRUMBS[(hash(x, y) >> 4) as usize % CRUMBS.len()];
             let colour = if cell.bg != Color::Reset {
                 cell.bg
             } else {
                 cell.fg
             };
-            let style = if s > CRUMBLE.as_secs_f32() * 0.3 {
+            let style = if crumble_faded(s) {
                 p.sub()
             } else {
                 Style::default().fg(colour)
@@ -236,45 +302,56 @@ fn draw_idle(frame: &mut Frame, usable: Rect, col: Rect, view: &IdleView, p: &Pa
             }
         }
     }
+    Vec::new()
 }
 
-/// The ghost's frame into `buf`: typed letters, a typo in the error
-/// colour, the block caret, then the rest dimmed; centred.
-fn paint_ghost(buf: &mut Buffer, size: Option<FontSize>, g: &GhostFrame, p: &Palette) {
-    let area = buf.area;
-    let chars: Vec<char> = g.phrase.chars().collect();
-    let caret = g.typed + usize::from(g.wrong.is_some());
-    let styled = |i: usize| -> (char, Style) {
-        if i < g.typed {
-            (chars[i], p.fg())
-        } else if i == g.typed && g.wrong.is_some() {
-            (g.wrong.unwrap_or(' '), p.error())
-        } else if i == caret {
-            (chars.get(i).copied().unwrap_or(' '), p.caret())
-        } else {
-            (chars.get(i).copied().unwrap_or(' '), p.sub())
+/// The ghost as real-font images, centred in `row`. Crumbling, each letter
+/// drops out of the line as its own image and falls off the screen.
+fn idle_images(
+    screen: Rect,
+    app: &App,
+    size: FontSize,
+    row: Rect,
+    cells: &[(char, Style)],
+    t: Option<Duration>,
+    p: &Palette,
+) -> Vec<ImageLine> {
+    let gc = app.glyph_cols(size);
+    let width = (gc * cells.len() as f32).ceil() as u16;
+    let x0 = row.x + row.width.saturating_sub(width) / 2;
+    let mut line = Vec::with_capacity(cells.len());
+    let mut images = Vec::new();
+    for (i, (ch, style)) in cells.iter().enumerate() {
+        let fallen = t.and_then(|t| crumble_at(hash(i as u16, 0), t));
+        let Some((s, fall, drift)) = fallen else {
+            line.push(typing::to_glyph((*ch, *style), p));
+            continue;
+        };
+        // Its place in the line stays, empty.
+        line.push(typing::to_glyph((' ', p.sub()), p));
+        let x = x0 as f32 + i as f32 * gc + drift;
+        let y = row.y as f32 + fall;
+        let (gh, gw) = (row.height as f32, gc.ceil());
+        if x < screen.left() as f32
+            || x + gw > screen.right() as f32
+            || y + gh > screen.bottom() as f32
+        {
+            continue;
         }
-    };
-    let slots = chars.len() + 1;
-    match size {
-        Some(f) => {
-            let (gw, _) = f.cell_dims();
-            let x0 = area.x + area.width.saturating_sub(gw * slots as u16) / 2;
-            for i in 0..slots {
-                let (ch, style) = styled(i);
-                bigtext::draw_glyph(buf, area, x0 + i as u16 * gw, area.y, ch, style, f);
-            }
-        }
-        None => {
-            let x0 = area.x + area.width.saturating_sub(slots as u16) / 2;
-            for i in 0..slots {
-                let (ch, style) = styled(i);
-                if let Some(c) = buf.cell_mut((x0 + i as u16, area.y)) {
-                    c.set_char(ch).set_style(style);
-                }
-            }
-        }
+        let style = if crumble_faded(s) { p.sub() } else { *style };
+        images.push(ImageLine {
+            area: Rect::new(x as u16, y as u16, gw as u16, row.height),
+            glyphs: vec![typing::to_glyph((*ch, style), p)],
+        });
     }
+    images.insert(
+        0,
+        ImageLine {
+            area: Rect::new(x0, row.y, width, row.height),
+            glyphs: line,
+        },
+    );
+    images
 }
 
 /// A cheap, stable scramble of a cell position.

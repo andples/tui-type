@@ -65,7 +65,7 @@ pub fn target_wpm(pace: Pace, records: &[TestRecord], mode: Mode, language: &str
         Pace::Last => records
             .iter()
             .rev()
-            .find(|r| r.mode == mode && r.language == language)
+            .find(|r| r.counts() && r.mode == mode && r.language == language)
             .map(|r| r.wpm),
     }
     .filter(|w| *w > 0.0)
@@ -151,6 +151,7 @@ mod tests {
             },
             duration_s: 30.0,
             daily_id: None,
+            invalid: None,
         }
     }
 

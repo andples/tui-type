@@ -30,12 +30,11 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
     let daily_h: u16 = u16::from(outcome.daily.is_some());
     let total = 2 + 1 + 1 + daily_h + if cfg.chart { 1 + chart_h } else { 0 } + 1 + 1;
     // The keyboard goes first when the terminal is too short for it.
-    let numbers = outcome.misses.on_number_row();
-    let (kb_w, kb_h) = misses::layout_size(numbers);
-    let show_keys = cfg.keys
-        && outcome.misses.total() > 0
-        && total + 2 + kb_h <= area.height
-        && kb_w <= col.width;
+    let keys = outcome.misses.on(app.config.keyboard);
+    let numbers = keys.on_number_row();
+    let (kb_w, kb_h) = misses::layout_size(keys.keyboard, numbers);
+    let show_keys =
+        cfg.keys && keys.total() > 0 && total + 2 + kb_h <= area.height && kb_w <= col.width;
     let total = total + if show_keys { 2 + kb_h } else { 0 };
     let block = vcenter(col, total);
 
@@ -60,6 +59,9 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
     let rows = Layout::vertical(constraints).split(block);
 
     render_headline(frame, outcome, rows[0], p);
+    if outcome.is_pb && app.config.pb_effect.trophy() {
+        render_trophy(frame, trophy_at(outcome, rows[0]), p);
+    }
     render_detail(frame, app, outcome, rows[2], p);
     let mut next = 3;
     if let Some(d) = &outcome.daily {
@@ -79,7 +81,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
         next += 2;
     }
     if show_keys {
-        render_keys(frame, &outcome.misses, rows[next + 1], p);
+        render_keys(frame, &keys, rows[next + 1], p);
     }
     let hint = "tab  next   ·   s  stats   ·   :  command";
     frame.render_widget(Paragraph::new(hint).style(p.sub()), rows[rows.len() - 1]);
@@ -143,7 +145,7 @@ fn render_confetti(
     }
 }
 
-/// `missed keys  e 4 · t 2` over a QWERTY keyboard shaded by misses.
+/// `missed keys  e 4 · t 2` over the configured keyboard shaded by misses.
 fn render_keys(frame: &mut Frame, m: &KeyMisses, area: Rect, p: &Palette) {
     let mut label = vec![Span::styled("missed keys", p.sub())];
     let mut worst: Vec<(String, u32)> = m
@@ -165,7 +167,7 @@ fn render_keys(frame: &mut Frame, m: &KeyMisses, area: Rect, p: &Palette) {
     );
     let max = m.max();
     let buf = frame.buffer_mut();
-    for (k, x, y) in misses::layout(m.on_number_row()) {
+    for (k, x, y) in misses::layout(m.keyboard, m.on_number_row()) {
         let style = match misses::heat(m.get(k), max) {
             0 => p.sub(),
             1 => Style::default().fg(p.error_extra),
@@ -182,9 +184,29 @@ fn render_keys(frame: &mut Frame, m: &KeyMisses, area: Rect, p: &Palette) {
     }
 }
 
+/// A two-row trophy, cup over its stand, drawn after "new best".
+const TROPHY: [&str; 2] = ["╰█╯", "▗▀▖"];
+
+/// Top left of the trophy: two columns past the "new best" text.
+fn trophy_at(o: &Outcome, headline: Rect) -> Rect {
+    let acc = format!("{:.0}%", o.metrics.accuracy);
+    let x = headline.x + 8 + 3 + acc.chars().count() as u16 + "  new best".len() as u16 + 2;
+    Rect::new(x, headline.y, 3, 2).intersection(headline)
+}
+
+fn render_trophy(frame: &mut Frame, area: Rect, p: &Palette) {
+    let style = p.main_bold();
+    let lines: Vec<Line> = TROPHY.iter().map(|r| Line::styled(*r, style)).collect();
+    frame.render_widget(Paragraph::new(lines), area);
+}
+
 fn render_headline(frame: &mut Frame, o: &Outcome, area: Rect, p: &Palette) {
     let m = &o.metrics;
-    let pb = if o.is_pb { "  new best" } else { "" };
+    let (note, note_style) = match o.record.invalid {
+        Some(why) => (format!("  invalid · {}", why.label()), p.error()),
+        None if o.is_pb => ("  new best".to_string(), p.main()),
+        None => (String::new(), p.main()),
+    };
     let label = Line::from(vec![
         Span::styled("wpm", p.sub()),
         Span::raw("        "),
@@ -194,7 +216,7 @@ fn render_headline(frame: &mut Frame, o: &Outcome, area: Rect, p: &Palette) {
         Span::styled(format!("{:<8}", format!("{:.0}", m.wpm)), p.main_bold()),
         Span::raw("   "),
         Span::styled(format!("{:.0}%", m.accuracy), p.main_bold()),
-        Span::styled(pb, p.main()),
+        Span::styled(note, note_style),
     ]);
     frame.render_widget(Paragraph::new(vec![label, value]), area);
 }

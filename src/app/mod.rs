@@ -17,7 +17,7 @@ use std::io::Write;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
-use crossterm::event::{self, Event};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::DefaultTerminal;
 use ratatui::layout::Rect;
 
@@ -39,7 +39,7 @@ use action::{Action, ListMove};
 use celebrate::Celebration;
 use idle::Screensaver;
 use input::InputContext;
-use misses::KeyMisses;
+use misses::Misses;
 use splash::Splash;
 use ttyp_core::api::{Daily, ResultDetail, SubmitResponse};
 
@@ -120,8 +120,8 @@ pub struct Outcome {
     /// Set when the run was a daily: how the submission is going.
     pub daily: Option<DailyOutcome>,
     /// The keys this run went wrong on, for the keyboard heatmap.
-    pub misses: KeyMisses,
-    /// The new-best confetti (`celebrate = true`), while it plays.
+    pub misses: Misses,
+    /// The new-best confetti (`pb_effect` both or confetti), while it plays.
     pub celebration: Option<Celebration>,
 }
 
@@ -190,6 +190,8 @@ pub struct App {
     pub splash: Option<Splash>,
     /// The landing screen's screensaver.
     pub idle: Screensaver,
+    /// The last key anywhere, for the go-home timeout (`idle::HOME_AFTER`).
+    last_input: Instant,
     pub should_quit: bool,
     pub gfx: Gfx,
     /// Present only when `server` is configured.
@@ -250,7 +252,7 @@ impl App {
         let dropped = profiles.reconcile(&mut config);
         if !dropped.is_empty() {
             warnings.push(format!(
-                "profile {} no longer matches the config, deselected",
+                "config {} no longer matches your settings, deselected",
                 dropped.join(", ")
             ));
             if let Err(e) = config.save(&paths.config_file) {
@@ -322,6 +324,7 @@ impl App {
             history: Selection::clamped(0),
             splash,
             idle: Screensaver::new(Instant::now()),
+            last_input: Instant::now(),
             should_quit: false,
             gfx,
             online,
@@ -405,7 +408,7 @@ impl App {
     }
 
     /// Average terminal columns one character of the typing text takes.
-    fn glyph_cols(&self, font: FontSize) -> f32 {
+    pub fn glyph_cols(&self, font: FontSize) -> f32 {
         match self.gfx.metrics(font) {
             Some(m) => self.gfx.mean_advance(m.geom.px) / m.cell_w as f32,
             None => font.cell_dims().0 as f32,
@@ -523,6 +526,14 @@ impl App {
             (Some(a), Some(b)) => Some(a.min(b)),
             (a, b) => a.or(b),
         };
+        let rest = if self.home_allowed() {
+            let home = idle::HOME_AFTER
+                .saturating_sub(self.last_input.elapsed())
+                .max(Duration::from_millis(1));
+            Some(rest.map_or(home, |r| r.min(home)))
+        } else {
+            rest
+        };
         if !self.idle_allowed() {
             return rest;
         }
@@ -626,6 +637,12 @@ impl App {
 
     pub fn dispatch(&mut self, action: Action) {
         self.fresh_notice = false;
+        if !matches!(
+            action,
+            Action::Tick | Action::Nop | Action::Redraw | Action::IdleWake
+        ) {
+            self.last_input = Instant::now();
+        }
         // Any key on the landing screen starts its quiet time over.
         if self.screen == Screen::Splash
             && !matches!(
@@ -649,6 +666,11 @@ impl App {
             Action::Nop => return,
             Action::Tick => {
                 let now = Instant::now();
+                if self.home_allowed()
+                    && now.saturating_duration_since(self.last_input) >= idle::HOME_AFTER
+                {
+                    self.go_home(now);
+                }
                 if self.idle_allowed() {
                     let lang = self.languages.get_or_default(&self.config.language);
                     self.idle.tick(now, || &lang.words);
@@ -910,13 +932,13 @@ impl App {
         );
         record.daily_id = daily.as_ref().map(|d| d.id);
         let prev_best = personal_best(self.stats.all(), record.mode, &record.language);
-        let is_pb = prev_best.is_none_or(|b| record.wpm > b) && record.wpm > 0.0;
+        let is_pb = record.counts() && prev_best.is_none_or(|b| record.wpm > b) && record.wpm > 0.0;
         if let Err(e) = self.stats.append(&record) {
             self.notify(format!("could not save result: {e}"));
         }
         let daily = daily.map(|d| self.submit_daily(&d));
-        let misses = KeyMisses::from_words(self.engine.words());
-        let celebration = (is_pb && self.config.celebrate).then(|| {
+        let misses = Misses::from_words(self.engine.words());
+        let celebration = (is_pb && self.config.pb_effect.confetti()).then(|| {
             let seed = record.ts.timestamp_nanos_opt().unwrap_or_default() as u64;
             Celebration::new(Instant::now(), seed)
         });
@@ -1035,6 +1057,14 @@ impl App {
                 self.config.zen = v.unwrap_or(!self.config.zen);
                 self.notify(format!("zen {}", on_off(self.config.zen)));
             }
+            Command::PbEffect(e) => {
+                self.config.pb_effect = e;
+                self.notify(format!("pb effect {}", e.label()));
+            }
+            Command::Keyboard(kb) => {
+                self.config.keyboard = kb;
+                self.notify(format!("keyboard {}", kb.label()));
+            }
             Command::Pace(pace) => {
                 self.config.pace = pace;
                 let target = self.pace_target();
@@ -1050,11 +1080,11 @@ impl App {
                     ),
                 });
             }
-            Command::Profile(None) => {
+            Command::ConfigProfile(None) => {
                 self.open_profiles();
                 return;
             }
-            Command::Profile(Some(name)) => {
+            Command::ConfigProfile(Some(name)) => {
                 self.activate_profile(&name);
                 return;
             }
@@ -1088,7 +1118,7 @@ impl App {
                 self.open_user(login);
                 return;
             }
-            Command::Quit => self.should_quit = true,
+            Command::Quit => self.quit_or_back(),
             Command::Results { section, value } => {
                 let current = self.config.results.get(&section).unwrap_or(true);
                 let new = value.unwrap_or(!current);
@@ -1144,7 +1174,11 @@ impl App {
                         | "daily_lock"
                         | "splash"
                         | "celebrate"
+                        | "pb_effect"
+                        | "pbeffect"
                         | "pace"
+                        | "keyboard"
+                        | "layout"
                 ) && !key.starts_with("results.");
             }
         }
@@ -1152,6 +1186,20 @@ impl App {
             self.rebuild_test();
         }
         self.save_config();
+    }
+
+    /// `:q`: quit from the typing and landing screens; anywhere else it
+    /// backs out one step, like `esc` there (results go back to the words).
+    fn quit_or_back(&mut self) {
+        match self.screen {
+            Screen::Typing | Screen::Splash => self.should_quit = true,
+            Screen::Results => self.restart(),
+            _ => {
+                let esc = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+                let action = input::map_key(esc, self.input_context());
+                self.dispatch(action);
+            }
+        }
     }
 
     fn apply_graphics(&mut self) -> Result<(), String> {
@@ -1164,7 +1212,7 @@ impl App {
     fn save_config(&mut self) {
         let dropped = self.profiles.reconcile(&mut self.config);
         if !dropped.is_empty() {
-            self.notify_more(format!("profile {} off", dropped.join(", ")));
+            self.notify_more(format!("config {} off", dropped.join(", ")));
         }
         if let Err(e) = self.config.save(&self.paths.config_file) {
             self.notify(format!("could not save config: {e}"));

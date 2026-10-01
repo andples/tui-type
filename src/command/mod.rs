@@ -6,7 +6,8 @@ pub mod palette;
 pub use palette::{CommandLine, Completions, Suggestion};
 
 use crate::config::{
-    FONT_SIZE_RANGE, LINES_RANGE, Pace, ResultsConfig, WORDS_PER_LINE_RANGE, parse_range,
+    FONT_SIZE_RANGE, Keyboard, LINES_RANGE, Pace, PbEffect, ResultsConfig, WORDS_PER_LINE_RANGE,
+    parse_range,
 };
 use crate::test::mode::Mode;
 
@@ -32,8 +33,12 @@ pub enum Command {
     Zen(Option<bool>),
     /// The pace caret: off, pb, last or a wpm.
     Pace(Pace),
-    /// `None` opens the profile menu; a name activates that profile.
-    Profile(Option<String>),
+    /// The layout of the results screen's missed-keys keyboard.
+    Keyboard(Keyboard),
+    /// What a new personal best shows.
+    PbEffect(PbEffect),
+    /// `None` opens the config menu; a name switches that config on.
+    ConfigProfile(Option<String>),
     /// `None` opens the install menu; a name installs that language/theme.
     Install(Option<String>),
     Uninstall(String),
@@ -78,6 +83,10 @@ pub enum ArgKind {
     ResultSections,
     /// `off`, `pb`, `last` or any wpm.
     Pace,
+    /// Keyboard layouts for the missed-keys heatmap.
+    Keyboards,
+    /// both, confetti, trophy, off.
+    PbEffects,
     /// `time 30`, `words 25`, …: the modes dailies exist for.
     DailyModes,
     /// `public on` / `public off`.
@@ -238,10 +247,26 @@ pub const COMMANDS: &[CommandSpec] = &[
         requires_arg: true,
     },
     CommandSpec {
-        name: "profile",
-        aliases: &["profiles", "pf"],
+        name: "pbeffect",
+        aliases: &["celebrate", "wineffect"],
+        usage: "<both|confetti|trophy|off>",
+        help: "what a new personal best shows: confetti, a trophy, both or nothing",
+        arg: ArgKind::PbEffects,
+        requires_arg: true,
+    },
+    CommandSpec {
+        name: "keyboard",
+        aliases: &["layout", "kb"],
+        usage: "<layout>",
+        help: "keyboard layout of the results screen's missed keys",
+        arg: ArgKind::Keyboards,
+        requires_arg: true,
+    },
+    CommandSpec {
+        name: "config",
+        aliases: &["configs", "cfg"],
         usage: "[name]",
-        help: "switch profiles (enter opens the menu)",
+        help: "switch saved configs (enter opens the menu)",
         arg: ArgKind::Profiles,
         requires_arg: false,
     },
@@ -335,7 +360,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "user",
-        aliases: &["whois"],
+        aliases: &["profile", "me", "self", "whois"],
         usage: "[login]",
         help: "a player's public profile (yours with no name)",
         arg: ArgKind::Free,
@@ -353,7 +378,7 @@ pub const COMMANDS: &[CommandSpec] = &[
         name: "quit",
         aliases: &["q", "exit"],
         usage: "",
-        help: "exit ttyp",
+        help: "exit ttyp from the words or the landing screen; back out anywhere else",
         arg: ArgKind::None,
         requires_arg: false,
     },
@@ -409,9 +434,11 @@ pub fn parse(line: &str) -> Result<Command, String> {
         "font" => Command::Font(rest.to_string()),
         "zen" => Command::Zen(opt_on_off(rest)?),
         "pace" => Command::Pace(Pace::parse(need(spec.usage)?)?),
+        "pbeffect" => Command::PbEffect(PbEffect::parse(need(spec.usage)?)?),
+        "keyboard" => Command::Keyboard(Keyboard::parse(need(spec.usage)?)?),
         "lines" => Command::Lines(opt_range(rest, LINES_RANGE)?),
         "fullscreen" => Command::Fullscreen(opt_on_off(rest)?),
-        "profile" => Command::Profile(Some(rest.to_string()).filter(|r| !r.is_empty())),
+        "config" => Command::ConfigProfile(Some(rest.to_string()).filter(|r| !r.is_empty())),
         "install" => Command::Install(Some(rest.to_string()).filter(|r| !r.is_empty())),
         "uninstall" => Command::Uninstall(need(spec.usage)?.to_string()),
         "restart" => Command::Restart,
@@ -518,6 +545,8 @@ pub fn arg_candidates(kind: ArgKind, comps: &Completions) -> Vec<String> {
             .map(|s| s.to_string())
             .collect(),
         ArgKind::Pace => Pace::PRESETS.iter().map(|p| p.label()).collect(),
+        ArgKind::PbEffects => PbEffect::ALL.iter().map(|e| e.label().into()).collect(),
+        ArgKind::Keyboards => Keyboard::ALL.iter().map(|k| k.label().into()).collect(),
         ArgKind::Account => vec!["public on".into(), "public off".into()],
         ArgKind::DailyModes => ttyp_core::api::DAILY_MODES
             .iter()
@@ -548,6 +577,20 @@ mod tests {
         assert_eq!(parse("pace pb"), Ok(Command::Pace(Pace::Pb)));
         assert_eq!(parse("ghost 87"), Ok(Command::Pace(Pace::Wpm(87))));
         assert_eq!(parse("pace off"), Ok(Command::Pace(Pace::Off)));
+        assert_eq!(
+            parse("keyboard colemak-dh"),
+            Ok(Command::Keyboard(Keyboard::ColemakDh))
+        );
+        assert_eq!(
+            parse("layout dvorak"),
+            Ok(Command::Keyboard(Keyboard::Dvorak))
+        );
+        assert!(parse("keyboard").is_err());
+        assert_eq!(
+            parse("pbeffect trophy"),
+            Ok(Command::PbEffect(PbEffect::Trophy))
+        );
+        assert_eq!(parse("celebrate off"), Ok(Command::PbEffect(PbEffect::Off)));
         assert!(parse("pace").is_err());
         assert!(parse("pace soon").is_err());
         assert_eq!(parse("daily"), Ok(Command::Daily(None)));
@@ -586,14 +629,17 @@ mod tests {
         // Graphics is config-file only.
         assert!(parse("graphics off").is_err());
         assert_eq!(parse("zen"), Ok(Command::Zen(None)));
-        assert_eq!(parse("profile"), Ok(Command::Profile(None)));
+        assert_eq!(parse("config"), Ok(Command::ConfigProfile(None)));
+        assert_eq!(parse("profile"), Ok(Command::User(None)));
+        assert_eq!(parse("me"), Ok(Command::User(None)));
+        assert_eq!(parse("self"), Ok(Command::User(None)));
         assert_eq!(parse("install"), Ok(Command::Install(None)));
         assert_eq!(parse("get nord"), Ok(Command::Install(Some("nord".into()))));
         assert_eq!(parse("remove nord"), Ok(Command::Uninstall("nord".into())));
         assert!(parse("uninstall").is_err());
         assert_eq!(
-            parse("pf sprint"),
-            Ok(Command::Profile(Some("sprint".into())))
+            parse("cfg sprint"),
+            Ok(Command::ConfigProfile(Some("sprint".into())))
         );
         assert_eq!(
             parse("results chart off"),

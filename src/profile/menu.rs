@@ -3,7 +3,9 @@
 
 use super::{Profile, ProfileRegistry, ProfileSettings, SettingKey, is_name_char};
 use crate::command::Completions;
-use crate::config::{Config, FONT_SIZE_RANGE, LINES_RANGE, Pace, WORDS_PER_LINE_RANGE};
+use crate::config::{
+    Config, FONT_SIZE_RANGE, Keyboard, LINES_RANGE, Pace, PbEffect, WORDS_PER_LINE_RANGE,
+};
 use crate::test::mode::Mode;
 use crate::ui::widgets::Selection;
 
@@ -195,8 +197,13 @@ impl Editor {
             SettingKey::ResultsConsistency => flip(&mut s.results.consistency),
             SettingKey::ResultsRaw => flip(&mut s.results.raw),
             SettingKey::ResultsKeys => flip(&mut s.results.keys),
-            SettingKey::Celebrate => flip(&mut s.celebrate),
+            SettingKey::PbEffect => {
+                s.pb_effect = s.pb_effect.map(|e| step(&PbEffect::ALL, &e, dir));
+            }
             SettingKey::Pace => s.pace = s.pace.map(|p| step(&Pace::PRESETS, &p, dir)),
+            SettingKey::Keyboard => {
+                s.keyboard = s.keyboard.map(|k| step(&Keyboard::ALL, &k, dir));
+            }
         }
     }
 

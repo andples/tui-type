@@ -45,6 +45,8 @@ pub struct Activity {
 
 impl Activity {
     pub fn from_records<Tz: TimeZone>(records: &[TestRecord], tz: &Tz, today: NaiveDate) -> Self {
+        let records: Vec<TestRecord> = records.iter().filter(|r| r.counts()).cloned().collect();
+        let records = records.as_slice();
         let days = by_day(records, tz);
         let best_day = days
             .iter()
@@ -249,6 +251,7 @@ mod tests {
             },
             duration_s: 30.0,
             daily_id: None,
+            invalid: None,
         }
     }
 

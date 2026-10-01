@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 
 use super::action::Action;
 use super::{App, Screen};
+use crate::test::Status;
 
 /// The word the intro types out.
 pub const LOGO: &str = "ttyp";
@@ -213,6 +214,36 @@ impl App {
         items
             .get(i)
             .map_or(Action::CloseSplash, |it| it.action.action())
+    }
+
+    /// Back to the landing screen after `HOME_AFTER` without a key: the
+    /// intro is skipped and a finished test is replaced by a fresh one, so
+    /// the first key starts typing.
+    pub(super) fn go_home(&mut self, now: Instant) {
+        if self.cmd_open {
+            self.close_command_line();
+        }
+        if self.engine.is_finished() {
+            self.restart();
+        }
+        let mut s = Splash::new(now);
+        s.skip();
+        self.splash = Some(s);
+        self.screen = Screen::Splash;
+        self.idle.touch(now);
+    }
+
+    /// Whether the quiet time sends this screen home: the landing screen
+    /// is on, and no test, sign-in, edit or slider is under way. An open
+    /// command line is closed.
+    pub(super) fn home_allowed(&self) -> bool {
+        self.config.splash
+            && self.slider.is_none()
+            && self.engine.status() != Status::Running
+            && !matches!(
+                self.screen,
+                Screen::Splash | Screen::Login | Screen::Profiles | Screen::Catalog
+            )
     }
 
     pub(super) fn close_splash(&mut self) {

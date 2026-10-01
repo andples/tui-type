@@ -62,7 +62,7 @@ pub fn render(frame: &mut Frame, app: &App) -> Vec<ImageLine> {
         Screen::Leaderboard => leaderboard::render(frame, app, body, &p),
         Screen::Graph => graph::render(frame, app, body, &p),
         Screen::User => user::render(frame, app, body, &p),
-        Screen::Splash => splash::render(frame, app, body, &p),
+        Screen::Splash => images = splash::render(frame, app, body, &p),
     }
 
     if app.slider.is_some() {

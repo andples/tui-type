@@ -30,22 +30,36 @@ Needs a terminal with true-color support.
 Backspace moves back into the previous word only if it was left with an
 error, like monkeytype.
 
-On the results screen: `tab` next test, `s` stats, `?` help.
+On the results screen: `tab` (or `q`) next test, `s` stats, `?` help.
 
 ### Results screen
 
 Besides wpm, accuracy, the detail row and the wpm chart, the results screen
-shows a **keyboard heatmap** of the keys you missed: a QWERTY keyboard with
-each key shaded by how often its character was typed wrong (the worst keys
-are listed above it; shifted characters count on their key, the number row
+shows a **keyboard heatmap** of the keys you missed: a keyboard with each
+key shaded by how often its character was typed wrong (the worst keys are
+listed above it; shifted characters count on their key, the number row
 appears when it's involved). It's left out on a clean run and when the
 terminal is too short. Hide it with `:results keys off`.
 
+The keyboard is drawn in your layout: `:keyboard <layout>` (or
+`keyboard = "…"` in the config, or a config set) picks `qwerty` (default),
+`colemak`, `colemak_dh` (ANSI, angle mod), `dvorak`, `dvorak_programmer`,
+`workman`, `qwertz` (German) or `azerty` (French). It only changes the
+drawing, and switching it on the results screen redraws the same run.
+
 A new **personal best** (for the mode and language) gets a short burst of
-confetti in the theme's colours, thrown from the "new best" text. It lasts
-about a second and a half, never covers text, and any key ends it (keys like
-`tab` still do their thing). Turn it off with `:set celebrate off`
-(`celebrate = false` in the config, or a profile).
+confetti in the theme's colours, thrown from the "new best" text, and a
+little trophy next to it. The confetti lasts about a second and a half,
+never covers text, and any key ends it (keys like `tab` still do their
+thing). `:pbeffect both|confetti|trophy|off` picks what you get (default
+`both`; `pb_effect = "…"` in the config — older files' `celebrate = true/false`
+still read as both/off).
+
+**Runs that don't count.** A run where you stop typing for 8 seconds in a
+row (afk), type under 10 wpm raw, or get under 50% accuracy is marked
+`invalid · afk` (or `too slow`, `too inaccurate`) on the results screen. It
+stays in your history, marked `✗` with its numbers dimmed, but never sets a
+personal best, a pace target, a streak or the averages.
 
 ### Pace caret
 
@@ -58,7 +72,7 @@ behind. `:pace last` races your last run in that mode and language,
 starts with your first key, and the mode line says what it's set to
 (`pace 87`). It's only drawn: scoring, history and daily submissions never
 see it. Set it in the config as `pace = "pb"` / `"last"` / `87`, with
-`:set pace …`, or in a profile.
+`:set pace …`, or in a saved config.
 
 ### Stats screen
 
@@ -69,7 +83,8 @@ busy the day was, today marked `▣`, month names above), then your current
 and longest streak of days with a test, total time typed and your busiest
 day, and a sparkline of your average wpm for each of the last 30 days
 (dots are days off). Days are your local days. Below that are the averages,
-your bests per mode and every run, newest first (`↑↓`, `g`/`G`).
+your bests per mode and every run, newest first (`↑↓`, `g`/`G`). Runs that
+didn't count are listed with a `✗` and left out of everything above them.
 
 The calendar shows as many weeks as fit (up to 52); in a short terminal it
 makes room for the runs first, then the streak and trend lines do too.
@@ -104,6 +119,14 @@ they aren't on screen yet; other keys finish the intro. `esc` and `space` go to 
 command line. Turn it off with `:set splash off` (`splash = false` in the
 config).
 
+Leave it alone for 5 seconds and a ghost starts typing random words, in
+your typing font a few sizes larger (real-font images where the terminal
+supports them, like the typing screen); any key crumbles them away. And
+after 30 seconds without a key anywhere else, ttyp comes back here on its
+own — not during a test, a login, the install menu, the config menu or a
+slider (an open command line is closed). With `splash = false` it stays
+where it is.
+
 ## Commands
 
 Press `esc`, start typing, and the palette fuzzy-filters as you go.
@@ -124,7 +147,9 @@ Press `esc`, start typing, and the palette fuzzy-filters as you go.
 | `fullscreen [on\|off]` | `full` | largest text that fits the terminal, no chrome |
 | `zen [on\|off]` | | words only — hides the brand, timer and mode line |
 | `pace <off\|pb\|last\|wpm>` | `ghost` | a ghost caret racing you at your best, your last run or a fixed speed |
-| `profile [name]` | `profiles`, `pf` | open the profile menu, or switch a profile on |
+| `keyboard <layout>` | `layout`, `kb` | layout of the results screen's missed-keys keyboard |
+| `pbeffect <both\|confetti\|trophy\|off>` | `celebrate`, `wineffect` | what a new personal best shows |
+| `config [name]` | `configs`, `cfg` | open the config menu, or switch a saved config on |
 | `install [name]` | `catalog`, `get` | open the install menu, or install and use a language/theme |
 | `uninstall <name>` | `remove` | remove an installed language or theme |
 | `set <key> <value>` | | any config key, e.g. `set results.chart off` |
@@ -134,7 +159,7 @@ Press `esc`, start typing, and the palette fuzzy-filters as you go.
 | `leaderboard` | `lb` | the daily leaderboards |
 | `login` / `logout` | | log in with GitHub for the dailies |
 | `help` | `h`, `?` | keys and commands |
-| `quit` | `q` | exit |
+| `quit` | `q`, `exit` | exit from the words or the landing screen; anywhere else, back out one step (like `esc`) |
 
 `fontsize`, `wordsperline` and `lines` take a number directly, or press `enter`
 with no number to open a slider on the bottom line: `←`/`→` (or `h`/`l`)
@@ -175,36 +200,38 @@ fetched from GitHub. Set `catalog` in the config to use another base URL or a
 local directory, or `catalog = ""` to turn it off. With `server = ""` ttyp
 never installs anything on its own at startup.
 
-### Profiles
+### Configs
 
-A profile is a named set of settings — any subset of them. `:profile`
-opens the menu:
+A config is a named set of settings — any subset of them. `:config`
+opens the menu (until 1.7 this was `:profile`, which now shows your player
+profile):
 
 ```
-profiles
+configs
 
 › ● sprint    mode time 15 · punctuation on
   ○ marathon  mode time 120
   ● night     theme nord · font size 3
-  + new profile
+  + new config
 
   enabling marathon replaces sprint
 ```
 
-`enter`/`space` switches the highlighted profile on or off, `n` creates one,
+`enter`/`space` switches the highlighted config on or off, `n` creates one,
 `e` edits, `d` deletes. In the editor, `space` picks which settings the
-profile controls, `←`/`→` change the value (themes preview live), `u` takes
+config controls, `←`/`→` change the value (themes preview live), `u` takes
 the value currently in use, `A` takes every current value, and `enter`
 saves.
 
-Several profiles can be on at once, so you can combine, say, a timing
-profile with a look profile. When a profile you switch on sets something an
-active profile also sets, that one is switched off (`●` becomes `○`) — only
+Several configs can be on at once, so you can combine, say, a timing
+config with a look config. When a config you switch on sets something an
+active config also sets, that one is switched off (`●` becomes `○`) — only
 the settings it shares get overwritten. Changing a setting by hand likewise
-switches off any profile that sets it, so a `●` always means the profile is
-fully in effect. Switching a profile off leaves the settings as they are.
+switches off any config that sets it, so a `●` always means the config is
+fully in effect. Switching a config off leaves the settings as they are.
+They're stored as `profiles/<name>.toml` in the config dir.
 
-`:profile <name>` switches one on straight from the command line.
+`:config <name>` switches one on straight from the command line.
 
 
 
@@ -280,7 +307,7 @@ ttyp. `:set server …` changes it live.
   `[` `]` day, `enter` opens that run's wpm graph, `p` opens that player's
   profile, `esc` goes back. Your own row stays visible at the bottom when it
   scrolls off.
-- `:user <login>` shows a player's profile: daily streak, personal best per
+- `:user <login>` (or `:profile`, `:me`, `:self`) shows a player's profile: daily streak, personal best per
   language and mode, and their latest runs (`enter` opens a run's graph).
   `:user` alone shows yours. Profiles are public; `:account public off`
   hides yours from everyone else, and `:account` shows which it is. Leaderboards list your
