@@ -234,14 +234,11 @@ runs.
 
 ## Notes
 
-- **Found, not fixed (pre-existing, also on `main`):** `server = ""` doesn't
-  survive the first config save. `App::new` reads `""` as `None`, `save`
-  skips `None`, and the next start sees no `server` key and writes the
-  built-in server back in, so an offline sandbox quietly goes online after
-  any setting change. In testing this only happened to throwaway configs
-  with no login (no token, nothing queued); the captures above were all
-  taken from fresh offline configs. The fix is probably to keep
-  `Some("")` in `Config` and treat empty as offline in `App::connect`.
+- **Fixed:** `server = ""` used to be dropped on the first config save
+  (the next start then wrote the built-in server back in, so an offline
+  config quietly went online). `Config` now keeps the empty value and
+  `Config::server_url` treats empty as offline; a test covers the round
+  trip.
 - The old agents' worktrees are still listed (`git worktree list`, under
   `~/Projects/tui-type/.claude/worktrees/`). They sit inside the main
   checkout, which this work stayed out of. Remove them with

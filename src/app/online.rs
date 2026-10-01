@@ -19,7 +19,7 @@ impl App {
     /// An `Online` when the config names a server; otherwise ttyp stays
     /// fully offline and never touches the network.
     pub(super) fn connect(config: &Config, paths: &Paths) -> Option<Online> {
-        let server = config.server.as_deref()?;
+        let server = config.server_url()?;
         let client = Client::new(server, token::load(&paths.token_file));
         Some(Online::new(client, config.github_client_id.clone()))
     }

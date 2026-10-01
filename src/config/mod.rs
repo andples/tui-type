@@ -398,6 +398,14 @@ impl FontSize {
 }
 
 impl Config {
+    /// The server to talk to; `None` when `server = ""` (fully offline).
+    pub fn server_url(&self) -> Option<&str> {
+        self.server
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+    }
+
     /// The catalogue to fetch from, `None` when it's turned off.
     pub fn catalog_source(&self) -> Option<&str> {
         match self.catalog.as_deref() {
@@ -532,7 +540,14 @@ impl Config {
             "lines" => self.set_lines(parse_range(value, LINES_RANGE)?),
             "font" => self.font = value.to_string(),
             "graphics" => self.graphics = Graphics::parse(value)?,
-            "server" => self.server = Some(value.to_string()).filter(|v| !v.is_empty()),
+            // Empty (`off` or `""` on the command line) means offline, and is
+            // kept so the config file remembers it.
+            "server" => {
+                self.server = Some(match value {
+                    "off" | "\"\"" => String::new(),
+                    v => v.to_string(),
+                });
+            }
             // `off` (or `""`) is the way to type an empty value.
             "catalog" => {
                 self.catalog = Some(match value {
@@ -635,8 +650,20 @@ mod tests {
         );
         assert!(c.github_client_id.is_some());
         let mut c = Config::default();
-        c.set("server", "").unwrap();
-        assert_eq!(c.server, None, "empty server means offline");
+        c.set("server", "off").unwrap();
+        assert_eq!(c.server_url(), None, "empty server means offline");
+    }
+
+    #[test]
+    fn offline_survives_a_save() {
+        // `server = ""` used to be dropped on the first save, and the next
+        // start wrote the built-in server back in.
+        let c = Config::parse("server = \"\"\n").unwrap();
+        assert_eq!(c.server_url(), None);
+        let saved = toml::to_string_pretty(&c).unwrap();
+        assert!(saved.contains("server = \"\""), "{saved}");
+        assert_eq!(Config::parse(&saved).unwrap().server_url(), None);
+        assert!(Config::default().server_url().is_some());
     }
 
     #[test]

@@ -329,7 +329,7 @@ impl App {
     /// isn't installed (a config from before they moved to the catalogue).
     /// Skipped when the user has opted out of the network (`server = ""`).
     pub(super) fn install_missing(&mut self) -> bool {
-        if self.config.server.is_none() {
+        if self.config.server_url().is_none() {
             return false;
         }
         let mut any = false;
