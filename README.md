@@ -32,6 +32,21 @@ error, like monkeytype.
 
 On the results screen: `tab` next test, `s` stats, `?` help.
 
+### Results screen
+
+Besides wpm, accuracy, the detail row and the wpm chart, the results screen
+shows a **keyboard heatmap** of the keys you missed: a QWERTY keyboard with
+each key shaded by how often its character was typed wrong (the worst keys
+are listed above it; shifted characters count on their key, the number row
+appears when it's involved). It's left out on a clean run and when the
+terminal is too short. Hide it with `:results keys off`.
+
+A new **personal best** (for the mode and language) gets a short burst of
+confetti in the theme's colours, thrown from the "new best" text. It lasts
+about a second and a half, never covers text, and any key ends it (keys like
+`tab` still do their thing). Turn it off with `:set celebrate off`
+(`celebrate = false` in the config, or a profile).
+
 ### Landing screen
 
 ttyp opens on a short intro: the logo typed out in big letters (under a
@@ -65,7 +80,7 @@ Press `esc`, start typing, and the palette fuzzy-filters as you go.
 | `theme <name>` | `th` | switch theme (previews live while you pick) |
 | `punctuation [on\|off]` | `punc`, `p` | toggle punctuation |
 | `numbers [on\|off]` | `num`, `n` | toggle numbers |
-| `results <section> [on\|off]` | `res` | show/hide `chart`, `breakdown`, `consistency`, `raw` |
+| `results <section> [on\|off]` | `res` | show/hide `chart`, `breakdown`, `consistency`, `raw`, `keys` |
 | `fontsize [1-16]` | `fs` | text size — 1 terminal font, 2–16 pixel font in block glyphs |
 | `wordsperline [4-30]` | `wpl`, `width` | width of the word box (× 6 characters per word) |
 | `lines [1-10]` | `ln` | lines of words shown at once (default 3) |

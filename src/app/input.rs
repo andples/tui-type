@@ -23,6 +23,8 @@ pub struct InputContext {
     pub splash_menu: SplashMenu,
     /// The landing screen's screensaver is typing.
     pub splash_idle: bool,
+    /// The results screen's new-best confetti is playing.
+    pub celebrating: bool,
 }
 
 /// Which part of the profile screen has the keyboard.
@@ -72,6 +74,8 @@ pub fn map_key(key: KeyEvent, ctx: InputContext) -> Action {
             KeyCode::Char('s') => Action::ShowStats,
             KeyCode::Char('?') => Action::ShowHelp,
             KeyCode::Char('q') => Action::Quit,
+            // Any other key just ends the confetti.
+            _ if ctx.celebrating => Action::EndCelebration,
             _ => Action::Nop,
         },
         Screen::Profiles => map_profiles(key, ctx.profile_menu),
@@ -352,7 +356,26 @@ mod tests {
             splash_playing: false,
             splash_menu: SplashMenu::Offline,
             splash_idle: false,
+            celebrating: false,
         }
+    }
+
+    #[test]
+    fn keys_end_the_confetti_and_still_work() {
+        let mut c = ctx(Screen::Results, false, Status::Finished);
+        let none = KeyModifiers::NONE;
+        assert_eq!(map_key(key(KeyCode::Char('x'), none), c), Action::Nop);
+        c.celebrating = true;
+        assert_eq!(
+            map_key(key(KeyCode::Char('x'), none), c),
+            Action::EndCelebration
+        );
+        assert_eq!(
+            map_key(key(KeyCode::Char(' '), none), c),
+            Action::EndCelebration
+        );
+        assert_eq!(map_key(key(KeyCode::Tab, none), c), Action::Restart);
+        assert_eq!(map_key(key(KeyCode::Char('s'), none), c), Action::ShowStats);
     }
 
     #[test]

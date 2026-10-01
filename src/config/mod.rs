@@ -39,6 +39,8 @@ pub struct ResultsConfig {
     pub char_breakdown: bool,
     pub consistency: bool,
     pub raw: bool,
+    /// A keyboard heatmap of the keys this test went wrong on.
+    pub keys: bool,
 }
 
 impl Default for ResultsConfig {
@@ -48,12 +50,13 @@ impl Default for ResultsConfig {
             char_breakdown: true,
             consistency: true,
             raw: true,
+            keys: true,
         }
     }
 }
 
 impl ResultsConfig {
-    pub const SECTIONS: [&'static str; 4] = ["chart", "breakdown", "consistency", "raw"];
+    pub const SECTIONS: [&'static str; 5] = ["chart", "breakdown", "consistency", "raw", "keys"];
 
     pub fn get(&self, section: &str) -> Option<bool> {
         match section {
@@ -61,6 +64,7 @@ impl ResultsConfig {
             "breakdown" | "char_breakdown" => Some(self.char_breakdown),
             "consistency" => Some(self.consistency),
             "raw" => Some(self.raw),
+            "keys" => Some(self.keys),
             _ => None,
         }
     }
@@ -71,6 +75,7 @@ impl ResultsConfig {
             "breakdown" | "char_breakdown" => self.char_breakdown = value,
             "consistency" => self.consistency = value,
             "raw" => self.raw = value,
+            "keys" => self.keys = value,
             _ => return false,
         }
         true
@@ -127,6 +132,9 @@ pub struct Config {
     /// Play the short landing screen (logo, login/daily hints) on start.
     /// Not a profile setting.
     pub splash: bool,
+    /// Throw a short burst of confetti on the results screen when a test
+    /// sets a new personal best.
+    pub celebrate: bool,
 }
 
 /// How font sizes above 1 are drawn. Only set in the config file; there is
@@ -370,6 +378,7 @@ impl Default for Config {
             catalog: None,
             daily_lock: true,
             splash: true,
+            celebrate: true,
         }
     }
 }
@@ -432,6 +441,7 @@ impl Config {
             "zen" => self.zen = parse_bool(value)?,
             "daily_lock" => self.daily_lock = parse_bool(value)?,
             "splash" => self.splash = parse_bool(value)?,
+            "celebrate" => self.celebrate = parse_bool(value)?,
             "fullscreen" | "full" => self.fullscreen = parse_bool(value)?,
             "lines" => self.set_lines(parse_range(value, LINES_RANGE)?),
             "font" => self.font = value.to_string(),
@@ -658,5 +668,18 @@ mod tests {
         // Older config files without the key keep the landing screen.
         assert!(Config::parse("theme = \"default\"").unwrap().splash);
         assert!(c.set("graphics", "sixel").is_err());
+    }
+
+    #[test]
+    fn celebrate_and_keys_default_on() {
+        let old = Config::parse("theme = \"default\"\n[results]\nchart = false\n").unwrap();
+        assert!(old.celebrate && old.results.keys, "older files get them");
+        let mut c = Config::default();
+        c.set("celebrate", "off").unwrap();
+        assert!(!c.celebrate);
+        c.set("results.keys", "off").unwrap();
+        assert!(!c.results.keys);
+        assert_eq!(c.results.get("keys"), Some(false));
+        assert!(ResultsConfig::SECTIONS.contains(&"keys"));
     }
 }

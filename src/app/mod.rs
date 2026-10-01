@@ -3,8 +3,10 @@
 pub mod action;
 mod board;
 mod catalog;
+pub mod celebrate;
 pub mod idle;
 pub mod input;
+pub mod misses;
 mod online;
 mod profiles;
 pub mod splash;
@@ -33,8 +35,10 @@ use crate::ui;
 use crate::ui::style::content_column;
 use crate::ui::widgets::Selection;
 use action::{Action, ListMove};
+use celebrate::Celebration;
 use idle::Screensaver;
 use input::InputContext;
+use misses::KeyMisses;
 use splash::Splash;
 use ttyp_core::api::{Daily, ResultDetail, SubmitResponse};
 
@@ -114,6 +118,19 @@ pub struct Outcome {
     pub is_pb: bool,
     /// Set when the run was a daily: how the submission is going.
     pub daily: Option<DailyOutcome>,
+    /// The keys this run went wrong on, for the keyboard heatmap.
+    pub misses: KeyMisses,
+    /// The new-best confetti (`celebrate = true`), while it plays.
+    pub celebration: Option<Celebration>,
+}
+
+impl Outcome {
+    /// The confetti is still in the air at `now`.
+    pub fn celebrating_at(&self, now: Instant) -> bool {
+        self.celebration
+            .as_ref()
+            .is_some_and(|c| !c.is_done_at(now))
+    }
 }
 
 pub struct DailyOutcome {
@@ -528,6 +545,16 @@ impl App {
         {
             return Some(next.max(Duration::from_millis(1)));
         }
+        // So does the new-best confetti.
+        if self.screen == Screen::Results
+            && let Some(next) = self
+                .outcome
+                .as_ref()
+                .and_then(|o| o.celebration.as_ref())
+                .and_then(|c| c.next_change_at(Instant::now()))
+        {
+            return Some(next.max(Duration::from_millis(1)));
+        }
         if self.online.as_ref().is_some_and(Online::busy)
             || self.fetcher.as_ref().is_some_and(Fetcher::busy)
         {
@@ -551,6 +578,11 @@ impl App {
             splash_playing: !self.splash_frame().done,
             splash_idle: self.screen == Screen::Splash && self.idle.typing(),
             splash_menu: self.splash_menu(),
+            celebrating: self.screen == Screen::Results
+                && self
+                    .outcome
+                    .as_ref()
+                    .is_some_and(|o| o.celebrating_at(Instant::now())),
         }
     }
 
@@ -567,6 +599,13 @@ impl App {
         }
         if self.screen == Screen::Splash && splash::leaves_splash(&action) {
             self.close_splash();
+        }
+        // Any key on the results screen ends the confetti.
+        if self.screen == Screen::Results
+            && !matches!(action, Action::Tick | Action::Nop | Action::Redraw)
+            && let Some(c) = self.outcome.as_mut().and_then(|o| o.celebration.as_mut())
+        {
+            c.stop();
         }
         match action {
             Action::Nop => return,
@@ -587,6 +626,7 @@ impl App {
             }
             Action::Redraw => {}
             Action::IdleWake => self.idle.wake(Instant::now()),
+            Action::EndCelebration => {}
             Action::SkipIntro => {
                 if let Some(s) = &mut self.splash {
                     s.skip();
@@ -837,11 +877,18 @@ impl App {
             self.notify(format!("could not save result: {e}"));
         }
         let daily = daily.map(|d| self.submit_daily(&d));
+        let misses = KeyMisses::from_words(self.engine.words());
+        let celebration = (is_pb && self.config.celebrate).then(|| {
+            let seed = record.ts.timestamp_nanos_opt().unwrap_or_default() as u64;
+            Celebration::new(Instant::now(), seed)
+        });
         self.outcome = Some(Outcome {
             metrics,
             record,
             is_pb,
             daily,
+            misses,
+            celebration,
         });
         self.screen = Screen::Results;
     }
@@ -1043,6 +1090,7 @@ impl App {
                         | "catalog"
                         | "daily_lock"
                         | "splash"
+                        | "celebrate"
                 ) && !key.starts_with("results.");
             }
         }

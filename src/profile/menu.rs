@@ -194,6 +194,8 @@ impl Editor {
             SettingKey::ResultsBreakdown => flip(&mut s.results.char_breakdown),
             SettingKey::ResultsConsistency => flip(&mut s.results.consistency),
             SettingKey::ResultsRaw => flip(&mut s.results.raw),
+            SettingKey::ResultsKeys => flip(&mut s.results.keys),
+            SettingKey::Celebrate => flip(&mut s.celebrate),
         }
     }
 

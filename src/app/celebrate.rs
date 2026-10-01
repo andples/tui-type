@@ -79,7 +79,7 @@ impl Celebration {
                 let delay = if i % 4 == 3 {
                     rng.random_range(0.12..0.35)
                 } else {
-                    rng.random_range(0.0..0.06)
+                    0.0
                 };
                 Spark {
                     x0: rng.random_range(-4.0..4.0),
@@ -212,10 +212,7 @@ mod tests {
         let t0 = Instant::now();
         let c = Celebration::new(t0, 4);
         let late = c.frame_at(t0 + ms(1450));
-        assert!(
-            late.iter()
-                .all(|p| p.glyph == EMBER && p.tint == Tint::Sub)
-        );
+        assert!(late.iter().all(|p| p.glyph == EMBER && p.tint == Tint::Sub));
     }
 
     #[test]
@@ -234,7 +231,10 @@ mod tests {
             now += d;
             wakes += 1;
         }
-        assert_eq!(wakes, DURATION.as_millis().div_ceil(FRAME.as_millis()) as usize);
+        assert_eq!(
+            wakes,
+            DURATION.as_millis().div_ceil(FRAME.as_millis()) as usize
+        );
     }
 
     #[test]

@@ -1,14 +1,19 @@
-//! Results screen: headline numbers, a detail row, and a wpm-over-time chart.
-//! Sections are gated by `config.results`.
+//! Results screen: headline numbers, a detail row, a wpm-over-time chart and
+//! a keyboard heatmap of missed keys, with confetti over a new personal
+//! best. Sections are gated by `config.results`.
 
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::style::Style;
+use std::time::Instant;
+
+use ratatui::style::{Modifier, Style};
 use ratatui::symbols;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Axis, Chart, Dataset, GraphType, Paragraph};
 
 use super::style::{Palette, content_column, vcenter};
+use crate::app::celebrate::{Particle, Tint};
+use crate::app::misses::{self, KeyMisses};
 use crate::app::{App, DailyOutcome, DailyStatus, Outcome};
 use crate::test::Mode;
 
@@ -19,10 +24,19 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
     let col = content_column(area, app.config.content_width());
     let cfg = &app.config.results;
 
-    // headline (2) + gap + detail (1) [+ daily (1)] + gap + chart (n) + gap + hint (1)
+    // headline (2) + gap + detail (1) [+ daily (1)] [+ gap + chart (n)]
+    // [+ gap + keys label (1) + keyboard (n)] + gap + hint (1)
     let chart_h: u16 = if cfg.chart { 10 } else { 0 };
     let daily_h: u16 = u16::from(outcome.daily.is_some());
     let total = 2 + 1 + 1 + daily_h + if cfg.chart { 1 + chart_h } else { 0 } + 1 + 1;
+    // The keyboard goes first when the terminal is too short for it.
+    let numbers = outcome.misses.on_number_row();
+    let (kb_w, kb_h) = misses::layout_size(numbers);
+    let show_keys = cfg.keys
+        && outcome.misses.total() > 0
+        && total + 2 + kb_h <= area.height
+        && kb_w <= col.width;
+    let total = total + if show_keys { 2 + kb_h } else { 0 };
     let block = vcenter(col, total);
 
     let mut constraints = vec![
@@ -36,6 +50,10 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
     if cfg.chart {
         constraints.push(Constraint::Length(1));
         constraints.push(Constraint::Length(chart_h));
+    }
+    if show_keys {
+        constraints.push(Constraint::Length(1));
+        constraints.push(Constraint::Length(1 + kb_h));
     }
     constraints.push(Constraint::Length(1));
     constraints.push(Constraint::Length(1));
@@ -58,9 +76,110 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
             rows[next + 1],
             p,
         );
+        next += 2;
+    }
+    if show_keys {
+        render_keys(frame, &outcome.misses, rows[next + 1], p);
     }
     let hint = "tab  next   ·   s  stats   ·   :  command";
     frame.render_widget(Paragraph::new(hint).style(p.sub()), rows[rows.len() - 1]);
+
+    if let Some(c) = &outcome.celebration {
+        let sparks = c.frame_at(Instant::now());
+        if !sparks.is_empty() {
+            render_confetti(frame, &sparks, new_best_center(outcome, rows[0]), area, p);
+        }
+    }
+}
+
+/// The middle of the "new best" text, where the confetti is thrown from.
+fn new_best_center(o: &Outcome, headline: Rect) -> (u16, u16) {
+    let acc = format!("{:.0}%", o.metrics.accuracy);
+    let x = headline.x + 8 + 3 + acc.chars().count() as u16 + 2 + 4;
+    (x, headline.y + 1)
+}
+
+/// Sparks over the screen, only on empty cells away from text, so nothing
+/// is hidden or crowded.
+fn render_confetti(
+    frame: &mut Frame,
+    sparks: &[Particle],
+    (cx, cy): (u16, u16),
+    area: Rect,
+    p: &Palette,
+) {
+    let buf = frame.buffer_mut();
+    let blank = |x: i32, y: i32| {
+        x < 0
+            || y < 0
+            || buf
+                .cell((x as u16, y as u16))
+                .is_none_or(|c| c.symbol() == " ")
+    };
+    let placed: Vec<(u16, u16, &Particle)> = sparks
+        .iter()
+        .filter_map(|s| {
+            let x = cx as i32 + s.dx as i32;
+            let y = cy as i32 + s.dy as i32;
+            let inside = x >= area.left() as i32
+                && x < area.right() as i32
+                && y >= area.top() as i32
+                && y < area.bottom() as i32;
+            (inside && blank(x, y) && blank(x - 1, y) && blank(x + 1, y))
+                .then_some((x as u16, y as u16, s))
+        })
+        .collect();
+    for (x, y, s) in placed {
+        let color = match s.tint {
+            Tint::Main => p.main,
+            Tint::Fg => p.fg,
+            Tint::Correct => p.correct,
+            Tint::ErrorExtra => p.error_extra,
+            Tint::Sub => p.sub,
+        };
+        if let Some(cell) = buf.cell_mut((x, y)) {
+            cell.set_char(s.glyph).set_fg(color);
+        }
+    }
+}
+
+/// `missed keys  e 4 · t 2` over a QWERTY keyboard shaded by misses.
+fn render_keys(frame: &mut Frame, m: &KeyMisses, area: Rect, p: &Palette) {
+    let mut label = vec![Span::styled("missed keys", p.sub())];
+    let mut worst: Vec<(String, u32)> = m
+        .worst(5)
+        .into_iter()
+        .map(|(k, n)| (k.to_string(), n))
+        .collect();
+    if m.other > 0 {
+        worst.push(("other".into(), m.other));
+    }
+    for (i, (k, n)) in worst.iter().enumerate() {
+        label.push(Span::styled(if i == 0 { "   " } else { "  ·  " }, p.sub()));
+        label.push(Span::styled(format!("{k} "), p.fg()));
+        label.push(Span::styled(n.to_string(), p.sub()));
+    }
+    frame.render_widget(
+        Paragraph::new(Line::from(label)),
+        Rect::new(area.x, area.y, area.width, 1),
+    );
+    let max = m.max();
+    let buf = frame.buffer_mut();
+    for (k, x, y) in misses::layout(m.on_number_row()) {
+        let style = match misses::heat(m.get(k), max) {
+            0 => p.sub(),
+            1 => Style::default().fg(p.error_extra),
+            2 => p.error().add_modifier(Modifier::BOLD),
+            _ => Style::default()
+                .bg(p.error)
+                .fg(p.bg)
+                .add_modifier(Modifier::BOLD),
+        };
+        let (x, y) = (area.x + x, area.y + 1 + y);
+        if y < area.bottom() && x + 3 <= area.right() {
+            buf.set_string(x, y, format!(" {k} "), style);
+        }
+    }
 }
 
 fn render_headline(frame: &mut Frame, o: &Outcome, area: Rect, p: &Palette) {

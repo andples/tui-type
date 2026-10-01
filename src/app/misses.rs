@@ -88,6 +88,55 @@ pub fn key_for(c: char) -> Option<char> {
     on_board.then_some(base)
 }
 
+/// Columns one key takes on screen: ` q ` plus a gap.
+pub const KEY_COLS: u16 = 4;
+/// How far each drawn row is shifted right, in columns, so the rows
+/// stagger like a real keyboard (number row first).
+const ROW_SHIFT: [u16; 4] = [0, 2, 3, 5];
+
+/// Where each key is drawn: (key, column, row) from the keyboard's top
+/// left. The number row is only drawn when `numbers` is set; without it the
+/// letter rows move up.
+pub fn layout(numbers: bool) -> Vec<(char, u16, u16)> {
+    let rows = std::iter::once((NUMBER_ROW, ROW_SHIFT[0]))
+        .filter(|_| numbers)
+        .chain(
+            LETTER_ROWS
+                .iter()
+                .zip(&ROW_SHIFT[1..])
+                .map(|(r, s)| (*r, *s)),
+        );
+    rows.enumerate()
+        .flat_map(|(y, (keys, shift))| {
+            keys.chars()
+                .enumerate()
+                .map(move |(x, k)| (k, shift + x as u16 * KEY_COLS, y as u16))
+        })
+        .collect()
+}
+
+/// Width and height of the drawn keyboard.
+pub fn layout_size(numbers: bool) -> (u16, u16) {
+    let cells = layout(numbers);
+    let w = cells
+        .iter()
+        .map(|(_, x, _)| x + KEY_COLS - 1)
+        .max()
+        .unwrap_or(0);
+    let h = cells.iter().map(|(_, _, y)| y + 1).max().unwrap_or(0);
+    (w, h)
+}
+
+impl KeyMisses {
+    /// The worst keys, most misses first (alphabetical on a tie).
+    pub fn worst(&self, n: usize) -> Vec<(char, u32)> {
+        let mut v: Vec<(char, u32)> = self.keys.iter().map(|(k, c)| (*k, *c)).collect();
+        v.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+        v.truncate(n);
+        v
+    }
+}
+
 /// How hot a key is drawn: 0 clean, then 1–3 by its share of the worst
 /// key's count (3 is the worst).
 pub fn heat(count: u32, max: u32) -> u8 {
@@ -131,11 +180,8 @@ mod tests {
 
     #[test]
     fn untyped_and_extra_characters_are_not_misses() {
-        let m = KeyMisses::from_words(&[
-            word("about", "ab"),
-            word("go", "gooo"),
-            word("later", ""),
-        ]);
+        let m =
+            KeyMisses::from_words(&[word("about", "ab"), word("go", "gooo"), word("later", "")]);
         assert_eq!(m, KeyMisses::default());
         assert_eq!(m.total(), 0);
     }
@@ -178,6 +224,29 @@ mod tests {
         assert_eq!(heat(4, 6), 2);
         assert_eq!(heat(5, 6), 3);
         assert_eq!(heat(6, 6), 3);
+    }
+
+    #[test]
+    fn keyboard_layout_staggers_rows() {
+        let letters = layout(false);
+        assert_eq!(letters.len(), 12 + 11 + 10);
+        let at = |cells: &[(char, u16, u16)], k| *cells.iter().find(|c| c.0 == k).unwrap();
+        assert_eq!(at(&letters, 'q'), ('q', 2, 0));
+        assert_eq!(at(&letters, 'w'), ('w', 6, 0));
+        assert_eq!(at(&letters, 'a'), ('a', 3, 1));
+        assert_eq!(at(&letters, 'z'), ('z', 5, 2));
+        let all = layout(true);
+        assert_eq!(at(&all, '1'), ('1', 0, 0));
+        assert_eq!(at(&all, 'q'), ('q', 2, 1));
+        assert_eq!(layout_size(false), (2 + 11 * 4 + 3, 3));
+        assert_eq!(layout_size(true), (2 + 11 * 4 + 3, 4));
+    }
+
+    #[test]
+    fn worst_keys_first() {
+        let m = KeyMisses::from_words(&[word("aab", "ssc"), word("eed", "ffx")]);
+        assert_eq!(m.worst(2), vec![('a', 2), ('e', 2)]);
+        assert_eq!(m.worst(10).len(), 4);
     }
 
     #[test]

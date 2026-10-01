@@ -33,6 +33,8 @@ pub struct ResultsSettings {
     pub consistency: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub raw: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub keys: Option<bool>,
 }
 
 impl ResultsSettings {
@@ -67,6 +69,8 @@ pub struct ProfileSettings {
     pub fullscreen: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub font: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub celebrate: Option<bool>,
     #[serde(skip_serializing_if = "ResultsSettings::is_empty")]
     pub results: ResultsSettings,
 }
@@ -203,10 +207,12 @@ settings! {
     Zen, "zen" => zen;
     Fullscreen, "fullscreen" => fullscreen;
     Font, "font" => font;
+    Celebrate, "celebrate" => celebrate;
     ResultsChart, "results chart" => results.chart;
     ResultsBreakdown, "results breakdown" => results.char_breakdown;
     ResultsConsistency, "results consistency" => results.consistency;
     ResultsRaw, "results raw" => results.raw;
+    ResultsKeys, "results keys" => results.keys;
 }
 
 impl SettingKey {

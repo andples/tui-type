@@ -50,6 +50,10 @@ pub enum Action {
     /// A key while the screensaver types: crumble it.
     IdleWake,
 
+    // Results screen
+    /// A key while the new-best confetti plays: end it.
+    EndCelebration,
+
     // Housekeeping
     Tick,
     Redraw,
