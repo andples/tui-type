@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::config::{Config, FONT_SIZE_RANGE, LINES_RANGE, WORDS_PER_LINE_RANGE};
+use crate::config::{Config, FONT_SIZE_RANGE, LINES_RANGE, Pace, WORDS_PER_LINE_RANGE};
 use crate::test::mode::Mode;
 
 pub use menu::{Editor, ProfileMenu};
@@ -71,6 +71,8 @@ pub struct ProfileSettings {
     pub font: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub celebrate: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pace: Option<Pace>,
     #[serde(skip_serializing_if = "ResultsSettings::is_empty")]
     pub results: ResultsSettings,
 }
@@ -99,6 +101,12 @@ impl Show for bool {
 impl Show for u8 {
     fn show(&self) -> String {
         self.to_string()
+    }
+}
+
+impl Show for Pace {
+    fn show(&self) -> String {
+        self.label()
     }
 }
 
@@ -207,6 +215,7 @@ settings! {
     Zen, "zen" => zen;
     Fullscreen, "fullscreen" => fullscreen;
     Font, "font" => font;
+    Pace, "pace" => pace;
     Celebrate, "celebrate" => celebrate;
     ResultsChart, "results chart" => results.chart;
     ResultsBreakdown, "results breakdown" => results.char_breakdown;

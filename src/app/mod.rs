@@ -8,6 +8,7 @@ pub mod idle;
 pub mod input;
 pub mod misses;
 mod online;
+pub mod pace;
 mod profiles;
 pub mod splash;
 mod user;
@@ -22,7 +23,7 @@ use ratatui::layout::Rect;
 
 use crate::catalog::{CatalogMenu, Fetcher};
 use crate::command::{self, Command, CommandLine, Completions};
-use crate::config::{Config, Paths};
+use crate::config::{Config, Pace, Paths};
 use crate::config::{FONT_SIZE_RANGE, FontSize, LINES_RANGE, WORDS_PER_LINE_RANGE};
 use crate::gfx::{self, Gfx};
 use crate::language::LanguageRegistry;
@@ -518,7 +519,10 @@ impl App {
     /// Only wake up on a timer when something on screen is time-dependent
     /// or a network reply is expected.
     fn poll_timeout(&self) -> Option<Duration> {
-        let rest = self.poll_timeout_rest();
+        let rest = match (self.poll_timeout_rest(), self.pace_wake()) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        };
         if !self.idle_allowed() {
             return rest;
         }
@@ -565,6 +569,40 @@ impl App {
                 .saturating_sub(at.elapsed())
                 .max(Duration::from_millis(50))
         })
+    }
+
+    /// The pace caret's speed for the test on screen, if it has one.
+    pub fn pace_target(&self) -> Option<f64> {
+        let language = match &self.daily {
+            Some(d) => d.language.as_str(),
+            None => self.config.language.as_str(),
+        };
+        pace::target_wpm(
+            self.config.pace,
+            self.stats.all(),
+            self.engine.mode(),
+            language,
+        )
+    }
+
+    /// Where the pace caret is at `now`: (word index, character offset).
+    /// Only while a test is running on the typing screen.
+    pub fn pace_position_at(&self, now: Instant) -> Option<(usize, usize)> {
+        if self.screen != Screen::Typing || self.engine.status() != Status::Running {
+            return None;
+        }
+        let wpm = self.pace_target()?;
+        let lengths: Vec<usize> = self.engine.words().iter().map(|w| w.target.len()).collect();
+        pace::position(&lengths, self.engine.elapsed_at(now), wpm)
+    }
+
+    /// When the pace caret next moves, while it's racing.
+    fn pace_wake(&self) -> Option<Duration> {
+        if self.screen != Screen::Typing || self.engine.status() != Status::Running {
+            return None;
+        }
+        let wpm = self.pace_target()?;
+        pace::next_move_in(self.engine.elapsed_at(Instant::now()), wpm)
     }
 
     fn input_context(&self) -> InputContext {
@@ -997,6 +1035,21 @@ impl App {
                 self.config.zen = v.unwrap_or(!self.config.zen);
                 self.notify(format!("zen {}", on_off(self.config.zen)));
             }
+            Command::Pace(pace) => {
+                self.config.pace = pace;
+                let target = self.pace_target();
+                self.notify(match (pace, target) {
+                    (Pace::Off, _) => "pace off".to_string(),
+                    (Pace::Wpm(n), _) => format!("pace {n} wpm"),
+                    (_, Some(w)) => format!("pace {} · {w:.0} wpm", pace.label()),
+                    (_, None) => format!(
+                        "pace {} · no {} for {} yet",
+                        pace.label(),
+                        if pace == Pace::Pb { "best" } else { "run" },
+                        self.engine.mode().label()
+                    ),
+                });
+            }
             Command::Profile(None) => {
                 self.open_profiles();
                 return;
@@ -1091,6 +1144,7 @@ impl App {
                         | "daily_lock"
                         | "splash"
                         | "celebrate"
+                        | "pace"
                 ) && !key.starts_with("results.");
             }
         }

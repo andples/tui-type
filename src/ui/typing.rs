@@ -1,5 +1,6 @@
 //! The test screen: timer/counter, a scrolling word box (`lines` tall) with
-//! a block caret, and a dim mode line. Fullscreen drops the counter and mode
+//! a block caret (and the faint pace caret, when `pace` is on), and a dim
+//! mode line. Fullscreen drops the counter and mode
 //! line and gives their rows to the words.
 
 use std::time::Instant;
@@ -11,8 +12,9 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
 use super::bigtext;
-use super::style::{Palette, vcenter};
+use super::style::{Palette, mix, vcenter};
 use crate::app::App;
+use crate::config::Pace;
 use crate::gfx::{Glyph, ImageLine, Rgb};
 use crate::test::{Mode, Status, Word};
 
@@ -68,7 +70,10 @@ fn to_glyph((ch, st): Cell, p: &Palette) -> Glyph {
     }
 }
 
-fn word_cells(w: &Word, is_current: bool, p: &Palette) -> Vec<Cell> {
+/// The cells of one word. `ghost` is where the pace caret sits in it (a
+/// character offset into the target, or its length for the space after
+/// it); it's a faint block behind the text, and the real caret wins.
+fn word_cells(w: &Word, is_current: bool, ghost: Option<usize>, p: &Palette) -> Vec<Cell> {
     let mut cells = Vec::with_capacity(w.target.len() + 2);
     let caret_at = if is_current {
         Some(w.typed.len())
@@ -76,6 +81,7 @@ fn word_cells(w: &Word, is_current: bool, p: &Palette) -> Vec<Cell> {
         None
     };
     let n = w.target.len().max(w.typed.len());
+    let ghost_at = ghost.map(|g| if g < w.target.len() { g } else { n });
     for j in 0..n {
         let (ch, style) = match (w.target.get(j), w.typed.get(j)) {
             (Some(t), Some(ty)) if t == ty => (*t, p.correct()),
@@ -86,6 +92,8 @@ fn word_cells(w: &Word, is_current: bool, p: &Palette) -> Vec<Cell> {
         };
         let style = if caret_at == Some(j) {
             p.caret()
+        } else if ghost_at == Some(j) {
+            ghost_style(style, p)
         } else {
             style
         };
@@ -94,11 +102,19 @@ fn word_cells(w: &Word, is_current: bool, p: &Palette) -> Vec<Cell> {
     // Caret sits on the trailing space when the word is fully typed.
     let space_style = if caret_at == Some(n) {
         p.caret()
+    } else if ghost_at == Some(n) {
+        ghost_style(p.sub(), p)
     } else {
         p.sub()
     };
     cells.push((' ', space_style));
     cells
+}
+
+/// The pace caret: a block in a faint shade of the theme's `sub` colour
+/// behind the character, which stays readable.
+fn ghost_style(style: Style, p: &Palette) -> Style {
+    style.bg(mix(p.bg, p.sub, 0.45))
 }
 
 /// Draws the typing screen. Returns the lines to show as real-font images
@@ -111,6 +127,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) -> Vec<Imag
     let visible_lines = line_count.max(1) as usize;
     let words = app.engine.words();
     let current = app.engine.current_index();
+    let pace = app.pace_position_at(Instant::now());
 
     let lines = match metrics {
         Some(m) => {
@@ -144,7 +161,11 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) -> Vec<Imag
             words[*s..*e]
                 .iter()
                 .enumerate()
-                .flat_map(|(k, w)| word_cells(w, s + k == current, p))
+                .flat_map(|(k, w)| {
+                    let i = s + k;
+                    let ghost = pace.filter(|(g, _)| *g == i).map(|(_, off)| off);
+                    word_cells(w, i == current, ghost, p)
+                })
                 .collect()
         })
         .collect();
@@ -236,6 +257,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) -> Vec<Imag
 
 pub fn mode_line(app: &App) -> String {
     let c = &app.config;
+    let pace = pace_label(app);
     if let Some(d) = &app.daily {
         return [
             "daily".to_string(),
@@ -243,6 +265,9 @@ pub fn mode_line(app: &App) -> String {
             d.language.clone(),
             d.date.clone(),
         ]
+        .into_iter()
+        .chain(pace)
+        .collect::<Vec<_>>()
         .join("  ·  ");
     }
     let lang = app.languages.get_or_default(&c.language);
@@ -253,7 +278,20 @@ pub fn mode_line(app: &App) -> String {
     if c.numbers {
         parts.push("numbers".into());
     }
+    parts.extend(pace);
     parts.join("  ·  ")
+}
+
+/// `pace 87` while the pace caret is on, `pace pb` when there's no best
+/// to race yet.
+fn pace_label(app: &App) -> Option<String> {
+    if app.config.pace == Pace::Off {
+        return None;
+    }
+    Some(match app.pace_target() {
+        Some(w) => format!("pace {w:.0}"),
+        None => format!("pace {} (none yet)", app.config.pace.label()),
+    })
 }
 
 #[cfg(test)]

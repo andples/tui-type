@@ -135,6 +135,8 @@ pub struct Config {
     /// Throw a short burst of confetti on the results screen when a test
     /// sets a new personal best.
     pub celebrate: bool,
+    /// The pace caret (see `Pace`).
+    pub pace: Pace,
 }
 
 /// How font sizes above 1 are drawn. Only set in the config file; there is
@@ -157,6 +159,88 @@ impl Graphics {
             "kitty" | "auto" | "on" => Ok(Graphics::Kitty),
             "off" | "blocks" => Ok(Graphics::Off),
             _ => Err(format!("expected kitty or off, got `{s}`")),
+        }
+    }
+}
+
+/// The pace caret: a ghost caret racing you through the words at a target
+/// speed. Purely visual. In the config: `pace = "off"`, `"pb"`, `"last"` or
+/// a number of wpm.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(try_from = "PaceValue", into = "PaceValue")]
+pub enum Pace {
+    #[default]
+    Off,
+    /// Your personal best for the mode and language.
+    Pb,
+    /// Your last result for the mode and language.
+    Last,
+    /// A fixed speed.
+    Wpm(u16),
+}
+
+/// Fastest fixed pace.
+pub const PACE_MAX: u16 = 400;
+
+/// How `Pace` reads and writes in TOML: a word or a number.
+#[derive(Serialize, Deserialize)]
+#[serde(untagged)]
+enum PaceValue {
+    Wpm(u16),
+    Name(String),
+}
+
+impl TryFrom<PaceValue> for Pace {
+    type Error = String;
+    fn try_from(v: PaceValue) -> Result<Self, String> {
+        match v {
+            PaceValue::Wpm(n) => Pace::parse(&n.to_string()),
+            PaceValue::Name(s) => Pace::parse(&s),
+        }
+    }
+}
+
+impl From<Pace> for PaceValue {
+    fn from(p: Pace) -> Self {
+        match p {
+            Pace::Wpm(n) => PaceValue::Wpm(n),
+            other => PaceValue::Name(other.label()),
+        }
+    }
+}
+
+impl Pace {
+    /// Suggestions for the palette and the profile editor.
+    pub const PRESETS: [Pace; 7] = [
+        Pace::Off,
+        Pace::Pb,
+        Pace::Last,
+        Pace::Wpm(60),
+        Pace::Wpm(80),
+        Pace::Wpm(100),
+        Pace::Wpm(120),
+    ];
+
+    pub fn parse(s: &str) -> Result<Self, String> {
+        match s.trim() {
+            "off" | "none" | "0" => Ok(Pace::Off),
+            "pb" | "best" => Ok(Pace::Pb),
+            "last" => Ok(Pace::Last),
+            n => match n.trim_end_matches("wpm").trim().parse::<u16>() {
+                Ok(n) if (1..=PACE_MAX).contains(&n) => Ok(Pace::Wpm(n)),
+                _ => Err(format!(
+                    "expected off, pb, last or a wpm (1-{PACE_MAX}), got `{s}`"
+                )),
+            },
+        }
+    }
+
+    pub fn label(self) -> String {
+        match self {
+            Pace::Off => "off".into(),
+            Pace::Pb => "pb".into(),
+            Pace::Last => "last".into(),
+            Pace::Wpm(n) => n.to_string(),
         }
     }
 }
@@ -379,6 +463,7 @@ impl Default for Config {
             daily_lock: true,
             splash: true,
             celebrate: true,
+            pace: Pace::Off,
         }
     }
 }
@@ -442,6 +527,7 @@ impl Config {
             "daily_lock" => self.daily_lock = parse_bool(value)?,
             "splash" => self.splash = parse_bool(value)?,
             "celebrate" => self.celebrate = parse_bool(value)?,
+            "pace" => self.pace = Pace::parse(value)?,
             "fullscreen" | "full" => self.fullscreen = parse_bool(value)?,
             "lines" => self.set_lines(parse_range(value, LINES_RANGE)?),
             "font" => self.font = value.to_string(),
@@ -668,6 +754,43 @@ mod tests {
         // Older config files without the key keep the landing screen.
         assert!(Config::parse("theme = \"default\"").unwrap().splash);
         assert!(c.set("graphics", "sixel").is_err());
+    }
+
+    #[test]
+    fn pace_reads_words_and_numbers() {
+        assert_eq!(Config::default().pace, Pace::Off);
+        for (text, pace) in [
+            ("pace = \"pb\"", Pace::Pb),
+            ("pace = \"last\"", Pace::Last),
+            ("pace = \"off\"", Pace::Off),
+            ("pace = 87", Pace::Wpm(87)),
+            ("pace = \"95\"", Pace::Wpm(95)),
+        ] {
+            let c = Config::parse(text).unwrap();
+            assert_eq!(c.pace, pace, "{text}");
+            // And it writes back the same way.
+            let again = Config::parse(&toml::to_string(&c).unwrap()).unwrap();
+            assert_eq!(again.pace, pace);
+        }
+        assert!(
+            toml::to_string(&Config {
+                pace: Pace::Wpm(87),
+                ..Config::default()
+            })
+            .unwrap()
+            .contains("pace = 87")
+        );
+        assert!(Config::parse("pace = \"fast\"").is_err());
+        assert!(Config::parse("pace = 0").is_ok_and(|c| c.pace == Pace::Off));
+        assert!(Config::parse("pace = 999").is_err());
+        let mut c = Config::default();
+        c.set("pace", "120").unwrap();
+        assert_eq!(c.pace, Pace::Wpm(120));
+        c.set("pace", "best").unwrap();
+        assert_eq!(c.pace, Pace::Pb);
+        assert!(c.set("pace", "-3").is_err());
+        assert_eq!(Pace::parse("72wpm"), Ok(Pace::Wpm(72)));
+        assert_eq!(Pace::Wpm(72).label(), "72");
     }
 
     #[test]

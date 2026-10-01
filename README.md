@@ -47,6 +47,19 @@ about a second and a half, never covers text, and any key ends it (keys like
 `tab` still do their thing). Turn it off with `:set celebrate off`
 (`celebrate = false` in the config, or a profile).
 
+### Pace caret
+
+`:pace pb` races you against yourself: a faint ghost caret (a block in a
+soft shade of the theme's `sub` colour, behind the text so nothing is
+hidden) moves through the words at the speed of your personal best for the
+mode and language, so you can see at a glance whether you're ahead or
+behind. `:pace last` races your last run in that mode and language,
+`:pace 87` a fixed 87 wpm, `:pace off` turns it off (the default). It
+starts with your first key, and the mode line says what it's set to
+(`pace 87`). It's only drawn: scoring, history and daily submissions never
+see it. Set it in the config as `pace = "pb"` / `"last"` / `87`, with
+`:set pace …`, or in a profile.
+
 ### Stats screen
 
 `:stats` (or `s` on the results screen) opens your history. On top is a
@@ -110,6 +123,7 @@ Press `esc`, start typing, and the palette fuzzy-filters as you go.
 | `lines [1-10]` | `ln` | lines of words shown at once (default 3) |
 | `fullscreen [on\|off]` | `full` | largest text that fits the terminal, no chrome |
 | `zen [on\|off]` | | words only — hides the brand, timer and mode line |
+| `pace <off\|pb\|last\|wpm>` | `ghost` | a ghost caret racing you at your best, your last run or a fixed speed |
 | `profile [name]` | `profiles`, `pf` | open the profile menu, or switch a profile on |
 | `install [name]` | `catalog`, `get` | open the install menu, or install and use a language/theme |
 | `uninstall <name>` | `remove` | remove an installed language or theme |

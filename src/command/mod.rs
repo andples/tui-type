@@ -6,7 +6,7 @@ pub mod palette;
 pub use palette::{CommandLine, Completions, Suggestion};
 
 use crate::config::{
-    FONT_SIZE_RANGE, LINES_RANGE, ResultsConfig, WORDS_PER_LINE_RANGE, parse_range,
+    FONT_SIZE_RANGE, LINES_RANGE, Pace, ResultsConfig, WORDS_PER_LINE_RANGE, parse_range,
 };
 use crate::test::mode::Mode;
 
@@ -30,6 +30,8 @@ pub enum Command {
     /// Font family, file name or path; empty for the system monospace.
     Font(String),
     Zen(Option<bool>),
+    /// The pace caret: off, pb, last or a wpm.
+    Pace(Pace),
     /// `None` opens the profile menu; a name activates that profile.
     Profile(Option<String>),
     /// `None` opens the install menu; a name installs that language/theme.
@@ -74,6 +76,8 @@ pub enum ArgKind {
     WordPresets,
     OnOff,
     ResultSections,
+    /// `off`, `pb`, `last` or any wpm.
+    Pace,
     /// `time 30`, `words 25`, …: the modes dailies exist for.
     DailyModes,
     /// `public on` / `public off`.
@@ -100,6 +104,7 @@ impl ArgKind {
                 | ArgKind::Fonts
                 | ArgKind::Installable
                 | ArgKind::Free
+                | ArgKind::Pace
                 | ArgKind::Slider { .. }
         )
     }
@@ -223,6 +228,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         help: "words only, no chrome",
         arg: ArgKind::OnOff,
         requires_arg: false,
+    },
+    CommandSpec {
+        name: "pace",
+        aliases: &["ghost"],
+        usage: "<off|pb|last|wpm>",
+        help: "a ghost caret racing you at your best, your last run or a speed",
+        arg: ArgKind::Pace,
+        requires_arg: true,
     },
     CommandSpec {
         name: "profile",
@@ -395,6 +408,7 @@ pub fn parse(line: &str) -> Result<Command, String> {
         "wordsperline" => Command::WordsPerLine(opt_range(rest, WORDS_PER_LINE_RANGE)?),
         "font" => Command::Font(rest.to_string()),
         "zen" => Command::Zen(opt_on_off(rest)?),
+        "pace" => Command::Pace(Pace::parse(need(spec.usage)?)?),
         "lines" => Command::Lines(opt_range(rest, LINES_RANGE)?),
         "fullscreen" => Command::Fullscreen(opt_on_off(rest)?),
         "profile" => Command::Profile(Some(rest.to_string()).filter(|r| !r.is_empty())),
@@ -503,6 +517,7 @@ pub fn arg_candidates(kind: ArgKind, comps: &Completions) -> Vec<String> {
             .iter()
             .map(|s| s.to_string())
             .collect(),
+        ArgKind::Pace => Pace::PRESETS.iter().map(|p| p.label()).collect(),
         ArgKind::Account => vec!["public on".into(), "public off".into()],
         ArgKind::DailyModes => ttyp_core::api::DAILY_MODES
             .iter()
@@ -530,6 +545,11 @@ mod tests {
         assert_eq!(parse("punc"), Ok(Command::Punctuation(None)));
         assert_eq!(parse("numbers off"), Ok(Command::Numbers(Some(false))));
         assert_eq!(parse("q"), Ok(Command::Quit));
+        assert_eq!(parse("pace pb"), Ok(Command::Pace(Pace::Pb)));
+        assert_eq!(parse("ghost 87"), Ok(Command::Pace(Pace::Wpm(87))));
+        assert_eq!(parse("pace off"), Ok(Command::Pace(Pace::Off)));
+        assert!(parse("pace").is_err());
+        assert!(parse("pace soon").is_err());
         assert_eq!(parse("daily"), Ok(Command::Daily(None)));
         assert_eq!(parse("lb"), Ok(Command::Leaderboard));
         assert_eq!(parse("account"), Ok(Command::Account(None)));
