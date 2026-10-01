@@ -182,6 +182,9 @@ pub struct App {
     /// A language being installed from the modules checklist: switching to
     /// it once it's in doesn't ask again.
     modules_chosen_for: Option<String>,
+    /// Catalogue files being refetched because they changed upstream
+    /// (`language` or `language/module`), so they say "updated".
+    catalog_updates: Vec<String>,
     /// Present unless `catalog` is turned off in the config.
     fetcher: Option<Fetcher>,
     pub engine: TestEngine,
@@ -322,6 +325,7 @@ impl App {
             module_menu: ModuleMenu::default(),
             module_downloads: Vec::new(),
             modules_chosen_for: None,
+            catalog_updates: Vec::new(),
             fetcher,
             engine,
             outcome: None,
@@ -367,6 +371,7 @@ impl App {
             app.notify(w.clone());
         }
         app.install_missing();
+        app.check_catalog_updates();
         app.retry_queued_submissions();
         Ok(app)
     }

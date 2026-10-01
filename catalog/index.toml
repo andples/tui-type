@@ -4,181 +4,217 @@
 name = "code_bash"
 display = "Bash (code)"
 words = 206
+checksum = "8b00d208bc178950"
 
 [[languages]]
 name = "code_c"
 display = "C (code)"
 words = 209
+checksum = "3d2b953173310f79"
 
 [[languages]]
 name = "code_cpp"
 display = "C++ (code)"
 words = 241
+checksum = "f8b31a42b07eb1eb"
 
 [[languages]]
 name = "code_csharp"
 display = "C# (code)"
 words = 246
+checksum = "42b9461826d57f80"
 
 [[languages]]
 name = "code_dart"
 display = "Dart (code)"
 words = 219
+checksum = "49234c8e23a576aa"
 
 [[languages]]
 name = "code_elixir"
 display = "Elixir (code)"
 words = 220
+checksum = "4a6618173c056cf0"
 
 [[languages]]
 name = "code_go"
 display = "Go (code)"
 words = 204
+checksum = "154a3ded25138a88"
 
 [[languages]]
 name = "code_haskell"
 display = "Haskell (code)"
 words = 243
+checksum = "6e741927f058c284"
 
 [[languages]]
 name = "code_java"
 display = "Java (code)"
 words = 244
+checksum = "fd71b323cd979ad8"
 
 [[languages]]
 name = "code_javascript"
 display = "JavaScript (code)"
 words = 233
+checksum = "e751f4a2841bd095"
 
 [[languages]]
 name = "code_kotlin"
 display = "Kotlin (code)"
 words = 242
+checksum = "a11e9fa22b62f81c"
 
 [[languages]]
 name = "code_lean"
 display = "Lean 4 (code)"
 words = 225
+checksum = "23aa3666a0d6405c"
 
 [[languages]]
 name = "code_lua"
 display = "Lua (code)"
 words = 173
+checksum = "815b3b5394b85684"
 
 [[languages]]
 name = "code_ocaml"
 display = "OCaml (code)"
 words = 225
+checksum = "9515ba801296fa6a"
 
 [[languages]]
 name = "code_perl"
 display = "Perl (code)"
 words = 201
+checksum = "d24fcf313244a402"
 
 [[languages]]
 name = "code_php"
 display = "PHP (code)"
 words = 200
+checksum = "e88e3f7896973b84"
 
 [[languages]]
 name = "code_python"
 display = "Python (code)"
 words = 216
+checksum = "295d373e29188d40"
 
 [[languages.modules]]
 name = "numpy"
 display = "NumPy"
 words = 95
+checksum = "3d13af0a258a45db"
 
 [[languages.modules]]
 name = "pandas"
 display = "pandas"
 words = 93
+checksum = "9e946595cb2a22e6"
 
 [[languages.modules]]
 name = "pytorch"
 display = "PyTorch"
 words = 100
+checksum = "dede038ad5f29f24"
 
 [[languages.modules]]
 name = "stdlib"
 display = "Standard library"
 words = 105
+checksum = "e38e6720f87bf50e"
 
 [[languages.modules]]
 name = "tensorflow"
 display = "TensorFlow"
 words = 81
+checksum = "05002dcb333ea045"
 
 [[languages]]
 name = "code_r"
 display = "R (code)"
 words = 237
+checksum = "1bdebe1b781bc42d"
 
 [[languages]]
 name = "code_ruby"
 display = "Ruby (code)"
 words = 244
+checksum = "9504a19a5ec605d1"
 
 [[languages]]
 name = "code_rust"
 display = "Rust (code)"
 words = 238
+checksum = "faa8b30db131c93b"
 
 [[languages]]
 name = "code_scala"
 display = "Scala (code)"
 words = 221
+checksum = "29313da5f0bbee88"
 
 [[languages]]
 name = "code_sql"
 display = "SQL (code)"
 words = 196
+checksum = "c13ad4fdd175aea3"
 
 [[languages]]
 name = "code_swift"
 display = "Swift (code)"
 words = 224
+checksum = "faf697025936232b"
 
 [[languages]]
 name = "code_typescript"
 display = "TypeScript (code)"
 words = 168
+checksum = "5163d64f33f3d3c3"
 
 [[languages]]
 name = "code_zig"
 display = "Zig (code)"
 words = 200
+checksum = "3556922f44c69770"
 
 [[languages]]
 name = "dutch"
 display = "Dutch"
 words = 196
+checksum = "b8308fc38a3dc445"
 
 [[languages]]
 name = "french"
 display = "French"
 words = 216
+checksum = "fcad820f45745cea"
 
 [[languages]]
 name = "german"
 display = "German"
 words = 225
+checksum = "df569f2429706672"
 
 [[languages]]
 name = "italian"
 display = "Italian"
 words = 202
+checksum = "c216a8df06aaff2c"
 
 [[languages]]
 name = "portuguese"
 display = "Portuguese"
 words = 215
+checksum = "b6194c75966a70b4"
 
 [[languages]]
 name = "spanish"
 display = "Spanish"
 words = 258
+checksum = "326676afe18d91eb"
 
 [[themes]]
 name = "8008"

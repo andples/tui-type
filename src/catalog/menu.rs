@@ -324,6 +324,7 @@ mod tests {
                     display: "Spanish".into(),
                     words: 200,
                     modules: Vec::new(),
+                    checksum: None,
                 }],
                 themes: vec![nord],
             }),

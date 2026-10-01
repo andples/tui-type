@@ -92,6 +92,10 @@ pub struct LanguageEntry {
     /// Optional add-on word lists (`modules.rs`), by name.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub modules: Vec<ModuleEntry>,
+    /// `checksum` of the file, so installed copies can be brought up to
+    /// date (absent in indexes from before 2.0.1).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checksum: Option<String>,
 }
 
 /// A language module as the index describes it.
@@ -100,6 +104,19 @@ pub struct ModuleEntry {
     pub name: String,
     pub display: String,
     pub words: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checksum: Option<String>,
+}
+
+/// A stable fingerprint of a catalogue file (64-bit FNV-1a, hex), to tell
+/// whether an installed copy is the catalogue's current one.
+pub fn checksum(text: &str) -> String {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in text.bytes() {
+        h ^= u64::from(b);
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    format!("{h:016x}")
 }
 
 /// `catalog/index.toml`.
@@ -412,6 +429,7 @@ mod tests {
                                         name: m.name,
                                         display: m.display,
                                         words: m.words.len(),
+                                        checksum: Some(checksum(&text)),
                                     }
                                 })
                                 .collect();
@@ -421,6 +439,7 @@ mod tests {
                             display: l.display,
                             words: l.words.len(),
                             modules,
+                            checksum: Some(checksum(&text)),
                         });
                     }
                     Kind::Theme => expected.themes.push(Theme::parse(&text).unwrap()),

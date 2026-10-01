@@ -148,6 +148,7 @@ impl App {
                 self.catalog_menu
                     .set_index(index, &self.themes, &self.languages);
                 self.refresh_catalog_lists();
+                self.update_stale();
             }
             CatalogEvent::Index(Err(e)) => self.catalog_menu.index = IndexState::Failed(e),
             CatalogEvent::ModuleFetched {
@@ -208,6 +209,13 @@ impl App {
             return;
         }
         self.reload_catalogued();
+        if self.take_update(name) {
+            self.notify(format!("updated {kind} {name}"));
+            if kind == Kind::Language && self.config.language == name {
+                self.refresh_words();
+            }
+            return;
+        }
         self.notify(format!("installed {kind} {name}"));
         if use_it {
             self.use_item(kind, name);
@@ -345,6 +353,83 @@ impl App {
 
     fn sync_catalog(&mut self) {
         self.catalog_menu.sync(&self.themes, &self.languages);
+    }
+
+    /// At startup: fetch the catalogue index, so installed languages and
+    /// modules that changed in the catalogue get updated (`update_stale`).
+    /// Skipped when the user has opted out of the network (`server = ""`).
+    pub(super) fn check_catalog_updates(&mut self) {
+        if self.config.server_url().is_some() {
+            self.load_index(false);
+        }
+    }
+
+    /// Refetch every installed catalogue language and module whose file
+    /// isn't the catalogue's current one (by `catalog::checksum`). Files
+    /// the index has no checksum for are left alone.
+    fn update_stale(&mut self) {
+        let Some(index) = self.catalog_menu.index() else {
+            return;
+        };
+        let dir = &self.paths.languages_dir;
+        let stale = |path: std::path::PathBuf, sum: &Option<String>| {
+            let Some(sum) = sum else { return false };
+            std::fs::read_to_string(path).is_ok_and(|text| catalog::checksum(&text) != *sum)
+        };
+        let mut languages = Vec::new();
+        let mut modules = Vec::new();
+        for entry in &index.languages {
+            if LanguageRegistry::is_builtin(&entry.name) {
+                continue;
+            }
+            if stale(dir.join(format!("{}.toml", entry.name)), &entry.checksum) {
+                languages.push(entry.name.clone());
+            }
+            let mdir = crate::catalog::modules::dir(dir, &entry.name);
+            for m in &entry.modules {
+                if stale(mdir.join(format!("{}.toml", m.name)), &m.checksum) {
+                    modules.push((entry.name.clone(), m.name.clone()));
+                }
+            }
+        }
+        let Some(fetcher) = &mut self.fetcher else {
+            return;
+        };
+        for name in languages {
+            if self.catalog_menu.installing.iter().any(|(_, n)| *n == name) {
+                continue;
+            }
+            fetcher.fetch(Some(Kind::Language), name.clone(), false);
+            self.catalog_menu
+                .installing
+                .push((Kind::Language, name.clone()));
+            self.catalog_updates.push(name);
+        }
+        for (language, module) in modules {
+            let key = (language.clone(), module.clone());
+            if self.module_downloads.contains(&key) {
+                continue;
+            }
+            fetcher.fetch_module(language.clone(), module.clone());
+            self.module_downloads.push(key);
+            self.catalog_updates.push(format!("{language}/{module}"));
+        }
+    }
+
+    /// Whether `name` (a language, or `language/module`) was being
+    /// updated rather than installed; forgets it either way.
+    pub(super) fn take_update(&mut self, name: &str) -> bool {
+        let before = self.catalog_updates.len();
+        self.catalog_updates.retain(|n| n != name);
+        self.catalog_updates.len() != before
+    }
+
+    /// New words for the current language without leaving the screen: an
+    /// update that lands while nothing is being typed.
+    pub(super) fn refresh_words(&mut self) {
+        if self.engine.status() == Status::Idle && self.daily.is_none() {
+            self.engine = Self::build_engine(&self.config, &self.languages, &self.modules);
+        }
     }
 
     /// At startup: fetch a language or theme the config names but that

@@ -239,6 +239,13 @@ impl App {
             return;
         }
         self.reload_modules();
+        if self.take_update(&format!("{language}/{module}")) {
+            self.notify(format!("updated {language}/{module}"));
+            if self.config.language == language {
+                self.refresh_words();
+            }
+            return;
+        }
         self.notify(format!("installed {language}/{module}"));
         let wanted = self
             .config
