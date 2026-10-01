@@ -60,7 +60,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
 
     render_headline(frame, outcome, rows[0], p);
     if outcome.is_pb && app.config.pb_effect.trophy() {
-        render_trophy(frame, trophy_at(outcome, rows[0]), p);
+        render_trophy(frame, trophy_at(outcome, rows[0], area), p);
     }
     render_detail(frame, app, outcome, rows[2], p);
     let mut next = 3;
@@ -184,19 +184,35 @@ fn render_keys(frame: &mut Frame, m: &KeyMisses, area: Rect, p: &Palette) {
     }
 }
 
-/// A two-row trophy, cup over its stand, drawn after "new best".
-const TROPHY: [&str; 2] = ["╰█╯", "▗▀▖"];
+/// The trophy drawn after "new best", in half blocks: a bowl whose handles
+/// curve in from its rim, on a stem and a foot. It takes the empty row
+/// above the headline too; `TROPHY_SHORT` is for when there isn't one.
+const TROPHY: [&str; 3] = ["█▀███▀█", " ▀███▀ ", "  ▄█▄  "];
+const TROPHY_SHORT: [&str; 2] = ["█▀███▀█", "  ▄█▄  "];
 
-/// Top left of the trophy: two columns past the "new best" text.
-fn trophy_at(o: &Outcome, headline: Rect) -> Rect {
+/// Where the trophy goes: two columns past the "new best" text, its foot
+/// on the score's row, reaching one row above the headline when that row
+/// is free (not the brand line at the top of `area`).
+fn trophy_at(o: &Outcome, headline: Rect, area: Rect) -> (Rect, &'static [&'static str]) {
     let acc = format!("{:.0}%", o.metrics.accuracy);
     let x = headline.x + 8 + 3 + acc.chars().count() as u16 + "  new best".len() as u16 + 2;
-    Rect::new(x, headline.y, 3, 2).intersection(headline)
+    let width = TROPHY[0].chars().count() as u16;
+    let fits = |r: Rect| r.right() <= area.right();
+    if headline.y >= area.y + 2 {
+        let r = Rect::new(x, headline.y - 1, width, 3);
+        if fits(r) {
+            return (r, &TROPHY);
+        }
+    }
+    (
+        Rect::new(x, headline.y, width, 2).intersection(area),
+        &TROPHY_SHORT,
+    )
 }
 
-fn render_trophy(frame: &mut Frame, area: Rect, p: &Palette) {
+fn render_trophy(frame: &mut Frame, (area, rows): (Rect, &[&str]), p: &Palette) {
     let style = p.main_bold();
-    let lines: Vec<Line> = TROPHY.iter().map(|r| Line::styled(*r, style)).collect();
+    let lines: Vec<Line> = rows.iter().map(|r| Line::styled(*r, style)).collect();
     frame.render_widget(Paragraph::new(lines), area);
 }
 
