@@ -47,6 +47,30 @@ about a second and a half, never covers text, and any key ends it (keys like
 `tab` still do their thing). Turn it off with `:set celebrate off`
 (`celebrate = false` in the config, or a profile).
 
+### Stats screen
+
+`:stats` (or `s` on the results screen) opens your history. On top is a
+year of **activity**: a calendar of tests per day (weeks across, Monday to
+Sunday down, shaded from the background towards the theme's accent by how
+busy the day was, today marked `▣`, month names above), then your current
+and longest streak of days with a test, total time typed and your busiest
+day, and a sparkline of your average wpm for each of the last 30 days
+(dots are days off). Days are your local days. Below that are the averages,
+your bests per mode and every run, newest first (`↑↓`, `g`/`G`).
+
+The calendar shows as many weeks as fit (up to 52); in a short terminal it
+makes room for the runs first, then the streak and trend lines do too.
+
+```
+    jul     aug       sep
+mon ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■
+    ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■
+wed ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ■ ▣
+    …
+streak 11 days  ·  longest 14 days  ·  typed 6h 32m  ·  best day sep 11 (9)
+last 30 days  ▃▄··▇▇▃··▆·▁·▆··▇··▃▅▃▇▄▁█▄▅▄█  60–74 wpm
+```
+
 ### Landing screen
 
 ttyp opens on a short intro: the logo typed out in big letters (under a

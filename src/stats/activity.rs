@@ -172,6 +172,46 @@ pub fn spark_levels(values: &[Option<f64>]) -> Vec<Option<u8>> {
         .collect()
 }
 
+/// Month names as the calendar labels them.
+const MONTHS: [&str; 12] = [
+    "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec",
+];
+
+/// Labels over the calendar's week columns: the week each month starts in
+/// (its first Monday on or after the 1st, or the first column for the
+/// month already under way), as (column, name). A label that would sit
+/// within `min_gap` columns of the previous one is dropped, unless the
+/// previous one is the leading month cut off at the left edge: that one
+/// gives way instead.
+pub fn month_labels(start: NaiveDate, weeks: usize, min_gap: usize) -> Vec<(usize, &'static str)> {
+    let mut out: Vec<(usize, &'static str)> = Vec::new();
+    let mut prev_month = None;
+    for w in 0..weeks {
+        let Some(monday) = start.checked_add_days(Days::new(7 * w as u64)) else {
+            break;
+        };
+        let m = monday.month0();
+        if prev_month != Some(m) {
+            match out.last() {
+                Some((c, _)) if w < c + min_gap => {
+                    if *c == 0 && start.day() > 7 {
+                        out.pop();
+                        out.push((w, MONTHS[m as usize]));
+                    }
+                }
+                _ => out.push((w, MONTHS[m as usize])),
+            }
+            prev_month = Some(m);
+        }
+    }
+    out
+}
+
+/// `sep 14`.
+pub fn short_date(d: NaiveDate) -> String {
+    format!("{} {}", MONTHS[d.month0() as usize], d.day())
+}
+
 /// `1h 05m`, `12m`, `45s`.
 pub fn format_duration(secs: f64) -> String {
     let s = secs.max(0.0).round() as u64;
@@ -278,11 +318,11 @@ mod tests {
         ];
         let a = Activity::from_records(&rs, &Utc, date("2026-01-10"));
         assert_eq!(a.trend(3), vec![Some(40.0), None, Some(70.0)]);
+        assert_eq!(spark_levels(&a.trend(3)), vec![Some(0), None, Some(7)]);
         assert_eq!(
-            spark_levels(&a.trend(3)),
-            vec![Some(0), None, Some(7)]
+            spark_levels(&[Some(5.0), Some(5.0)]),
+            vec![Some(3), Some(3)]
         );
-        assert_eq!(spark_levels(&[Some(5.0), Some(5.0)]), vec![Some(3), Some(3)]);
         assert_eq!(spark_levels(&[None]), vec![None]);
     }
 
@@ -305,8 +345,33 @@ mod tests {
         ];
         let a = Activity::from_records(&rs, &Utc, date("2026-10-01"));
         assert_eq!(a.tests_on(date("2026-09-01")), 2);
-        assert_eq!(a.max_tests_between(date("2026-08-02"), date("2026-10-01")), 2);
-        assert_eq!(a.max_tests_between(date("2026-07-01"), date("2026-08-31")), 1);
+        assert_eq!(
+            a.max_tests_between(date("2026-08-02"), date("2026-10-01")),
+            2
+        );
+        assert_eq!(
+            a.max_tests_between(date("2026-07-01"), date("2026-08-31")),
+            1
+        );
+    }
+
+    #[test]
+    fn month_labels_mark_where_months_start() {
+        // Mondays: 2026-08-24, 08-31, 09-07, 09-14, 09-21, 09-28, 10-05.
+        let start = date("2026-08-24");
+        assert_eq!(
+            month_labels(start, 7, 2),
+            vec![(0, "aug"), (2, "sep"), (6, "oct")]
+        );
+        // The cut-off month at the left edge gives way to the next.
+        assert_eq!(month_labels(start, 7, 3), vec![(2, "sep"), (6, "oct")]);
+        // Otherwise a label too close to the previous one is dropped.
+        assert_eq!(month_labels(date("2026-09-07"), 5, 5), vec![(0, "sep")]);
+        // A year of columns names every month once (or twice for the one
+        // at both ends).
+        let year = month_labels(calendar_start(date("2026-10-01"), 52), 52, 3);
+        assert!(year.len() >= 12 && year.len() <= 13, "{year:?}");
+        assert_eq!(short_date(date("2026-09-14")), "sep 14");
     }
 
     #[test]
