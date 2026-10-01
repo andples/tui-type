@@ -23,6 +23,10 @@ pub struct Language {
     #[serde(default)]
     pub display: String,
     pub words: Vec<String>,
+    /// Boilerplate the client's `trim_syntax` setting strips from every
+    /// word, e.g. `["()"]` for Python calls. Empty for natural languages.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub trim: Vec<String>,
 }
 
 impl Language {
@@ -127,6 +131,18 @@ mod tests {
     #[test]
     fn empty_rejected() {
         assert!(Language::parse("name = \"x\"\nwords = []").is_err());
+    }
+
+    #[test]
+    fn trim_is_optional() {
+        let l = Language::parse("name = \"x\"\nwords = [\"a()\"]\ntrim = [\"()\"]").unwrap();
+        assert_eq!(l.trim, ["()"]);
+        assert!(
+            Language::parse("name = \"x\"\nwords = [\"a\"]")
+                .unwrap()
+                .trim
+                .is_empty()
+        );
     }
 
     #[test]

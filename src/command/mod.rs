@@ -37,6 +37,10 @@ pub enum Command {
     Keyboard(Keyboard),
     /// What a new personal best shows.
     PbEffect(PbEffect),
+    /// The current language's modules checklist.
+    Modules,
+    /// Strip each language's boilerplate; `None` toggles.
+    TrimSyntax(Option<bool>),
     /// `None` opens the config menu; a name switches that config on.
     ConfigProfile(Option<String>),
     /// `None` opens the install menu; a name installs that language/theme.
@@ -247,6 +251,22 @@ pub const COMMANDS: &[CommandSpec] = &[
         requires_arg: true,
     },
     CommandSpec {
+        name: "modules",
+        aliases: &["module", "libs"],
+        usage: "",
+        help: "pick the current language's modules (numpy, pandas, …)",
+        arg: ArgKind::None,
+        requires_arg: false,
+    },
+    CommandSpec {
+        name: "trimsyntax",
+        aliases: &["trim", "trim_syntax"],
+        usage: "[on|off]",
+        help: "strip each language's boilerplate, like python's ()",
+        arg: ArgKind::OnOff,
+        requires_arg: false,
+    },
+    CommandSpec {
         name: "pbeffect",
         aliases: &["celebrate", "wineffect"],
         usage: "<both|confetti|trophy|off>",
@@ -434,6 +454,8 @@ pub fn parse(line: &str) -> Result<Command, String> {
         "font" => Command::Font(rest.to_string()),
         "zen" => Command::Zen(opt_on_off(rest)?),
         "pace" => Command::Pace(Pace::parse(need(spec.usage)?)?),
+        "modules" => Command::Modules,
+        "trimsyntax" => Command::TrimSyntax(opt_on_off(rest)?),
         "pbeffect" => Command::PbEffect(PbEffect::parse(need(spec.usage)?)?),
         "keyboard" => Command::Keyboard(Keyboard::parse(need(spec.usage)?)?),
         "lines" => Command::Lines(opt_range(rest, LINES_RANGE)?),
@@ -591,6 +613,9 @@ mod tests {
             Ok(Command::PbEffect(PbEffect::Trophy))
         );
         assert_eq!(parse("celebrate off"), Ok(Command::PbEffect(PbEffect::Off)));
+        assert_eq!(parse("modules"), Ok(Command::Modules));
+        assert_eq!(parse("trim on"), Ok(Command::TrimSyntax(Some(true))));
+        assert_eq!(parse("trimsyntax"), Ok(Command::TrimSyntax(None)));
         assert!(parse("pace").is_err());
         assert!(parse("pace soon").is_err());
         assert_eq!(parse("daily"), Ok(Command::Daily(None)));

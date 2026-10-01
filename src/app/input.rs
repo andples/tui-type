@@ -3,7 +3,9 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use super::Screen;
-use super::action::{Action, BoardAction, CatalogAction, ListMove, ProfileAction, UserAction};
+use super::action::{
+    Action, BoardAction, CatalogAction, ListMove, ModuleAction, ProfileAction, UserAction,
+};
 use super::splash::SplashMenu;
 use crate::test::Status;
 
@@ -81,6 +83,7 @@ pub fn map_key(key: KeyEvent, ctx: InputContext) -> Action {
         },
         Screen::Profiles => map_profiles(key, ctx.profile_menu),
         Screen::Catalog => map_catalog(key, ctrl || alt, ctx.catalog_confirm),
+        Screen::Modules => map_modules(key),
         Screen::Login => match key.code {
             KeyCode::Esc | KeyCode::Char('q') => Action::CancelLogin,
             KeyCode::Char(':') => Action::OpenCommandLine,
@@ -211,6 +214,23 @@ fn map_leaderboard(key: KeyEvent, ctrl: bool) -> Action {
 
 /// Letters go to the search, so the other actions sit on arrows, enter
 /// and ctrl.
+fn map_modules(key: KeyEvent) -> Action {
+    use ModuleAction as M;
+    let m = Action::Modules;
+    match key.code {
+        KeyCode::Up | KeyCode::Char('k') => m(M::Move(-1)),
+        KeyCode::Down | KeyCode::Char('j') => m(M::Move(1)),
+        KeyCode::Home | KeyCode::Char('g') => m(M::Top),
+        KeyCode::End | KeyCode::Char('G') => m(M::Bottom),
+        KeyCode::Char(' ') | KeyCode::Char('x') => m(M::Toggle),
+        KeyCode::Char('a') => m(M::ToggleAll),
+        KeyCode::Enter => m(M::Apply),
+        KeyCode::Esc | KeyCode::Char('q') => m(M::Cancel),
+        KeyCode::Char(':') => Action::OpenCommandLine,
+        _ => Action::Nop,
+    }
+}
+
 fn map_catalog(key: KeyEvent, modified: bool, confirm: bool) -> Action {
     use CatalogAction as C;
     let c = |a| Action::Catalog(a);

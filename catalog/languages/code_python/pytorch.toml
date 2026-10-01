@@ -1,0 +1,25 @@
+name = "pytorch"
+display = "PyTorch"
+words = [
+  "torch", "torch.nn", "nn", "F", "torch.tensor()", "torch.zeros()", "torch.ones()",
+  "torch.randn()", "torch.rand()", "torch.arange()", "torch.empty()", "torch.eye()",
+  "torch.cat()", "torch.stack()", "torch.matmul()", "torch.no_grad()",
+  "torch.manual_seed()", "torch.save()", "torch.load()", "torch.device()",
+  "torch.cuda.is_available()", "torch.float32", "torch.long", "torch.optim",
+  "torch.utils.data", "nn.Module", "nn.Linear()", "nn.Conv2d()", "nn.ReLU()",
+  "nn.GELU()", "nn.Sequential()", "nn.Dropout()", "nn.BatchNorm2d()", "nn.LayerNorm()",
+  "nn.Embedding()", "nn.LSTM()", "nn.MultiheadAttention()", "nn.CrossEntropyLoss()",
+  "nn.MSELoss()", "nn.Parameter()", "nn.ModuleList()", "F.relu()", "F.softmax()",
+  "F.cross_entropy()", "F.mse_loss()", "F.dropout()", "F.log_softmax()",
+  "x.to(device)", "x.cuda()", "x.cpu()", "x.numpy()", "x.item()", "x.view()",
+  "x.reshape()", "x.permute()", "x.transpose()", "x.unsqueeze()", "x.squeeze()",
+  "x.detach()", "x.shape", "x.size()", "x.dim()", "x.float()", "x.argmax()",
+  "x.mean()", "x.sum()", "x.grad", "requires_grad=True", "model", "model.train()",
+  "model.eval()", "model.parameters()", "model.state_dict()",
+  "model.load_state_dict()", "model.to(device)", "self.fc", "self.conv", "forward()",
+  "super().__init__()", "optimizer", "optim.Adam()", "optim.SGD()", "optim.AdamW()",
+  "optimizer.zero_grad()", "optimizer.step()", "loss", "loss.backward()",
+  "loss.item()", "scheduler.step()", "DataLoader()", "Dataset", "TensorDataset()",
+  "batch_size=32", "shuffle=True", "num_workers=4", "loader", "epoch", "logits",
+  "targets", "lr=1e-3"
+]

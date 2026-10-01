@@ -7,6 +7,7 @@ pub mod celebrate;
 pub mod idle;
 pub mod input;
 pub mod misses;
+mod modules;
 mod online;
 pub mod pace;
 mod profiles;
@@ -21,7 +22,8 @@ use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::DefaultTerminal;
 use ratatui::layout::Rect;
 
-use crate::catalog::{CatalogMenu, Fetcher};
+use crate::catalog::module_menu::ModuleMenu;
+use crate::catalog::{CatalogMenu, Fetcher, ModuleRegistry};
 use crate::command::{self, Command, CommandLine, Completions};
 use crate::config::{Config, Pace, Paths};
 use crate::config::{FONT_SIZE_RANGE, FontSize, LINES_RANGE, WORDS_PER_LINE_RANGE};
@@ -67,6 +69,8 @@ pub enum Screen {
     User,
     /// The landing screen played on start (`splash = true`).
     Splash,
+    /// A language's modules as a checklist (download or mix in).
+    Modules,
 }
 
 /// Which config value a slider edits.
@@ -169,6 +173,15 @@ pub struct App {
     pub profiles: ProfileRegistry,
     pub profile_menu: ProfileMenu,
     pub catalog_menu: CatalogMenu,
+    /// Installed language modules (`catalog::modules`).
+    pub modules: ModuleRegistry,
+    /// The modules checklist (`Screen::Modules`).
+    pub module_menu: ModuleMenu,
+    /// Module downloads in flight: (language, module).
+    module_downloads: Vec<(String, String)>,
+    /// A language being installed from the modules checklist: switching to
+    /// it once it's in doesn't ask again.
+    modules_chosen_for: Option<String>,
     /// Present unless `catalog` is turned off in the config.
     fetcher: Option<Fetcher>,
     pub engine: TestEngine,
@@ -246,6 +259,7 @@ impl App {
         }
         let themes = ThemeRegistry::load(&paths.themes_dir, |w| warnings.push(w));
         let languages = LanguageRegistry::load(&paths.languages_dir, |w| warnings.push(w));
+        let modules = ModuleRegistry::load(&paths.languages_dir, |w| warnings.push(w));
         let profiles = ProfileRegistry::load(&paths.profiles_dir, |w| warnings.push(w));
         // Profiles deleted or edited outside ttyp no longer describe the
         // config; deselect them before anything else reads the list.
@@ -291,7 +305,7 @@ impl App {
             profiles: profiles.names().map(str::to_string).collect(),
             ..Default::default()
         };
-        let engine = Self::build_engine(&config, &languages);
+        let engine = Self::build_engine(&config, &languages, &modules);
         let summary = Summary::from_records(store.all());
         let online = Self::connect(&config, &paths);
         let fetcher = Self::catalog_fetcher(&config);
@@ -304,6 +318,10 @@ impl App {
             profiles,
             profile_menu: ProfileMenu::default(),
             catalog_menu: CatalogMenu::default(),
+            modules,
+            module_menu: ModuleMenu::default(),
+            module_downloads: Vec::new(),
+            modules_chosen_for: None,
             fetcher,
             engine,
             outcome: None,
@@ -353,10 +371,19 @@ impl App {
         Ok(app)
     }
 
-    fn build_engine(config: &Config, languages: &LanguageRegistry) -> TestEngine {
+    fn build_engine(
+        config: &Config,
+        languages: &LanguageRegistry,
+        modules: &ModuleRegistry,
+    ) -> TestEngine {
         let lang = languages.get_or_default(&config.language);
+        let wanted = config
+            .modules
+            .get(&lang.name)
+            .map_or(&[][..], Vec::as_slice);
+        let mixed = modules.selected(&lang.name, wanted);
         let generator = RandomGenerator::new(
-            lang.words.clone(),
+            crate::catalog::modules::word_pool(lang, &mixed, config.trim_syntax),
             Modifiers {
                 punctuation: config.punctuation,
                 numbers: config.numbers,
@@ -584,9 +611,10 @@ impl App {
 
     /// The pace caret's speed for the test on screen, if it has one.
     pub fn pace_target(&self) -> Option<f64> {
+        let key = self.language_key();
         let language = match &self.daily {
             Some(d) => d.language.as_str(),
-            None => self.config.language.as_str(),
+            None => key.as_str(),
         };
         pace::target_wpm(
             self.config.pace,
@@ -791,6 +819,7 @@ impl App {
             Action::Profile(a) => self.profile_action(a),
             Action::ShowCatalog => self.open_catalog(),
             Action::Catalog(a) => self.catalog_action(a),
+            Action::Modules(a) => self.module_action(a),
             Action::CatalogFetched(ev) => self.catalog_event(*ev),
             Action::Login => self.login(),
             Action::CancelLogin => self.cancel_login(),
@@ -886,7 +915,7 @@ impl App {
         }
         self.daily = None;
         self.daily_start = DailyStart::None;
-        self.engine = Self::build_engine(&self.config, &self.languages);
+        self.engine = Self::build_engine(&self.config, &self.languages, &self.modules);
         self.outcome = None;
         self.screen = Screen::Typing;
         self.previous_screen = Screen::Typing;
@@ -901,10 +930,13 @@ impl App {
             self.notify_more("applies after the daily");
             return;
         }
-        if matches!(self.screen, Screen::Profiles | Screen::Catalog) {
+        if matches!(
+            self.screen,
+            Screen::Profiles | Screen::Catalog | Screen::Modules
+        ) {
             self.daily = None;
             self.daily_start = DailyStart::None;
-            self.engine = Self::build_engine(&self.config, &self.languages);
+            self.engine = Self::build_engine(&self.config, &self.languages, &self.modules);
             self.outcome = None;
             self.previous_screen = Screen::Typing;
         } else {
@@ -918,7 +950,7 @@ impl App {
         let (language, punctuation, numbers) = match &daily {
             Some(d) => (d.language.clone(), false, false),
             None => (
-                self.config.language.clone(),
+                self.language_key(),
                 self.config.punctuation,
                 self.config.numbers,
             ),
@@ -977,7 +1009,17 @@ impl App {
                     self.notify(format!("language `{name}` isn't installed (:install)"));
                     return;
                 }
-                self.config.language = name;
+                self.config.language = name.clone();
+                changed_test = true;
+                self.offer_modules(&name);
+            }
+            Command::Modules => {
+                self.show_modules();
+                return;
+            }
+            Command::TrimSyntax(v) => {
+                self.config.trim_syntax = v.unwrap_or(!self.config.trim_syntax);
+                self.notify(format!("trim syntax {}", on_off(self.config.trim_syntax)));
                 changed_test = true;
             }
             Command::Theme(name) => {

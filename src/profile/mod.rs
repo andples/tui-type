@@ -78,6 +78,8 @@ pub struct ProfileSettings {
     pub pace: Option<Pace>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub keyboard: Option<Keyboard>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trim_syntax: Option<bool>,
     #[serde(skip_serializing_if = "ResultsSettings::is_empty")]
     pub results: ResultsSettings,
 }
@@ -235,6 +237,7 @@ settings! {
     Pace, "pace" => pace;
     PbEffect, "pb effect" => pb_effect;
     Keyboard, "keyboard" => keyboard;
+    TrimSyntax, "trim syntax" => trim_syntax;
     ResultsChart, "results chart" => results.chart;
     ResultsBreakdown, "results breakdown" => results.char_breakdown;
     ResultsConsistency, "results consistency" => results.consistency;
@@ -247,7 +250,11 @@ impl SettingKey {
     pub fn restarts_test(self) -> bool {
         matches!(
             self,
-            SettingKey::Mode | SettingKey::Language | SettingKey::Punctuation | SettingKey::Numbers
+            SettingKey::Mode
+                | SettingKey::Language
+                | SettingKey::Punctuation
+                | SettingKey::Numbers
+                | SettingKey::TrimSyntax
         )
     }
 

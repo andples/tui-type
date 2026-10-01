@@ -1,50 +1,133 @@
 #!/usr/bin/env python3
 """Writes the programming-language word lists (catalog/languages/code_*.toml):
 keywords, operators, built-ins, standard-library names and common idioms per
-language. Each list is split on whitespace, so every entry must be one
-self-contained token (no spaces inside). Edit the lists below, run
-`scripts/code-languages.py catalog/languages`, then regenerate the index
+language, plus optional modules: extra lists for common libraries, written
+to catalog/languages/code_<language>/<module>.toml (see `module` below and
+docs/language-modules.md). Each list is split on whitespace, so every entry
+must be one self-contained token (no spaces inside). Edit the lists below,
+run `scripts/code-languages.py catalog/languages`, then regenerate the index
 with `TTYP_BLESS=1 cargo test catalog_index`."""
 import json, sys
 L = {}
-def lang(name, display, text):
-    L[name] = (display, text.split())
+M = {}
+def lang(name, display, text, trim=()):
+    """`trim`: boilerplate the `trim_syntax` setting cuts from every word of
+    this language and its modules, e.g. ["()"] for Python calls."""
+    L[name] = (display, text.split(), list(trim))
+def module(language, name, display, text):
+    """An add-on list for `language`, picked in the app's modules checklist.
+    Keep library calls here rather than in the base list, so the base stays
+    the language itself."""
+    M.setdefault(language, []).append((name, display, text.split()))
 
 lang("python", "Python", r"""
-def return if elif else for while in not and or is None True False import from as class self
-try except finally raise with yield lambda pass break continue global nonlocal assert del async await
-match case
-print() len() range() enumerate() zip() map() filter() sorted() reversed() sum() min() max() abs() round()
-int() float() str() bool() list() dict() set() tuple() type() isinstance() issubclass()
-hasattr() getattr() setattr() open() input() super() iter() next() any() all() repr()
-__init__ __name__ __main__ __repr__ __str__ __eq__ __len__ __iter__ __next__ __enter__ __exit__
-__getitem__ __call__ __file__ __all__
-self.name self.value cls
-@property @staticmethod @classmethod @dataclass @abstractmethod
-@pytest.fixture @functools.lru_cache
-append() extend() insert() pop() remove() index() count() sort() clear() keys() values() items()
-get() update() copy() add()
-split() join() strip() rstrip() lstrip() replace() startswith() endswith() lower() upper() find()
-encode() decode() read() write() close()
-os sys json re math time random itertools functools collections pathlib subprocess logging typing
-datetime asyncio
-os.path.join() os.path.exists() os.environ os.getcwd() os.listdir()
-sys.argv sys.exit() sys.stdin sys.stdout
-json.loads() json.dumps() json.load() json.dump() re.match() re.search() re.sub() re.compile()
-math.sqrt() time.time() time.sleep() random.randint() random.choice()
-Path() Path.cwd() datetime.now() defaultdict() Counter() namedtuple() deque()
-subprocess.run() logging.getLogger() logger.info() argparse.ArgumentParser()
-asyncio.run()
-List Dict Set Tuple Optional Any Union Callable Iterable Iterator TypeVar
-Literal list[int] list[str] Optional[str]
-Exception ValueError TypeError KeyError IndexError AttributeError RuntimeError StopIteration
-NotImplementedError FileNotFoundError
-== != <= >= += -= *= // ** % -> := ... *args **kwargs args kwargs
-f"{x}" f"{name}" "__main__" [] {} () [0] [-1] [1:] [:-1] [::-1] [i] range(n) range(len(xs))
-print(f"{x}") len(xs)
-numpy np pandas pd np.array() np.zeros() pd.DataFrame() df.head()
-pytest requests requests.get() response.json()
+def return if elif else for while in not and or is None True False import from as class self try
+except finally raise with yield lambda pass break continue global nonlocal assert del async
+await match case print() len() range() enumerate() zip() map() filter() sorted() reversed()
+sum() min() max() abs() round() int() float() str() bool() list() dict() set() tuple() type()
+isinstance() issubclass() hasattr() getattr() setattr() open() input() super() iter() next()
+any() all() repr() vars() id() hash() callable() format() ord() chr() divmod() pow() __init__
+__name__ __main__ __repr__ __str__ __eq__ __len__ __iter__ __next__ __enter__ __exit__
+__getitem__ __call__ __file__ __all__ self.name self.value self.items cls @property
+@staticmethod @classmethod @dataclass @abstractmethod append() extend() insert() pop() remove()
+index() count() sort() clear() keys() values() items() get() update() copy() setdefault() add()
+discard() split() join() strip() rstrip() lstrip() replace() startswith() endswith() lower()
+upper() find() encode() decode() read() write() close() readlines() List Dict Set Tuple Optional
+Any Union Callable Iterable Iterator TypeVar Literal list[int] list[str] dict[str,int]
+Optional[str] Exception ValueError TypeError KeyError IndexError AttributeError RuntimeError
+StopIteration NotImplementedError FileNotFoundError ZeroDivisionError == != <= >= += -= *= // **
+% -> := ... *args **kwargs args kwargs f"{x}" f"{name}" "__main__" [] {} () [0] [-1] [1:] [:-1]
+[::-1] [i] range(n) range(len(xs)) print(f"{x}") len(xs) x y i n xs key value result data item
+name path line text
+""", trim=["()"])
+
+module("python", "stdlib", "Standard library", r"""
+os sys json re math time random itertools functools collections pathlib subprocess logging
+typing datetime asyncio dataclasses argparse shutil csv os.path.join() os.path.exists()
+os.path.dirname() os.path.basename() os.environ os.getcwd() os.listdir() os.makedirs()
+os.remove() sys.argv sys.exit() sys.stdin sys.stdout sys.path json.loads() json.dumps()
+json.load() json.dump() re.match() re.search() re.sub() re.compile() re.findall() math.sqrt()
+math.floor() math.ceil() math.pi math.inf time.time() time.sleep() time.perf_counter()
+random.randint() random.choice() random.shuffle() random.random() random.seed() Path()
+Path.cwd() path.read_text() path.write_text() path.exists() path.parent path.name path.suffix
+path.glob() datetime.now() datetime.date() timedelta() defaultdict() Counter() namedtuple()
+deque() OrderedDict() itertools.chain() itertools.product() itertools.groupby()
+functools.partial() functools.reduce() @functools.lru_cache @functools.wraps @functools.cache
+subprocess.run() subprocess.check_output() logging.getLogger() logging.basicConfig()
+logger.info() logger.debug() logger.warning() logger.error() argparse.ArgumentParser()
+parser.add_argument() parser.parse_args() asyncio.run() asyncio.gather() asyncio.sleep()
+asyncio.create_task() shutil.copy() shutil.rmtree() csv.reader() csv.writer() csv.DictReader()
+field() asdict() __future__ annotations
 """)
+
+module("python", "numpy", "NumPy", r"""
+numpy np np.array() np.zeros() np.ones() np.empty() np.arange() np.linspace() np.eye() np.full()
+np.random.rand() np.random.randn() np.random.randint() np.random.seed() np.random.default_rng()
+rng.normal() rng.integers() np.reshape() arr.reshape() arr.shape arr.ndim arr.size arr.dtype
+arr.T arr.astype() arr.flatten() arr.ravel() arr.copy() arr.tolist() np.sum() np.mean()
+np.median() np.std() np.var() np.min() np.max() np.argmin() np.argmax() np.cumsum() np.prod()
+np.abs() np.sqrt() np.exp() np.log() np.sin() np.cos() np.pi np.inf np.nan np.dot() np.matmul()
+a@b np.linalg.inv() np.linalg.norm() np.linalg.eig() np.linalg.solve() np.transpose()
+np.concatenate() np.stack() np.vstack() np.hstack() np.split() np.where() np.unique() np.sort()
+np.argsort() np.clip() np.isnan() np.allclose() np.all() np.any() np.float32 np.float64 np.int32
+np.int64 np.bool_ np.ndarray axis=0 axis=1 keepdims=True dtype=np.float32 arr[:,0] arr[0,:]
+arr[mask] arr[...,None] np.newaxis np.save() np.load() np.loadtxt() np.savetxt() np.meshgrid()
+np.histogram() np.percentile() np.diff() np.round()
+""")
+
+module("python", "pandas", "pandas", r"""
+pandas pd pd.DataFrame() pd.Series() pd.read_csv() pd.read_excel() pd.read_json()
+pd.read_parquet() pd.read_sql() pd.concat() pd.merge() pd.to_datetime() pd.to_numeric()
+pd.isna() pd.notna() pd.date_range() pd.cut() pd.get_dummies() pd.pivot_table() pd.NA
+pd.Timestamp() df df.head() df.tail() df.info() df.describe() df.shape df.columns df.index
+df.dtypes df.values df.to_numpy() df.loc[] df.iloc[] df.at[] df["col"] df[["a","b"]] df.query()
+df.filter() df.groupby() df.agg() df.apply() df.map() df.sort_values() df.sort_index()
+df.reset_index() df.set_index() df.rename() df.drop() df.dropna() df.fillna() df.astype()
+df.assign() df.copy() df.merge() df.join() df.pivot() df.melt() df.explode() df.duplicated()
+df.drop_duplicates() df.value_counts() df.nunique() df.sum() df.mean() df.count() df.corr()
+df.rolling() df.resample() df.shift() df.diff() df.isna() df.sample() df.to_csv() df.to_json()
+df.to_parquet() df.to_dict() df.plot() s.str.contains() s.str.lower() s.str.split() s.dt.year
+s.dt.month s.unique() s.tolist() s.idxmax() inplace=True axis=1 ignore_index=True how="left"
+on="id" as_index=False index=False
+""")
+
+module("python", "pytorch", "PyTorch", r"""
+torch torch.nn nn F torch.tensor() torch.zeros() torch.ones() torch.randn() torch.rand()
+torch.arange() torch.empty() torch.eye() torch.cat() torch.stack() torch.matmul()
+torch.no_grad() torch.manual_seed() torch.save() torch.load() torch.device()
+torch.cuda.is_available() torch.float32 torch.long torch.optim torch.utils.data nn.Module
+nn.Linear() nn.Conv2d() nn.ReLU() nn.GELU() nn.Sequential() nn.Dropout() nn.BatchNorm2d()
+nn.LayerNorm() nn.Embedding() nn.LSTM() nn.MultiheadAttention() nn.CrossEntropyLoss()
+nn.MSELoss() nn.Parameter() nn.ModuleList() F.relu() F.softmax() F.cross_entropy() F.mse_loss()
+F.dropout() F.log_softmax() x.to(device) x.cuda() x.cpu() x.numpy() x.item() x.view()
+x.reshape() x.permute() x.transpose() x.unsqueeze() x.squeeze() x.detach() x.shape x.size()
+x.dim() x.float() x.argmax() x.mean() x.sum() x.grad requires_grad=True model model.train()
+model.eval() model.parameters() model.state_dict() model.load_state_dict() model.to(device)
+self.fc self.conv forward() super().__init__() optimizer optim.Adam() optim.SGD() optim.AdamW()
+optimizer.zero_grad() optimizer.step() loss loss.backward() loss.item() scheduler.step()
+DataLoader() Dataset TensorDataset() batch_size=32 shuffle=True num_workers=4 loader epoch
+logits targets lr=1e-3
+""")
+
+module("python", "tensorflow", "TensorFlow", r"""
+tensorflow tf keras tf.keras tf.constant() tf.Variable() tf.zeros() tf.ones() tf.random.normal()
+tf.random.uniform() tf.range() tf.reshape() tf.cast() tf.concat() tf.stack() tf.matmul()
+tf.reduce_sum() tf.reduce_mean() tf.reduce_max() tf.argmax() tf.nn.relu() tf.nn.softmax()
+tf.float32 tf.int32 tf.GradientTape() tape.gradient() tf.function @tf.function tf.data.Dataset
+tf.data.Dataset.from_tensor_slices() dataset.batch() dataset.shuffle() dataset.map()
+dataset.prefetch() tf.data.AUTOTUNE tf.convert_to_tensor() tf.shape() tf.expand_dims()
+tf.squeeze() tf.one_hot() tf.where() tf.config.list_physical_devices() tf.saved_model.save()
+keras.Sequential() keras.Model() keras.Input() keras.layers layers.Dense() layers.Conv2D()
+layers.MaxPooling2D() layers.Flatten() layers.Dropout() layers.BatchNormalization()
+layers.Embedding() layers.LSTM() layers.Input() activation="relu" activation="softmax"
+model.compile() model.fit() model.evaluate() model.predict() model.summary() model.save()
+keras.models.load_model() model.layers model.trainable_variables optimizer="adam"
+keras.optimizers.Adam() keras.losses.SparseCategoricalCrossentropy() loss="mse"
+metrics=["accuracy"] epochs=10 batch_size=32 validation_split=0.2 callbacks=[]
+keras.callbacks.EarlyStopping() keras.callbacks.ModelCheckpoint() from_logits=True
+optimizer.apply_gradients() history.history
+""")
+
 
 lang("cpp", "C++", r"""
 #include #define #ifdef #ifndef #endif #pragma once
@@ -694,13 +777,14 @@ Option.get! Id.run main
 
 out = sys.argv[1]
 import os
-for name,(display,words) in L.items():
-    def ok(w):
-        # Whole phrases were split on spaces; drop the fragments.
-        pairs = ["()", "[]", "{}"]
-        if any(w.count(o) != w.count(c) for o, c in pairs):
-            return False
-        return not w.endswith(",")
+def ok(w):
+    # Whole phrases were split on spaces; drop the fragments.
+    pairs = ["()", "[]", "{}"]
+    if any(w.count(o) != w.count(c) for o, c in pairs):
+        return False
+    return not w.endswith(",")
+
+def write(path, name, display, words, trim=()):
     seen=[]
     dropped=[]
     for w in words:
@@ -715,7 +799,17 @@ for name,(display,words) in L.items():
             lines.append(cur.rstrip()); cur="  "
         cur+=tok
     lines.append(cur.rstrip().rstrip(","))
+    head=f'name = "{name}"\ndisplay = "{display}"\n'
+    if trim:
+        head+="trim = ["+", ".join(json.dumps(t) for t in trim)+"]\n"
+    text=head+"words = [\n"+"\n".join(lines)+"\n]\n"
+    open(path,"w").write(text)
+    print(f"{name}: {len(seen)}")
+
+for name,(display,words,trim) in L.items():
     slug=f"code_{name}"
-    text=f'name = "{slug}"\ndisplay = "{display} (code)"\nwords = [\n'+"\n".join(lines)+"\n]\n"
-    open(os.path.join(out,f"{slug}.toml"),"w").write(text)
-    print(f"{slug}: {len(seen)}")
+    write(os.path.join(out,f"{slug}.toml"), slug, f"{display} (code)", words, trim)
+    for mname, mdisplay, mwords in M.get(name, []):
+        d=os.path.join(out, slug)
+        os.makedirs(d, exist_ok=True)
+        write(os.path.join(d, f"{mname}.toml"), mname, mdisplay, mwords)

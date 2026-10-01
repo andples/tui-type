@@ -83,7 +83,32 @@ words = 200
 [[languages]]
 name = "code_python"
 display = "Python (code)"
-words = 251
+words = 216
+
+[[languages.modules]]
+name = "numpy"
+display = "NumPy"
+words = 95
+
+[[languages.modules]]
+name = "pandas"
+display = "pandas"
+words = 93
+
+[[languages.modules]]
+name = "pytorch"
+display = "PyTorch"
+words = 100
+
+[[languages.modules]]
+name = "stdlib"
+display = "Standard library"
+words = 105
+
+[[languages.modules]]
+name = "tensorflow"
+display = "TensorFlow"
+words = 81
 
 [[languages]]
 name = "code_r"

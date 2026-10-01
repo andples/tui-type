@@ -2,6 +2,7 @@
 //! optional with sane defaults. Settings changed at runtime are written back
 //! immediately so the file always mirrors the live state.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -144,6 +145,13 @@ pub struct Config {
     pub pace: Pace,
     /// The layout the results screen's missed-keys keyboard is drawn in.
     pub keyboard: Keyboard,
+    /// Strip each language's boilerplate (its `trim` list, e.g. Python's
+    /// `()`) from the words.
+    pub trim_syntax: bool,
+    /// Installed language modules to mix in, by language
+    /// (`code_python = ["numpy", "pandas"]`). Not a profile setting.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub modules: BTreeMap<String, Vec<String>>,
 }
 
 /// How font sizes above 1 are drawn. Only set in the config file; there is
@@ -552,6 +560,8 @@ impl Default for Config {
             pb_effect: PbEffect::Both,
             pace: Pace::Off,
             keyboard: Keyboard::Qwerty,
+            trim_syntax: false,
+            modules: BTreeMap::new(),
         }
     }
 }
@@ -617,6 +627,7 @@ impl Config {
             "pb_effect" | "pbeffect" | "celebrate" => self.pb_effect = PbEffect::parse(value)?,
             "pace" => self.pace = Pace::parse(value)?,
             "keyboard" | "layout" => self.keyboard = Keyboard::parse(value)?,
+            "trim_syntax" | "trimsyntax" | "trim" => self.trim_syntax = parse_bool(value)?,
             "fullscreen" | "full" => self.fullscreen = parse_bool(value)?,
             "lines" => self.set_lines(parse_range(value, LINES_RANGE)?),
             "font" => self.font = value.to_string(),

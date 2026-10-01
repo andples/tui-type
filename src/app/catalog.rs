@@ -76,6 +76,16 @@ impl App {
             }
             C::Use | C::Install => {
                 let Some(item) = selected else { return };
+                let has_modules = kind == Kind::Language
+                    && self
+                        .catalog_menu
+                        .index()
+                        .and_then(|i| i.language(&item.name))
+                        .is_some_and(|l| !l.modules.is_empty());
+                if action == C::Use && has_modules {
+                    self.open_module_download(&item.name);
+                    return;
+                }
                 if item.status.is_installed() {
                     if action == C::Use {
                         self.use_item(kind, &item.name);
@@ -140,6 +150,11 @@ impl App {
                 self.refresh_catalog_lists();
             }
             CatalogEvent::Index(Err(e)) => self.catalog_menu.index = IndexState::Failed(e),
+            CatalogEvent::ModuleFetched {
+                language,
+                module,
+                result,
+            } => self.module_fetched(language, module, result),
             CatalogEvent::Fetched {
                 name,
                 use_it,
@@ -246,10 +261,17 @@ impl App {
                 self.notify_more("theme default");
                 self.save_config();
             }
-            Kind::Language if self.config.language == name => {
-                self.config.language = "english".into();
-                self.notify_more("language english");
-                self.rebuild_test();
+            Kind::Language => {
+                // Its modules go with it.
+                let dir = crate::catalog::modules::dir(&self.paths.languages_dir, name);
+                let _ = std::fs::remove_dir_all(dir);
+                self.config.modules.remove(name);
+                self.reload_modules();
+                if self.config.language == name {
+                    self.config.language = "english".into();
+                    self.notify_more("language english");
+                    self.rebuild_test();
+                }
                 self.save_config();
             }
             _ => {}

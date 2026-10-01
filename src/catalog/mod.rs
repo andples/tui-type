@@ -9,11 +9,18 @@
 //! theme before it's installed. Files are `languages/<name>.toml` and
 //! `themes/<name>.toml` next to it. Installing writes the file into the
 //! matching config dir, where the registries pick it up like any user file.
+//!
+//! A language can offer modules (`modules.rs`): extra word lists in
+//! `languages/<language>/<module>.toml`, listed under the language's index
+//! entry.
 
 pub mod menu;
+pub mod module_menu;
+pub mod modules;
 pub mod worker;
 
 pub use menu::{CatalogMenu, Item, ItemStatus};
+pub use modules::ModuleRegistry;
 pub use worker::{CatalogEvent, Fetcher};
 
 use std::fmt;
@@ -81,6 +88,17 @@ pub struct LanguageEntry {
     pub name: String,
     pub display: String,
     /// Number of words in the list.
+    pub words: usize,
+    /// Optional add-on word lists (`modules.rs`), by name.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub modules: Vec<ModuleEntry>,
+}
+
+/// A language module as the index describes it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ModuleEntry {
+    pub name: String,
+    pub display: String,
     pub words: usize,
 }
 
@@ -257,6 +275,21 @@ impl Source {
         Index::parse(&text)
     }
 
+    /// A language module's file, checked to be a word list named `module`.
+    pub fn fetch_module(&self, language: &str, module: &str) -> Result<String, String> {
+        if !valid_name(language) || !valid_name(module) {
+            return Err(format!("bad name `{language}/{module}`"));
+        }
+        let text = self
+            .get(&format!(
+                "{}/{language}/{module}.toml",
+                Kind::Language.dir()
+            ))
+            .map_err(|e| format!("module {language}/{module}: {e}"))?;
+        validate(Kind::Language, module, &text)?;
+        Ok(text)
+    }
+
     /// A catalogue file, checked to be a valid `kind` named `name`.
     pub fn fetch(&self, kind: Kind, name: &str) -> Result<String, String> {
         if !valid_name(name) {
@@ -362,10 +395,32 @@ mod tests {
                 match kind {
                     Kind::Language => {
                         let l = Language::parse(&text).unwrap();
+                        let mut modules: Vec<ModuleEntry> =
+                            std::fs::read_dir(root.join(kind.dir()).join(&name))
+                                .into_iter()
+                                .flatten()
+                                .flatten()
+                                .filter_map(|e| {
+                                    let p = e.path();
+                                    (p.extension()? == "toml")
+                                        .then(|| p.file_stem()?.to_str().map(String::from))?
+                                })
+                                .map(|m| {
+                                    let text = src.fetch_module(&name, &m).unwrap();
+                                    let m = Language::parse(&text).unwrap();
+                                    ModuleEntry {
+                                        name: m.name,
+                                        display: m.display,
+                                        words: m.words.len(),
+                                    }
+                                })
+                                .collect();
+                        modules.sort_by(|a, b| a.name.cmp(&b.name));
                         expected.languages.push(LanguageEntry {
                             name: l.name,
                             display: l.display,
                             words: l.words.len(),
+                            modules,
                         });
                     }
                     Kind::Theme => expected.themes.push(Theme::parse(&text).unwrap()),

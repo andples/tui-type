@@ -1,0 +1,26 @@
+name = "stdlib"
+display = "Standard library"
+words = [
+  "os", "sys", "json", "re", "math", "time", "random", "itertools", "functools",
+  "collections", "pathlib", "subprocess", "logging", "typing", "datetime", "asyncio",
+  "dataclasses", "argparse", "shutil", "csv", "os.path.join()", "os.path.exists()",
+  "os.path.dirname()", "os.path.basename()", "os.environ", "os.getcwd()",
+  "os.listdir()", "os.makedirs()", "os.remove()", "sys.argv", "sys.exit()",
+  "sys.stdin", "sys.stdout", "sys.path", "json.loads()", "json.dumps()", "json.load()",
+  "json.dump()", "re.match()", "re.search()", "re.sub()", "re.compile()",
+  "re.findall()", "math.sqrt()", "math.floor()", "math.ceil()", "math.pi", "math.inf",
+  "time.time()", "time.sleep()", "time.perf_counter()", "random.randint()",
+  "random.choice()", "random.shuffle()", "random.random()", "random.seed()", "Path()",
+  "Path.cwd()", "path.read_text()", "path.write_text()", "path.exists()",
+  "path.parent", "path.name", "path.suffix", "path.glob()", "datetime.now()",
+  "datetime.date()", "timedelta()", "defaultdict()", "Counter()", "namedtuple()",
+  "deque()", "OrderedDict()", "itertools.chain()", "itertools.product()",
+  "itertools.groupby()", "functools.partial()", "functools.reduce()",
+  "@functools.lru_cache", "@functools.wraps", "@functools.cache", "subprocess.run()",
+  "subprocess.check_output()", "logging.getLogger()", "logging.basicConfig()",
+  "logger.info()", "logger.debug()", "logger.warning()", "logger.error()",
+  "argparse.ArgumentParser()", "parser.add_argument()", "parser.parse_args()",
+  "asyncio.run()", "asyncio.gather()", "asyncio.sleep()", "asyncio.create_task()",
+  "shutil.copy()", "shutil.rmtree()", "csv.reader()", "csv.writer()",
+  "csv.DictReader()", "field()", "asdict()", "__future__", "annotations"
+]

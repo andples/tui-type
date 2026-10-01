@@ -75,6 +75,8 @@ pub enum Action {
     // Install menu (languages and themes from the catalogue)
     ShowCatalog,
     Catalog(CatalogAction),
+    /// Keys on the modules checklist.
+    Modules(ModuleAction),
     /// A catalogue download finished.
     CatalogFetched(Box<CatalogEvent>),
 
@@ -140,6 +142,18 @@ pub enum UserAction {
     Open,
     /// Back to where the profile was opened from.
     Close,
+}
+
+/// Keys on the modules checklist (`Screen::Modules`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModuleAction {
+    Move(isize),
+    Top,
+    Bottom,
+    Toggle,
+    ToggleAll,
+    Apply,
+    Cancel,
 }
 
 /// Keys on the install screen.

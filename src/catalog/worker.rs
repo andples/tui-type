@@ -17,6 +17,12 @@ pub enum CatalogEvent {
         use_it: bool,
         result: Result<(Kind, String), String>,
     },
+    /// A language module's file, fetched and validated.
+    ModuleFetched {
+        language: String,
+        module: String,
+        result: Result<String, String>,
+    },
 }
 
 pub struct Fetcher {
@@ -52,6 +58,20 @@ impl Fetcher {
         self.pending += 1;
         thread::spawn(move || {
             let _ = tx.send(CatalogEvent::Index(src.index()));
+        });
+    }
+
+    /// Fetch one of `language`'s modules.
+    pub fn fetch_module(&mut self, language: String, module: String) {
+        let (src, tx) = (self.source.clone(), self.tx.clone());
+        self.pending += 1;
+        thread::spawn(move || {
+            let result = src.fetch_module(&language, &module);
+            let _ = tx.send(CatalogEvent::ModuleFetched {
+                language,
+                module,
+                result,
+            });
         });
     }
 

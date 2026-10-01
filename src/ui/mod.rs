@@ -9,6 +9,7 @@ pub mod graph;
 pub mod help;
 pub mod leaderboard;
 pub mod login;
+pub mod modules;
 pub mod profiles;
 pub mod results;
 pub mod slider;
@@ -58,6 +59,7 @@ pub fn render(frame: &mut Frame, app: &App) -> Vec<ImageLine> {
         Screen::Help => help::render(frame, app, body, &p),
         Screen::Profiles => profiles::render(frame, app, body, &p),
         Screen::Catalog => catalog::render(frame, app, body, &p),
+        Screen::Modules => modules::render(frame, app, body, &p),
         Screen::Login => login::render(frame, app, body, &p),
         Screen::Leaderboard => leaderboard::render(frame, app, body, &p),
         Screen::Graph => graph::render(frame, app, body, &p),

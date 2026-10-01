@@ -242,7 +242,11 @@ impl App {
             && self.engine.status() != Status::Running
             && !matches!(
                 self.screen,
-                Screen::Splash | Screen::Login | Screen::Profiles | Screen::Catalog
+                Screen::Splash
+                    | Screen::Login
+                    | Screen::Profiles
+                    | Screen::Catalog
+                    | Screen::Modules
             )
     }
 

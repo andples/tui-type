@@ -1,0 +1,21 @@
+name = "numpy"
+display = "NumPy"
+words = [
+  "numpy", "np", "np.array()", "np.zeros()", "np.ones()", "np.empty()", "np.arange()",
+  "np.linspace()", "np.eye()", "np.full()", "np.random.rand()", "np.random.randn()",
+  "np.random.randint()", "np.random.seed()", "np.random.default_rng()", "rng.normal()",
+  "rng.integers()", "np.reshape()", "arr.reshape()", "arr.shape", "arr.ndim",
+  "arr.size", "arr.dtype", "arr.T", "arr.astype()", "arr.flatten()", "arr.ravel()",
+  "arr.copy()", "arr.tolist()", "np.sum()", "np.mean()", "np.median()", "np.std()",
+  "np.var()", "np.min()", "np.max()", "np.argmin()", "np.argmax()", "np.cumsum()",
+  "np.prod()", "np.abs()", "np.sqrt()", "np.exp()", "np.log()", "np.sin()", "np.cos()",
+  "np.pi", "np.inf", "np.nan", "np.dot()", "np.matmul()", "a@b", "np.linalg.inv()",
+  "np.linalg.norm()", "np.linalg.eig()", "np.linalg.solve()", "np.transpose()",
+  "np.concatenate()", "np.stack()", "np.vstack()", "np.hstack()", "np.split()",
+  "np.where()", "np.unique()", "np.sort()", "np.argsort()", "np.clip()", "np.isnan()",
+  "np.allclose()", "np.all()", "np.any()", "np.float32", "np.float64", "np.int32",
+  "np.int64", "np.bool_", "np.ndarray", "axis=0", "axis=1", "keepdims=True",
+  "dtype=np.float32", "arr[:,0]", "arr[0,:]", "arr[mask]", "arr[...,None]",
+  "np.newaxis", "np.save()", "np.load()", "np.loadtxt()", "np.savetxt()",
+  "np.meshgrid()", "np.histogram()", "np.percentile()", "np.diff()", "np.round()"
+]

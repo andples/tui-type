@@ -201,6 +201,7 @@ impl Editor {
                 s.pb_effect = s.pb_effect.map(|e| step(&PbEffect::ALL, &e, dir));
             }
             SettingKey::Pace => s.pace = s.pace.map(|p| step(&Pace::PRESETS, &p, dir)),
+            SettingKey::TrimSyntax => flip(&mut s.trim_syntax),
             SettingKey::Keyboard => {
                 s.keyboard = s.keyboard.map(|k| step(&Keyboard::ALL, &k, dir));
             }

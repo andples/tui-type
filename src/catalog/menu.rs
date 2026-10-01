@@ -323,6 +323,7 @@ mod tests {
                     name: "spanish".into(),
                     display: "Spanish".into(),
                     words: 200,
+                    modules: Vec::new(),
                 }],
                 themes: vec![nord],
             }),

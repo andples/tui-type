@@ -270,8 +270,10 @@ pub fn mode_line(app: &App) -> String {
         .collect::<Vec<_>>()
         .join("  ·  ");
     }
-    let lang = app.languages.get_or_default(&c.language);
-    let mut parts = vec![c.mode.label(), lang.name.clone()];
+    let mut parts = vec![c.mode.label(), app.language_key().replace('+', " + ")];
+    if c.trim_syntax {
+        parts.push("trim".into());
+    }
     if c.punctuation {
         parts.push("punctuation".into());
     }

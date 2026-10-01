@@ -1,0 +1,26 @@
+name = "tensorflow"
+display = "TensorFlow"
+words = [
+  "tensorflow", "tf", "keras", "tf.keras", "tf.constant()", "tf.Variable()",
+  "tf.zeros()", "tf.ones()", "tf.random.normal()", "tf.random.uniform()", "tf.range()",
+  "tf.reshape()", "tf.cast()", "tf.concat()", "tf.stack()", "tf.matmul()",
+  "tf.reduce_sum()", "tf.reduce_mean()", "tf.reduce_max()", "tf.argmax()",
+  "tf.nn.relu()", "tf.nn.softmax()", "tf.float32", "tf.int32", "tf.GradientTape()",
+  "tape.gradient()", "tf.function", "@tf.function", "tf.data.Dataset",
+  "tf.data.Dataset.from_tensor_slices()", "dataset.batch()", "dataset.shuffle()",
+  "dataset.map()", "dataset.prefetch()", "tf.data.AUTOTUNE", "tf.convert_to_tensor()",
+  "tf.shape()", "tf.expand_dims()", "tf.squeeze()", "tf.one_hot()", "tf.where()",
+  "tf.config.list_physical_devices()", "tf.saved_model.save()", "keras.Sequential()",
+  "keras.Model()", "keras.Input()", "keras.layers", "layers.Dense()",
+  "layers.Conv2D()", "layers.MaxPooling2D()", "layers.Flatten()", "layers.Dropout()",
+  "layers.BatchNormalization()", "layers.Embedding()", "layers.LSTM()",
+  "layers.Input()", "activation=\"relu\"", "activation=\"softmax\"", "model.compile()",
+  "model.fit()", "model.evaluate()", "model.predict()", "model.summary()",
+  "model.save()", "keras.models.load_model()", "model.layers",
+  "model.trainable_variables", "optimizer=\"adam\"", "keras.optimizers.Adam()",
+  "keras.losses.SparseCategoricalCrossentropy()", "loss=\"mse\"",
+  "metrics=[\"accuracy\"]", "epochs=10", "batch_size=32", "validation_split=0.2",
+  "callbacks=[]", "keras.callbacks.EarlyStopping()",
+  "keras.callbacks.ModelCheckpoint()", "from_logits=True",
+  "optimizer.apply_gradients()", "history.history"
+]

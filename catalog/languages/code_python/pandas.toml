@@ -1,0 +1,22 @@
+name = "pandas"
+display = "pandas"
+words = [
+  "pandas", "pd", "pd.DataFrame()", "pd.Series()", "pd.read_csv()", "pd.read_excel()",
+  "pd.read_json()", "pd.read_parquet()", "pd.read_sql()", "pd.concat()", "pd.merge()",
+  "pd.to_datetime()", "pd.to_numeric()", "pd.isna()", "pd.notna()", "pd.date_range()",
+  "pd.cut()", "pd.get_dummies()", "pd.pivot_table()", "pd.NA", "pd.Timestamp()", "df",
+  "df.head()", "df.tail()", "df.info()", "df.describe()", "df.shape", "df.columns",
+  "df.index", "df.dtypes", "df.values", "df.to_numpy()", "df.loc[]", "df.iloc[]",
+  "df.at[]", "df[\"col\"]", "df[[\"a\",\"b\"]]", "df.query()", "df.filter()",
+  "df.groupby()", "df.agg()", "df.apply()", "df.map()", "df.sort_values()",
+  "df.sort_index()", "df.reset_index()", "df.set_index()", "df.rename()", "df.drop()",
+  "df.dropna()", "df.fillna()", "df.astype()", "df.assign()", "df.copy()",
+  "df.merge()", "df.join()", "df.pivot()", "df.melt()", "df.explode()",
+  "df.duplicated()", "df.drop_duplicates()", "df.value_counts()", "df.nunique()",
+  "df.sum()", "df.mean()", "df.count()", "df.corr()", "df.rolling()", "df.resample()",
+  "df.shift()", "df.diff()", "df.isna()", "df.sample()", "df.to_csv()", "df.to_json()",
+  "df.to_parquet()", "df.to_dict()", "df.plot()", "s.str.contains()", "s.str.lower()",
+  "s.str.split()", "s.dt.year", "s.dt.month", "s.unique()", "s.tolist()", "s.idxmax()",
+  "inplace=True", "axis=1", "ignore_index=True", "how=\"left\"", "on=\"id\"",
+  "as_index=False", "index=False"
+]
