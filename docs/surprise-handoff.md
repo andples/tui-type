@@ -32,7 +32,34 @@ wired in or tested yet.
    partial**: both modules exist but are not declared in `src/app/mod.rs`
    or drawn yet.
 
-## To finish
+## Plan: one agent, in serial
+
+Work in `/home/andples-oma/Projects/tui-type-surprise` (a worktree on the
+`surprise` branch; don't touch `main` or the main checkout). Do the three
+features **one after another**, each finished before the next starts:
+
+1. **Results screen** (the most built): declare `celebrate` and `misses` in
+   `src/app/mod.rs`, finish and draw the confetti and the keyboard heatmap,
+   add the `celebrate` setting and the `keys` results section. Test, check
+   in tmux, commit.
+2. **Stats activity view**: finish `src/stats/activity.rs`, draw the
+   calendar, summary line and sparkline in `src/ui/stats.rs`. Test with a
+   generated history, check in tmux, commit.
+3. **Pace caret**: build from scratch per the spec above. Test, check in
+   tmux, commit.
+
+After each feature: `cargo fmt`, `cargo test --workspace`, `cargo clippy
+--workspace --all-targets -- -D warnings` all green, one commit (squash the
+WIP into it if you like; never rewrite `main`). Commit messages for these
+substantial features end with `Co-Authored-By: Claude
+<noreply@anthropic.com>`; never a Claude-Session link. Don't push, don't
+release, don't touch the live server. If a feature can't be finished, leave
+it committed and working-but-off rather than broken, and say so below.
+
+When all three are done, replace this file's status lines with what was
+built, how to try each, and tmux captures, so the owner can be surprised.
+
+## To finish (each feature)
 
 - Wire each piece in following CLAUDE.md (Screen/Action/dispatch, rendering
   in `src/ui/`, settings in `Config` + `:set`, tick only while animating as
