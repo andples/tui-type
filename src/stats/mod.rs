@@ -1,6 +1,8 @@
 //! Test history. `StatsStore` is the seam for a future server backend; the
 //! only implementation today appends JSON lines to a local file.
 
+pub mod activity;
+
 use std::collections::HashMap;
 use std::fs::{self, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
@@ -11,6 +13,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::test::mode::Mode;
 use crate::test::{CharCounts, Metrics};
+
+pub use activity::Activity;
 
 #[derive(Debug, thiserror::Error)]
 pub enum StatsError {

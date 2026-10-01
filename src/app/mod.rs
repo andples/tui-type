@@ -26,7 +26,7 @@ use crate::gfx::{self, Gfx};
 use crate::language::LanguageRegistry;
 use crate::online::{BoardView, Online, UserView};
 use crate::profile::{ProfileMenu, ProfileRegistry};
-use crate::stats::{LocalJsonlStore, StatsStore, Summary, TestRecord, personal_best};
+use crate::stats::{Activity, LocalJsonlStore, StatsStore, Summary, TestRecord, personal_best};
 use crate::test::{Metrics, Mode, Modifiers, RandomGenerator, Status, TestEngine};
 use crate::theme::{Theme, ThemeRegistry};
 use crate::ui;
@@ -157,6 +157,8 @@ pub struct App {
     pub outcome: Option<Outcome>,
     pub stats: Box<dyn StatsStore>,
     pub summary: Summary,
+    /// Calendar, streaks and trend for the stats screen (built when it opens).
+    pub activity: Activity,
     pub screen: Screen,
     pub cmdline: CommandLine,
     pub cmd_open: bool,
@@ -287,6 +289,7 @@ impl App {
             outcome: None,
             stats: Box::new(store),
             summary,
+            activity: Activity::default(),
             screen: if splash.is_some() {
                 Screen::Splash
             } else {
@@ -675,6 +678,11 @@ impl App {
             }
             Action::ShowStats => {
                 self.summary = Summary::from_records(self.stats.all());
+                self.activity = Activity::from_records(
+                    self.stats.all(),
+                    &chrono::Local,
+                    chrono::Local::now().date_naive(),
+                );
                 self.history = Selection::clamped(self.stats.all().len());
                 self.push_screen(Screen::Stats);
             }
