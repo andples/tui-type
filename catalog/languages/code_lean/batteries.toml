@@ -1,0 +1,12 @@
+name = "batteries"
+display = "Batteries"
+words = [
+  "import", "Batteries", "Batteries.Data.RBMap", "Batteries.Data.BinaryHeap",
+  "Batteries.Data.UnionFind", "Batteries.Data.List.Basic",
+  "Batteries.Data.List.Lemmas", "Batteries.Data.Array.Lemmas", "Batteries.RBMap",
+  "Batteries.RBSet", "Batteries.BinaryHeap", "Batteries.UnionFind", "RBMap.empty",
+  "RBMap.insert", "RBMap.find?", "RBMap.contains", "RBMap.erase", "RBMap.toList",
+  "RBMap.foldl", "compare", "Ordering", "Ordering.lt", "Ordering.eq", "Ordering.gt",
+  "exacts", "trans", "alias", "#help", "#lint", "@[nolint]", "Batteries.Tactic.Lint",
+  "Batteries.Data.ByteArray"
+]

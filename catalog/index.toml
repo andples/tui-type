@@ -69,8 +69,26 @@ checksum = "a11e9fa22b62f81c"
 [[languages]]
 name = "code_lean"
 display = "Lean 4 (code)"
-words = 225
-checksum = "23aa3666a0d6405c"
+words = 214
+checksum = "ff73a77be604270c"
+
+[[languages.modules]]
+name = "batteries"
+display = "Batteries"
+words = 32
+checksum = "9f3ba9ea78d2d4b2"
+
+[[languages.modules]]
+name = "mathlib"
+display = "Mathlib"
+words = 117
+checksum = "c8014a639c46b0e2"
+
+[[languages.modules]]
+name = "std"
+display = "Standard library"
+words = 80
+checksum = "aecbb793bfc98783"
 
 [[languages]]
 name = "code_lua"

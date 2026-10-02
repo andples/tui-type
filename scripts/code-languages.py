@@ -748,21 +748,21 @@ Self self main() zig build build.zig build.zig.zon
 # ℝ, \all or \forall for ∀, \r or \to for →; from vscode-lean4's
 # abbreviations.json): the symbols themselves aren't on a keyboard.
 lang("lean", "Lean 4", r"""
-def theorem lemma example abbrev structure inductive instance class namespace section end
+def theorem example abbrev structure inductive instance class namespace section end
 variable open where match with fun \fun \la let have show calc by do if then else return mutual
 deriving extends private protected noncomputable partial unsafe
 universe import at for in mut termination_by decreasing_by
 set_option
 #eval #check
 intro intros apply exact rfl simp simp_all simpa rw rwa induction cases rcases obtain constructor
-refine use linarith omega norm_num decide trivial contradiction exfalso
-unfold ring aesop assumption exists left right ext
-funext by_cases by_contra push_neg split next case all_goals first
+refine omega decide trivial contradiction exfalso
+unfold assumption exists left right ext
+funext by_cases by_contra split next case all_goals first
 repeat sorry exact? apply? absurd <;> \.
-Nat Int Prop Type Type* Sort List Array Option IO String Bool True False Unit
+Nat Int Prop Type Sort List Array Option IO String Bool True False Unit
 DecidableEq Inhabited Repr
 ToString BEq Monad Eq Iff And Or Not Exists
-\N \Z \R \a \b \forall \all \exists \ex \to \r \iff \and \or \not \ne \le \ge \<> <|> <| |> \l := => -> <- <-> /\ \/ \x \in
+\N \Z \a \b \forall \all \exists \ex \to \r \iff \and \or \not \ne \le \ge \<> <|> <| |> \l := => -> <- <-> /\ \/ \x \in
 >>= <$> <*> ++ :: == != && || ! _ ?_
 none some zero succ .none .some Nat.succ Nat.zero n+1 x::xs []
 #[] ih h h.1 h.2 .mp .mpr Iff.intro And.intro Or.inl Or.inr
@@ -772,8 +772,47 @@ List.map List.filter List.foldl List.foldr List.length List.reverse
 xs.map xs.length arr[i]! arr[i]?
 toString s!"{x}" IO.println IO.print pure get set panic!
 Option.get! Id.run main
-@[simp] @[inline] lake lakefile.lean Mathlib Mathlib.Tactic Lean
+@[simp] @[inline] lake lakefile.lean Lean
 """)
+
+# Lean modules. Symbols use the same editor abbreviations as the base list.
+module("lean", "mathlib", "Mathlib", r"""
+import Mathlib Mathlib.Tactic Mathlib.Data.Real.Basic Mathlib.Data.Nat.Prime.Basic
+Mathlib.Data.Finset.Basic Mathlib.Algebra.Group.Basic Mathlib.Analysis.SpecialFunctions.Pow.Real
+Mathlib.Topology.Basic Mathlib.Order.Basic lemma Type* \R \C \Q \sum \prod \sub \subseteq \cap
+\cup \circ \mapsto \-1 \inf \sup \bot \top \| \nhds linarith nlinarith positivity ring ring_nf
+field_simp norm_num push_neg use gcongr polyrith norm_cast push_cast exact_mod_cast zify qify
+lift choose filter_upwards continuity fun_prop interval_cases fin_cases tauto aesop bound abel
+group nth_rewrite Real Real.sqrt Real.exp Real.log Real.pi Real.sin Real.cos Nat.Prime
+Nat.factorial Nat.choose Nat.gcd Finset Finset.range Finset.sum Finset.card Finset.sum_range_succ
+Set Set.univ Set.mem_setOf_eq Function.Injective Function.Surjective Continuous Differentiable
+deriv Filter.Tendsto Filter.atTop Metric.ball IsOpen IsClosed Polynomial Matrix Group CommGroup
+Ring CommRing Field Module Subgroup Ideal MonoidHom LinearMap abs_nonneg sq_nonneg mul_pos
+add_pos le_refl le_trans le_antisymm lt_of_le_of_lt lt_irrefl mul_comm mul_assoc pow_two
+two_mul sub_nonneg mul_le_mul ne_of_gt Nat.succ_le_iff
+""")
+
+module("lean", "std", "Standard library", r"""
+import Std Std.Data.HashMap Std.Data.HashSet Std.HashMap Std.HashSet Std.HashMap.empty
+m.insert m.get? m.getD m.contains m.erase m.fold m.toList m.size Std.Format IO.FS.readFile
+IO.FS.writeFile IO.FS.lines IO.FS.Handle IO.getStdin IO.getStdout stdin.getLine
+stdout.putStrLn IO.Process.exit IO.Ref IO.mkRef ref.get ref.set ref.modify IO.monoMsNow
+IO.sleep IO.asTask Task.get IO.userError throw tryCatch try catch finally StateT ReaderT ExceptT
+StateM modify modifyGet read liftM String.splitOn s.splitOn s.trim s.toNat? s.toNat! s.toList
+String.join String.intercalate s.length s.push s.append s.startsWith Char.isDigit c.toNat
+Array.range arr.push arr.pop arr.size arr.foldl arr.map arr.toList arr.qsort arr.modify
+List.range List.iota l.head! l.tail l.zip List.sum l.take l.drop bv_decide
+""")
+
+module("lean", "batteries", "Batteries", r"""
+import Batteries Batteries.Data.RBMap Batteries.Data.BinaryHeap Batteries.Data.UnionFind
+Batteries.Data.List.Basic Batteries.Data.List.Lemmas Batteries.Data.Array.Lemmas
+Batteries.RBMap Batteries.RBSet Batteries.BinaryHeap Batteries.UnionFind RBMap.empty
+RBMap.insert RBMap.find? RBMap.contains RBMap.erase RBMap.toList RBMap.foldl compare Ordering
+Ordering.lt Ordering.eq Ordering.gt exacts trans alias #help #lint @[nolint]
+Batteries.Tactic.Lint Batteries.Data.ByteArray
+""")
+
 
 out = sys.argv[1]
 import os

@@ -4,14 +4,15 @@ Two ways to make a programming language's word list fit what you actually
 write, without growing the base list:
 
 - **Modules**: optional extra word lists for common libraries. Python has
-  `stdlib`, `numpy`, `pandas`, `pytorch` and `tensorflow`. The base list
+  `stdlib`, `numpy`, `pandas`, `pytorch` and `tensorflow`; Lean has
+  `mathlib`, `std` and `batteries`. The base list
   keeps only the language itself (keywords, built-ins, common methods,
   typing, exceptions, operators, idioms), and library calls live in modules.
 - **Trim syntax**: boilerplate that every call repeats, such as Python's
   `()`. The `trim_syntax` setting (`:trim on`, off by default) cuts it out of
   every word: `print()` becomes `print`, while `len(xs)` stays as it is.
 
-Python is the first language with both. This page describes how they work
+Python was the first language with both; Lean has modules too (no trim). This page describes how they work
 and how to add them to another language.
 
 ## Using them

@@ -1,0 +1,18 @@
+name = "std"
+display = "Standard library"
+words = [
+  "import", "Std", "Std.Data.HashMap", "Std.Data.HashSet", "Std.HashMap",
+  "Std.HashSet", "Std.HashMap.empty", "m.insert", "m.get?", "m.getD", "m.contains",
+  "m.erase", "m.fold", "m.toList", "m.size", "Std.Format", "IO.FS.readFile",
+  "IO.FS.writeFile", "IO.FS.lines", "IO.FS.Handle", "IO.getStdin", "IO.getStdout",
+  "stdin.getLine", "stdout.putStrLn", "IO.Process.exit", "IO.Ref", "IO.mkRef",
+  "ref.get", "ref.set", "ref.modify", "IO.monoMsNow", "IO.sleep", "IO.asTask",
+  "Task.get", "IO.userError", "throw", "tryCatch", "try", "catch", "finally", "StateT",
+  "ReaderT", "ExceptT", "StateM", "modify", "modifyGet", "read", "liftM",
+  "String.splitOn", "s.splitOn", "s.trim", "s.toNat?", "s.toNat!", "s.toList",
+  "String.join", "String.intercalate", "s.length", "s.push", "s.append",
+  "s.startsWith", "Char.isDigit", "c.toNat", "Array.range", "arr.push", "arr.pop",
+  "arr.size", "arr.foldl", "arr.map", "arr.toList", "arr.qsort", "arr.modify",
+  "List.range", "List.iota", "l.head!", "l.tail", "l.zip", "List.sum", "l.take",
+  "l.drop", "bv_decide"
+]

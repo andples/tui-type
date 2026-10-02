@@ -417,8 +417,8 @@ built-ins and common idioms): `code_python`, `code_cpp`, `code_c`, `code_javascr
 
 **Modules and trim syntax.** A language can come with modules: extra word
 lists for common libraries, kept out of the base list. `code_python` has
-`stdlib`, `numpy`, `pandas`, `pytorch` and `tensorflow`. `enter` on Python in
-`:install` opens a checklist to pick which to download; switching to Python
+`stdlib`, `numpy`, `pandas`, `pytorch` and `tensorflow`; `code_lean` has
+`mathlib`, `std` and `batteries`. `enter` on either in `:install` opens a checklist to pick which to download; switching to Python
 later (or `:modules`) asks which to mix in. Runs with modules keep their own
 bests (`code_python+numpy`). `:trim on` strips each language's boilerplate,
 such as Python's `()` (`print()` → `print`; `len(xs)` stays). How it works
