@@ -41,7 +41,7 @@ use action::{Action, ListMove};
 use celebrate::Celebration;
 use idle::Screensaver;
 use input::InputContext;
-use misses::Misses;
+use misses::{MissedRange, Misses};
 use splash::Splash;
 use ttyp_core::api::{Daily, ResultDetail, SubmitResponse};
 
@@ -57,6 +57,8 @@ pub enum Screen {
     Typing,
     Results,
     Stats,
+    /// `:missed`: missed keys across the history.
+    Missed,
     Help,
     Profiles,
     /// `:install`: languages and themes from the catalogue.
@@ -193,6 +195,11 @@ pub struct App {
     pub summary: Summary,
     /// Calendar, streaks and trend for the stats screen (built when it opens).
     pub activity: Activity,
+    /// How far back the missed-keys screen looks.
+    pub missed_range: MissedRange,
+    /// The misses in `missed_range` (added up when the screen opens or the
+    /// range changes; drawn on whichever keyboard is configured).
+    pub missed: Misses,
     pub screen: Screen,
     pub cmdline: CommandLine,
     pub cmd_open: bool,
@@ -332,6 +339,8 @@ impl App {
             stats: Box::new(store),
             summary,
             activity: Activity::default(),
+            missed_range: MissedRange::default(),
+            missed: Misses::default(),
             screen: if splash.is_some() {
                 Screen::Splash
             } else {
@@ -819,6 +828,21 @@ impl App {
                 self.history = Selection::clamped(self.stats.all().len());
                 self.push_screen(Screen::Stats);
             }
+            Action::ShowMissed(range) => {
+                if let Some(r) = range {
+                    self.missed_range = r;
+                }
+                self.missed = Misses::from_records(
+                    self.stats.all(),
+                    self.missed_range.since(chrono::Utc::now()),
+                );
+                if self.screen != Screen::Missed {
+                    self.push_screen(Screen::Missed);
+                }
+            }
+            Action::MissedStep(by) => {
+                self.dispatch(Action::ShowMissed(Some(self.missed_range.step(by))));
+            }
             Action::ShowHelp => self.push_screen(Screen::Help),
             Action::ShowProfiles => self.open_profiles(),
             Action::Profile(a) => self.profile_action(a),
@@ -968,13 +992,15 @@ impl App {
             numbers,
         );
         record.daily_id = daily.as_ref().map(|d| d.id);
+        let misses = Misses::from_words(self.engine.words());
+        record.missed_chars = misses.chars.clone();
+        record.typed_chars = misses.typed.clone();
         let prev_best = personal_best(self.stats.all(), record.mode, &record.language);
         let is_pb = record.counts() && prev_best.is_none_or(|b| record.wpm > b) && record.wpm > 0.0;
         if let Err(e) = self.stats.append(&record) {
             self.notify(format!("could not save result: {e}"));
         }
         let daily = daily.map(|d| self.submit_daily(&d));
-        let misses = Misses::from_words(self.engine.words());
         let celebration = (is_pb && self.config.pb_effect.confetti()).then(|| {
             let seed = record.ts.timestamp_nanos_opt().unwrap_or_default() as u64;
             Celebration::new(Instant::now(), seed)
@@ -1149,6 +1175,7 @@ impl App {
             }
             Command::Restart => self.restart(),
             Command::Stats => self.dispatch(Action::ShowStats),
+            Command::Missed(range) => self.dispatch(Action::ShowMissed(range)),
             Command::Help => self.dispatch(Action::ShowHelp),
             Command::Daily(mode) => {
                 self.open_daily(mode);

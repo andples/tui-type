@@ -5,6 +5,7 @@ pub mod palette;
 
 pub use palette::{CommandLine, Completions, Suggestion};
 
+use crate::app::misses::MissedRange;
 use crate::config::{
     FONT_SIZE_RANGE, Keyboard, LINES_RANGE, Pace, PbEffect, ResultsConfig, WORDS_PER_LINE_RANGE,
     parse_range,
@@ -48,6 +49,8 @@ pub enum Command {
     Uninstall(String),
     Restart,
     Stats,
+    /// The missed-keys screen; `None` keeps the range it showed last.
+    Missed(Option<MissedRange>),
     Help,
     /// Today's online daily: `None` uses the current mode.
     Daily(Option<Mode>),
@@ -89,6 +92,8 @@ pub enum ArgKind {
     Pace,
     /// Keyboard layouts for the missed-keys heatmap.
     Keyboards,
+    /// day, week, month, all: how far back `:missed` looks.
+    MissedRanges,
     /// both, confetti, trophy, off.
     PbEffects,
     /// `time 30`, `words 25`, …: the modes dailies exist for.
@@ -323,6 +328,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         requires_arg: false,
     },
     CommandSpec {
+        name: "missed",
+        aliases: &["misses"],
+        usage: "[day|week|month|all]",
+        help: "missed keys across your tests",
+        arg: ArgKind::MissedRanges,
+        requires_arg: false,
+    },
+    CommandSpec {
         name: "results",
         aliases: &["res"],
         usage: "<section> [on|off]",
@@ -465,6 +478,11 @@ pub fn parse(line: &str) -> Result<Command, String> {
         "uninstall" => Command::Uninstall(need(spec.usage)?.to_string()),
         "restart" => Command::Restart,
         "stats" => Command::Stats,
+        "missed" => Command::Missed(if rest.is_empty() {
+            None
+        } else {
+            Some(MissedRange::parse(rest)?)
+        }),
         "help" => Command::Help,
         "daily" => Command::Daily(if rest.is_empty() {
             None
@@ -569,6 +587,7 @@ pub fn arg_candidates(kind: ArgKind, comps: &Completions) -> Vec<String> {
         ArgKind::Pace => Pace::PRESETS.iter().map(|p| p.label()).collect(),
         ArgKind::PbEffects => PbEffect::ALL.iter().map(|e| e.label().into()).collect(),
         ArgKind::Keyboards => Keyboard::ALL.iter().map(|k| k.label().into()).collect(),
+        ArgKind::MissedRanges => MissedRange::ALL.iter().map(|r| r.arg().into()).collect(),
         ArgKind::Account => vec!["public on".into(), "public off".into()],
         ArgKind::DailyModes => ttyp_core::api::DAILY_MODES
             .iter()
@@ -608,6 +627,12 @@ mod tests {
             Ok(Command::Keyboard(Keyboard::Dvorak))
         );
         assert!(parse("keyboard").is_err());
+        assert_eq!(parse("missed"), Ok(Command::Missed(None)));
+        assert_eq!(
+            parse("misses 30d"),
+            Ok(Command::Missed(Some(MissedRange::Month)))
+        );
+        assert!(parse("missed year").is_err());
         assert_eq!(
             parse("pbeffect trophy"),
             Ok(Command::PbEffect(PbEffect::Trophy))

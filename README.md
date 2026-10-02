@@ -30,7 +30,7 @@ Needs a terminal with true-color support.
 Backspace moves back into the previous word only if it was left with an
 error, like monkeytype.
 
-On the results screen: `tab` (or `q`) next test, `s` stats, `?` help.
+On the results screen: `tab` (or `q`) next test, `s` stats, `m` missed keys, `?` help.
 
 ### Results screen
 
@@ -73,6 +73,33 @@ starts with your first key, and the mode line says what it's set to
 (`pace 87`). It's only drawn: scoring, history and daily submissions never
 see it. Set it in the config as `pace = "pb"` / `"last"` / `87`, with
 `:set pace …`, or in a saved config.
+
+### Missed keys
+
+`:missed` (or `m` on the results or stats screen) adds up the keys you
+missed in every run that counted, for the **last day**, **7 days**, **30
+days** or **all time** (`←`/`→` or `tab` switch, `1`–`4` pick one; `:missed
+month` opens on one). It's the results screen's heatmap, centred and as big
+as the terminal allows: each key shaded by how often it was missed, with
+its miss rate (misses out of the times its character came up) under the
+letter, then the five most missed keys with their rate and counts.
+
+Runs record which characters they missed, not which keys, so the keyboard
+is always your current `:keyboard` layout and switching it redraws the whole
+history on the new one, whichever layout the tests were typed on. Runs from
+before 2.1.0 didn't record misses and add nothing.
+
+```
+             '    ,    .    p    y    f    g    c    r    l    /    =
+                           6%   7%   2%   4%   3%   11%  3%
+
+              a    o    e    u    i    d    h    t    n    s    -
+             3%   3%   4%   3%   2%   3%   3%   3%   3%   3%
+                          …
+                          most missed
+                          1   b   15.3%   109 of 714
+                          2   e    3.7%   109 of 2961
+```
 
 ### Stats screen
 
@@ -157,6 +184,7 @@ Press `esc`, start typing, and the palette fuzzy-filters as you go.
 | `set <key> <value>` | | any config key, e.g. `set results.chart off` |
 | `restart` | `r` | new test |
 | `stats` | `s` | history |
+| `missed [day\|week\|month\|all]` | `misses` | missed keys across your tests |
 | `daily [mode]` | `d` | today's online daily test (needs `server`, see below) |
 | `leaderboard` | `lb` | the daily leaderboards |
 | `login` / `logout` | | log in with GitHub for the dailies |

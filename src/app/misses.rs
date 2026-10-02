@@ -1,10 +1,14 @@
 //! Which keys a finished test went wrong on, for the results screen's
-//! keyboard heatmap. Pure: counted from the engine's words (`typed` against
-//! `target`), so it never touches scoring or the keylog.
+//! keyboard heatmap and the `:missed` screen. Pure: counted from the
+//! engine's words (`typed` against `target`), so it never touches scoring
+//! or the keylog.
 
 use std::collections::BTreeMap;
 
+use chrono::{DateTime, Duration, Utc};
+
 use crate::config::Keyboard;
+use crate::stats::TestRecord;
 use crate::test::engine::Word;
 
 /// Mistyped target characters, as they were in the words. Which key each
@@ -13,6 +17,9 @@ use crate::test::engine::Word;
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Misses {
     pub chars: BTreeMap<char, u32>,
+    /// How often each target character was typed at all, right or wrong:
+    /// what a miss rate is out of.
+    pub typed: BTreeMap<char, u32>,
 }
 
 impl Misses {
@@ -24,9 +31,29 @@ impl Misses {
         let mut m = Self::default();
         for w in words {
             for (target, typed) in w.target.iter().zip(&w.typed) {
+                *m.typed.entry(*target).or_default() += 1;
                 if target != typed {
                     *m.chars.entry(*target).or_default() += 1;
                 }
+            }
+        }
+        m
+    }
+
+    /// The misses of every run in `records` that counts, at or after
+    /// `since` (all of them without it). Runs from before misses were
+    /// recorded add nothing.
+    pub fn from_records(records: &[TestRecord], since: Option<DateTime<Utc>>) -> Self {
+        let mut m = Self::default();
+        for r in records
+            .iter()
+            .filter(|r| r.counts() && since.is_none_or(|t| r.ts >= t))
+        {
+            for (c, n) in &r.missed_chars {
+                *m.chars.entry(*c).or_default() += n;
+            }
+            for (c, n) in &r.typed_chars {
+                *m.typed.entry(*c).or_default() += n;
             }
         }
         m
@@ -48,7 +75,78 @@ impl Misses {
                 None => m.other += n,
             }
         }
+        for (c, n) in &self.typed {
+            if let Some(k) = kb.key_for(*c) {
+                *m.typed.entry(k).or_default() += n;
+            }
+        }
         m
+    }
+}
+
+/// How far back the `:missed` screen looks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MissedRange {
+    Day,
+    #[default]
+    Week,
+    Month,
+    All,
+}
+
+impl MissedRange {
+    pub const ALL: [MissedRange; 4] = [
+        MissedRange::Day,
+        MissedRange::Week,
+        MissedRange::Month,
+        MissedRange::All,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            MissedRange::Day => "last day",
+            MissedRange::Week => "7 days",
+            MissedRange::Month => "30 days",
+            MissedRange::All => "all time",
+        }
+    }
+
+    /// The `:missed` argument for it.
+    pub fn arg(self) -> &'static str {
+        match self {
+            MissedRange::Day => "day",
+            MissedRange::Week => "week",
+            MissedRange::Month => "month",
+            MissedRange::All => "all",
+        }
+    }
+
+    pub fn parse(s: &str) -> Result<Self, String> {
+        match s.trim().to_lowercase().as_str() {
+            "day" | "1" | "1d" | "today" | "24h" => Ok(MissedRange::Day),
+            "week" | "7" | "7d" => Ok(MissedRange::Week),
+            "month" | "30" | "30d" => Ok(MissedRange::Month),
+            "all" | "all time" | "alltime" | "ever" => Ok(MissedRange::All),
+            _ => Err(format!("expected day, week, month or all, got `{s}`")),
+        }
+    }
+
+    /// The oldest run it takes, counting back from `now`.
+    pub fn since(self, now: DateTime<Utc>) -> Option<DateTime<Utc>> {
+        let days = match self {
+            MissedRange::Day => 1,
+            MissedRange::Week => 7,
+            MissedRange::Month => 30,
+            MissedRange::All => return None,
+        };
+        Some(now - Duration::days(days))
+    }
+
+    /// The next range, `by` steps on, wrapping.
+    pub fn step(self, by: i8) -> Self {
+        let n = Self::ALL.len() as i8;
+        let i = Self::ALL.iter().position(|r| *r == self).unwrap_or(0) as i8;
+        Self::ALL[(i + by).rem_euclid(n) as usize]
     }
 }
 
@@ -58,6 +156,8 @@ impl Misses {
 pub struct KeyMisses {
     pub keyboard: Keyboard,
     pub keys: BTreeMap<char, u32>,
+    /// How often each key's characters were typed, right or wrong.
+    pub typed: BTreeMap<char, u32>,
     /// Misses on characters that aren't on the drawn keyboard (accents,
     /// other scripts, space).
     pub other: u32,
@@ -72,6 +172,12 @@ impl KeyMisses {
         self.keys.values().sum::<u32>() + self.other
     }
 
+    /// The share of `key`'s characters that were missed, 0–100.
+    pub fn percent(&self, key: char) -> Option<f64> {
+        let typed = self.typed.get(&key).copied().unwrap_or(0);
+        (typed > 0).then(|| f64::from(self.get(key)) * 100.0 / f64::from(typed))
+    }
+
     /// Most misses on one key.
     pub fn max(&self) -> u32 {
         self.keys.values().copied().max().unwrap_or(0)
@@ -84,38 +190,101 @@ impl KeyMisses {
 
 /// Columns one key takes on screen: ` q ` plus a gap.
 pub const KEY_COLS: u16 = 4;
-/// How far each drawn row is shifted right, in columns, so the rows
+/// How far each drawn row is shifted right, in quarter keys, so the rows
 /// stagger like a real keyboard (number row first).
 const ROW_SHIFT: [u16; 4] = [0, 2, 3, 5];
+
+/// How big each key is drawn: `width` × `height` cells, one every `pitch`
+/// columns and every `row_pitch` rows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct KeySize {
+    pub pitch: u16,
+    pub width: u16,
+    pub height: u16,
+    pub row_pitch: u16,
+}
+
+/// The results screen's keys: ` q ` on one row.
+pub const SMALL: KeySize = KeySize {
+    pitch: KEY_COLS,
+    width: KEY_COLS - 1,
+    height: 1,
+    row_pitch: 1,
+};
+
+/// The `:missed` screen's sizes, biggest first; it takes the first that
+/// fits. Keys two or more rows tall have room for their miss rate under
+/// the letter.
+pub const SIZES: [KeySize; 5] = [
+    KeySize {
+        pitch: 10,
+        width: 9,
+        height: 3,
+        row_pitch: 4,
+    },
+    KeySize {
+        pitch: 8,
+        width: 7,
+        height: 3,
+        row_pitch: 4,
+    },
+    KeySize {
+        pitch: 6,
+        width: 5,
+        height: 3,
+        row_pitch: 4,
+    },
+    KeySize {
+        pitch: 5,
+        width: 4,
+        height: 2,
+        row_pitch: 3,
+    },
+    SMALL,
+];
 
 /// Where each key of `kb` is drawn: (key, column, row) from the
 /// keyboard's top left. The number row is only drawn when `numbers` is set; without it the
 /// letter rows move up.
 pub fn layout(kb: Keyboard, numbers: bool) -> Vec<(char, u16, u16)> {
+    layout_sized(kb, numbers, SMALL)
+}
+
+/// `layout` with keys of `size`.
+pub fn layout_sized(kb: Keyboard, numbers: bool, size: KeySize) -> Vec<(char, u16, u16)> {
     let rows = kb
         .rows()
         .into_iter()
         .zip(ROW_SHIFT)
-        .map(|((keys, _), shift)| (keys, shift))
+        .map(|((keys, _), shift)| (keys, shift * size.pitch / 4))
         .skip(usize::from(!numbers));
     rows.enumerate()
         .flat_map(|(y, (keys, shift))| {
             keys.chars()
                 .enumerate()
-                .map(move |(x, k)| (k, shift + x as u16 * KEY_COLS, y as u16))
+                .map(move |(x, k)| (k, shift + x as u16 * size.pitch, y as u16 * size.row_pitch))
         })
         .collect()
 }
 
 /// Width and height of the drawn keyboard.
 pub fn layout_size(kb: Keyboard, numbers: bool) -> (u16, u16) {
-    let cells = layout(kb, numbers);
+    layout_size_sized(kb, numbers, SMALL)
+}
+
+/// `layout_size` with keys of `size`.
+pub fn layout_size_sized(kb: Keyboard, numbers: bool, size: KeySize) -> (u16, u16) {
+    let cells = layout_sized(kb, numbers, size);
     let w = cells
         .iter()
-        .map(|(_, x, _)| x + KEY_COLS - 1)
+        .map(|(_, x, _)| x + size.width)
         .max()
         .unwrap_or(0);
-    let h = cells.iter().map(|(_, _, y)| y + 1).max().unwrap_or(0);
+    let h = cells
+        .iter()
+        .map(|(_, _, y)| y + size.height)
+        .max()
+        .unwrap_or(0);
     (w, h)
 }
 
@@ -177,7 +346,8 @@ mod tests {
     #[test]
     fn untyped_and_extra_characters_are_not_misses() {
         let m = qwerty(&[word("about", "ab"), word("go", "gooo"), word("later", "")]);
-        assert_eq!(m, KeyMisses::default());
+        assert!(m.keys.is_empty());
+        assert_eq!(m.other, 0);
         assert_eq!(Misses::from_words(&[word("go", "gooo")]).total(), 0);
         assert_eq!(m.total(), 0);
     }
@@ -265,5 +435,89 @@ mod tests {
         let dp = m.on(Keyboard::DvorakProgrammer);
         assert_eq!(dp.get('['), 1);
         assert!(dp.on_number_row());
+    }
+
+    #[test]
+    fn typed_counts_give_the_miss_rate() {
+        let m = qwerty(&[word("aab", "sab"), word("Ab", "Ab")]);
+        assert_eq!(m.typed.get(&'a'), Some(&3));
+        assert_eq!(m.percent('a'), Some(100.0 / 3.0));
+        assert_eq!(m.percent('b'), Some(0.0));
+        assert_eq!(m.percent('z'), None, "never typed");
+    }
+
+    #[test]
+    fn history_adds_up_counted_runs_in_range() {
+        let now = Utc::now();
+        let run = |days_ago: i64, missed: &[(char, u32)], typed: &[(char, u32)]| {
+            let mut r: TestRecord = serde_json::from_str(
+                r#"{"schema":4,"ts":"2026-01-01T00:00:00Z","mode":{"time":30},"language":"english",
+                "punctuation":false,"numbers":false,"wpm":80.0,"raw":82.0,"acc":97.0,
+                "consistency":80.0,"chars":{"correct":1,"incorrect":0,"extra":0,"missed":0},
+                "duration_s":30.0}"#,
+            )
+            .unwrap();
+            r.ts = now - Duration::days(days_ago);
+            r.missed_chars = missed.iter().copied().collect();
+            r.typed_chars = typed.iter().copied().collect();
+            r
+        };
+        let mut invalid = run(0, &[('e', 50)], &[('e', 50)]);
+        invalid.invalid = Some(crate::stats::Invalid::Afk);
+        let records = vec![
+            run(40, &[('e', 1)], &[('e', 10)]),
+            run(3, &[('e', 2), ('T', 1)], &[('e', 10), ('t', 4), ('T', 1)]),
+            run(0, &[], &[('e', 5)]),
+            invalid,
+        ];
+        let all = Misses::from_records(&records, MissedRange::All.since(now));
+        assert_eq!(all.chars.get(&'e'), Some(&3));
+        assert_eq!(all.typed.get(&'e'), Some(&25));
+        let week =
+            Misses::from_records(&records, MissedRange::Week.since(now)).on(Keyboard::Qwerty);
+        assert_eq!(week.get('e'), 2);
+        assert_eq!(week.get('t'), 1, "`T` lands on the t key");
+        assert_eq!(week.percent('t'), Some(20.0));
+        let day = Misses::from_records(&records, MissedRange::Day.since(now));
+        assert_eq!(day.total(), 0);
+        assert_eq!(day.typed.get(&'e'), Some(&5));
+    }
+
+    #[test]
+    fn ranges_parse_and_cycle() {
+        for r in MissedRange::ALL {
+            assert_eq!(MissedRange::parse(r.arg()), Ok(r));
+        }
+        assert_eq!(MissedRange::parse("30d"), Ok(MissedRange::Month));
+        assert!(MissedRange::parse("year").is_err());
+        assert_eq!(MissedRange::All.step(1), MissedRange::Day);
+        assert_eq!(MissedRange::Day.step(-1), MissedRange::All);
+        assert_eq!(MissedRange::Week.step(1), MissedRange::Month);
+    }
+
+    #[test]
+    fn bigger_keys_keep_the_stagger() {
+        let big = SIZES[0];
+        let at = |k| {
+            *layout_sized(Keyboard::Qwerty, false, big)
+                .iter()
+                .find(|c| c.0 == k)
+                .unwrap()
+        };
+        assert_eq!(at('q'), ('q', 5, 0));
+        assert_eq!(at('a'), ('a', 7, 4));
+        assert_eq!(at('z'), ('z', 12, 8));
+        assert_eq!(
+            layout_size_sized(Keyboard::Qwerty, false, big),
+            (5 + 11 * 10 + 9, 11)
+        );
+        assert_eq!(
+            layout_size_sized(Keyboard::Qwerty, true, big),
+            (5 + 11 * 10 + 9, 15)
+        );
+        assert_eq!(
+            layout_size_sized(Keyboard::Qwerty, true, SMALL),
+            layout_size(Keyboard::Qwerty, true)
+        );
     }
 }

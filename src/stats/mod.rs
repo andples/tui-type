@@ -4,7 +4,7 @@
 pub mod activity;
 pub mod validity;
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::{self, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
@@ -70,11 +70,20 @@ pub struct TestRecord {
     /// the history, left out of bests, pace and the stats.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub invalid: Option<Invalid>,
+    /// Target characters typed wrong, with how often (schema 4; empty
+    /// before). The `:missed` screen adds these up.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub missed_chars: BTreeMap<char, u32>,
+    /// Target characters typed at all, right or wrong (schema 4): what the
+    /// miss rate is out of.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub typed_chars: BTreeMap<char, u32>,
 }
 
 impl TestRecord {
     /// 1: initial. 2: optional `daily_id`. 3: optional `invalid`.
-    pub const SCHEMA: u8 = 3;
+    /// 4: optional `missed_chars` and `typed_chars`.
+    pub const SCHEMA: u8 = 4;
 
     pub fn new(
         metrics: &Metrics,
@@ -98,6 +107,8 @@ impl TestRecord {
             duration_s: metrics.duration.as_secs_f64(),
             daily_id: None,
             invalid: validity::check(metrics),
+            missed_chars: BTreeMap::new(),
+            typed_chars: BTreeMap::new(),
         }
     }
 
@@ -263,6 +274,8 @@ mod tests {
             duration_s: 30.0,
             daily_id: None,
             invalid: None,
+            missed_chars: Default::default(),
+            typed_chars: Default::default(),
         }
     }
 

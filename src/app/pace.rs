@@ -152,6 +152,8 @@ mod tests {
             duration_s: 30.0,
             daily_id: None,
             invalid: None,
+            missed_chars: Default::default(),
+            typed_chars: Default::default(),
         }
     }
 

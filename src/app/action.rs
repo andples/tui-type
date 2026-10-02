@@ -2,6 +2,7 @@
 //! (later) remote events all reduce to this enum and go through
 //! `App::dispatch`, which keeps the UI layer purely presentational.
 
+use super::misses::MissedRange;
 use crate::catalog::CatalogEvent;
 use crate::online::RemoteEvent;
 
@@ -37,6 +38,10 @@ pub enum Action {
     ScrollUp,
     /// History screen: move the selected run.
     History(ListMove),
+    /// Open the missed-keys screen, on a range or the last one shown.
+    ShowMissed(Option<MissedRange>),
+    /// Missed-keys screen: the next (1) or previous (-1) range.
+    MissedStep(i8),
 
     // Landing screen
     /// Finish the intro animation at once.

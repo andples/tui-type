@@ -165,7 +165,13 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
             .collect();
         SelectTable::new(&columns, rows, &app.history).render(frame, table, p);
     }
-    hints::render(frame, area, col, p, "↑↓ move · g/G top/bottom · esc back");
+    hints::render(
+        frame,
+        area,
+        col,
+        p,
+        "↑↓ move · g/G top/bottom · m missed keys · esc back",
+    );
 }
 
 /// How many weeks of calendar fit in `width` columns.

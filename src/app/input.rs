@@ -6,6 +6,7 @@ use super::Screen;
 use super::action::{
     Action, BoardAction, CatalogAction, ListMove, ModuleAction, ProfileAction, UserAction,
 };
+use super::misses::MissedRange;
 use super::splash::SplashMenu;
 use crate::test::Status;
 
@@ -74,6 +75,7 @@ pub fn map_key(key: KeyEvent, ctx: InputContext) -> Action {
             KeyCode::Tab | KeyCode::Enter => Action::Restart,
             KeyCode::Esc | KeyCode::Char(':') => Action::OpenCommandLine,
             KeyCode::Char('s') => Action::ShowStats,
+            KeyCode::Char('m') => Action::ShowMissed(None),
             KeyCode::Char('?') => Action::ShowHelp,
             // Back to the words, like `:q` here; quitting is from there.
             KeyCode::Char('q') => Action::Restart,
@@ -123,6 +125,19 @@ pub fn map_key(key: KeyEvent, ctx: InputContext) -> Action {
             KeyCode::Char('u') if ctrl => Action::History(ListMove::Page(-1)),
             KeyCode::Home | KeyCode::Char('g') => Action::History(ListMove::Home),
             KeyCode::End | KeyCode::Char('G') => Action::History(ListMove::End),
+            KeyCode::Char('m') => Action::ShowMissed(None),
+            KeyCode::Char('?') => Action::ShowHelp,
+            _ => Action::Nop,
+        },
+        Screen::Missed => match key.code {
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter => Action::Back,
+            KeyCode::Char(':') => Action::OpenCommandLine,
+            KeyCode::Right | KeyCode::Char('l') | KeyCode::Tab => Action::MissedStep(1),
+            KeyCode::Left | KeyCode::Char('h') | KeyCode::BackTab => Action::MissedStep(-1),
+            KeyCode::Char(c @ '1'..='4') => {
+                Action::ShowMissed(Some(MissedRange::ALL[c as usize - '1' as usize]))
+            }
+            KeyCode::Char('s') => Action::ShowStats,
             KeyCode::Char('?') => Action::ShowHelp,
             _ => Action::Nop,
         },

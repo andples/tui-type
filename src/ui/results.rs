@@ -83,7 +83,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
     if show_keys {
         render_keys(frame, &keys, rows[next + 1], p);
     }
-    let hint = "tab  next   ·   s  stats   ·   :  command";
+    let hint = "tab  next   ·   s  stats   ·   m  missed keys   ·   :  command";
     frame.render_widget(Paragraph::new(hint).style(p.sub()), rows[rows.len() - 1]);
 
     if let Some(c) = &outcome.celebration {
