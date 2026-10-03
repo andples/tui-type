@@ -77,9 +77,11 @@ see it. Set it in the config as `pace = "pb"` / `"last"` / `87`, with
 ### Missed keys
 
 `:missed` (or `m` on the results or stats screen) adds up the keys you
-missed in every run that counted, for the **last day**, **7 days**, **30
-days** or **all time** (`←`/`→` or `tab` switch, `1`–`4` pick one; `:missed
-month` opens on one). It's the results screen's heatmap, centred and as big
+missed for the **last test**, or every run that counted in the **last
+day**, **7 days**, **30 days** or **all time** (`←`/`→` or `tab` switch,
+`1`–`5` pick one). `:missed` opens on 7 days (`:missed last`, `:missed month`
+… open on another); `m` on the results screen opens on the test you just
+finished. It's the results screen's heatmap, centred and as big
 as the terminal allows: each key shaded by how often it was missed, with
 its miss rate (misses out of the times its character came up) under the
 letter, then the five most missed keys with their rate and counts.
@@ -131,9 +133,9 @@ last 30 days  ▃▄··▇▇▃··▆·▁·▆··▇··▃▅▃▇▄▁�
 ttyp opens on a short intro: the logo typed out in big letters (under a
 second), then a few keys for where you might want to go:
 
-- logged out: login with github (`l`), start typing (`tab`)
-- logged in: today's daily (`d`, lists the modes to pick from), leaderboard
-  (`b`), start typing (`tab`)
+- logged out: start typing (`tab`), login with github (`l`)
+- logged in: start typing (`tab`), today's daily (`d`, lists the modes to
+  pick from), leaderboard (`b`)
 - offline (`server = ""`): start typing (`tab`), help (`?`)
 
 `↑`/`↓` move the highlight and `enter` runs the highlighted row; the keys in
@@ -186,7 +188,7 @@ Press `esc`, start typing, and the palette fuzzy-filters as you go.
 | `stats` | `s` | history |
 | `missed [day\|week\|month\|all]` | `misses` | missed keys across your tests |
 | `daily [mode]` | `d` | today's online daily test (needs `server`, see below) |
-| `leaderboard` | `lb` | the daily leaderboards |
+| `leaderboard` | `lb` | the daily and all-time leaderboards |
 | `login` / `logout` | | log in with GitHub for the dailies |
 | `help` | `h`, `?` | keys and commands |
 | `quit` | `q`, `exit` | exit from the words or the landing screen; anywhere else, back out one step (like `esc`) |
@@ -332,9 +334,12 @@ ttyp. `:set server …` changes it live.
   start a new test wait until it's finished, so you can't throw a run away
   by accident. Turn that off with `:set daily_lock off` (`daily_lock = false`
   in the config).
-- `:leaderboard` shows both boards side by side (or behind `tab` on narrow
-  terminals): `↑↓`/`jk` move, `g`/`G` top/bottom, `←→` mode, `l` language,
-  `[` `]` day, `enter` opens that run's wpm graph, `p` opens that player's
+- `:leaderboard` shows the daily's boards (first try, best) side by side (or
+  behind `tab` on narrow terminals); `a` switches to the all-time boards,
+  each player's best first try and best run over every daily of that
+  language and mode, with the date it was set. `↑↓`/`jk` move, `g`/`G`
+  top/bottom, `←→` mode, `l` language, `[` `]` day (daily boards),
+  `enter` opens that run's wpm graph, `p` opens that player's
   profile, `esc` goes back. Your own row stays visible at the bottom when it
   scrolls off.
 - `:user <login>` (or `:profile`, `:me`, `:self`) shows a player's profile: daily streak, personal best per

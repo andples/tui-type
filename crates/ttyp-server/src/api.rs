@@ -15,10 +15,12 @@ use ttyp_core::api::{
     Account, AccountUpdate, AuthRequest, AuthResponse, Board, Daily, DailySummary, ErrorBody,
     Leaderboard, Profile, ResultDetail, StartResponse, SubmitRequest, SubmitResponse,
 };
+use ttyp_core::boards::Period;
 use ttyp_core::language::LanguageRegistry;
 use ttyp_core::test::{Rejected, replay};
 
 use crate::auth::{self, User};
+use crate::leaderboard::Scope;
 use crate::{daily, leaderboard, profile};
 
 /// Attempts (starts and submissions) per user per daily.
@@ -55,6 +57,7 @@ pub fn router(state: AppState) -> Router {
         .route("/results", post(submit))
         .route("/results/{id}", get(result_by_id))
         .route("/leaderboard/{daily_id}", get(leaderboard))
+        .route("/boards/{id}", get(board))
         .route("/account", get(account).post(update_account))
         .route("/users/{login}", get(user_profile))
         .route("/auth/github", post(auth_github))
@@ -284,11 +287,12 @@ async fn submit(
 
     let (rank_first, rank_best) = if metrics.is_some() {
         let first = if attempt == 1 && first_eligible {
-            leaderboard::me(&state.pool, daily.id, Board::First, user.id).await?
+            leaderboard::me(&state.pool, Board::First, &Scope::Daily(daily.id), user.id).await?
         } else {
             None
         };
-        let best = leaderboard::me(&state.pool, daily.id, Board::Best, user.id).await?;
+        let best =
+            leaderboard::me(&state.pool, Board::Best, &Scope::Daily(daily.id), user.id).await?;
         (first.map(|r| r.rank), best.map(|r| r.rank))
     } else {
         (None, None)
@@ -398,6 +402,7 @@ fn default_limit() -> u32 {
     50
 }
 
+/// The daily boards by daily id; what clients before 2.1.2 call.
 async fn leaderboard(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -407,21 +412,96 @@ async fn leaderboard(
     if daily::get(&state.pool, daily_id).await?.is_none() {
         return Err(ApiError::NotFound);
     }
-    let limit = q.limit.clamp(1, MAX_PAGE);
-    let user = auth::user_from_headers(&state.pool, &headers).await?;
+    let page = Paging {
+        offset: q.offset,
+        limit: q.limit,
+        around: q.around,
+    };
+    ranked(&state, &headers, q.board, &Scope::Daily(daily_id), page).await
+}
+
+#[derive(Debug, Deserialize)]
+struct BoardQuery {
+    /// Daily boards: which daily.
+    daily: Option<i64>,
+    /// All-time boards: the language and mode (`kind` `time`/`words`).
+    language: Option<String>,
+    kind: Option<String>,
+    value: Option<i64>,
+    #[serde(default)]
+    offset: u32,
+    #[serde(default = "default_limit")]
+    limit: u32,
+    around: Option<String>,
+}
+
+/// Any board of `boards::BOARDS`, by id, for the target its period needs.
+async fn board(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<BoardQuery>,
+) -> ApiResult<Leaderboard> {
+    let spec = ttyp_core::boards::find(&id).ok_or(ApiError::NotFound)?;
+    let scope = match spec.period {
+        Period::Daily => {
+            let id = q
+                .daily
+                .ok_or_else(|| ApiError::BadRequest("missing daily".into()))?;
+            if daily::get(&state.pool, id).await?.is_none() {
+                return Err(ApiError::NotFound);
+            }
+            Scope::Daily(id)
+        }
+        Period::AllTime => {
+            let (Some(language), Some(kind), Some(value)) = (q.language, q.kind, q.value) else {
+                return Err(ApiError::BadRequest(
+                    "missing language, kind or value".into(),
+                ));
+            };
+            let mode = daily::mode_from(&kind, value)
+                .ok_or_else(|| ApiError::BadRequest("unknown mode".into()))?;
+            Scope::Mode { language, mode }
+        }
+    };
+    let page = Paging {
+        offset: q.offset,
+        limit: q.limit,
+        around: q.around,
+    };
+    ranked(&state, &headers, spec.rule, &scope, page).await
+}
+
+struct Paging {
+    offset: u32,
+    limit: u32,
+    /// `me`: centre the page on the caller's own row.
+    around: Option<String>,
+}
+
+/// A page of one board, with the caller's own row when logged in.
+async fn ranked(
+    state: &AppState,
+    headers: &HeaderMap,
+    rule: Board,
+    scope: &Scope,
+    page: Paging,
+) -> ApiResult<Leaderboard> {
+    let limit = page.limit.clamp(1, MAX_PAGE);
+    let user = auth::user_from_headers(&state.pool, headers).await?;
     let me = match &user {
-        Some(u) => leaderboard::me(&state.pool, daily_id, q.board, u.id).await?,
+        Some(u) => leaderboard::me(&state.pool, rule, scope, u.id).await?,
         None => None,
     };
-    let mut offset = q.offset;
-    if q.around.as_deref() == Some("me")
+    let mut offset = page.offset;
+    if page.around.as_deref() == Some("me")
         && let Some(mine) = &me
     {
         offset = mine.rank.saturating_sub(1).saturating_sub(limit / 2);
     }
-    let (rows, total) = leaderboard::page(&state.pool, daily_id, q.board, offset, limit).await?;
+    let (rows, total) = leaderboard::page(&state.pool, rule, scope, offset, limit).await?;
     Ok(Json(Leaderboard {
-        board: q.board,
+        board: rule,
         rows,
         offset,
         total,
@@ -796,6 +876,48 @@ mod tests {
         assert!(lb.me.is_none());
         let (status, _) = call(&app, get("/leaderboard/9999", None)).await;
         assert_eq!(status, StatusCode::NOT_FOUND);
+
+        // The same boards through `/boards`, and the all-time ones.
+        use ttyp_core::boards::Target;
+        let daily_target = Target::Daily(daily.id).query();
+        let (_, body) = call(
+            &app,
+            get(&format!("/boards/daily-first?{daily_target}"), Some(&alice)),
+        )
+        .await;
+        let lb: Leaderboard = serde_json::from_value(body).unwrap();
+        let names: Vec<&str> = lb.rows.iter().map(|r| r.user.as_str()).collect();
+        assert_eq!(names, ["bob", "alice"]);
+        let all_time = Target::Mode {
+            language: daily.language.clone(),
+            mode: daily.mode,
+        }
+        .query();
+        let (status, body) = call(
+            &app,
+            get(&format!("/boards/alltime-best?{all_time}"), Some(&bob)),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        let lb: Leaderboard = serde_json::from_value(body).unwrap();
+        assert_eq!(lb.rows[0].result_id, alice_best);
+        assert_eq!(lb.rows[0].date.as_deref(), Some(daily.date.as_str()));
+        assert_eq!(lb.me.unwrap().rank, 2);
+        for (path, want) in [
+            ("/boards/nope?daily=1".to_string(), StatusCode::NOT_FOUND),
+            ("/boards/daily-best".to_string(), StatusCode::BAD_REQUEST),
+            (
+                "/boards/alltime-best?daily=1".to_string(),
+                StatusCode::BAD_REQUEST,
+            ),
+            (
+                "/boards/alltime-best?language=english&kind=laps&value=3".to_string(),
+                StatusCode::BAD_REQUEST,
+            ),
+        ] {
+            let (status, _) = call(&app, get(&path, None)).await;
+            assert_eq!(status, want, "{path}");
+        }
 
         // The graph view of a run.
         let (status, body) = call(&app, get(&format!("/results/{alice_best}"), None)).await;

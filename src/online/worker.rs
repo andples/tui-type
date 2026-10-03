@@ -10,9 +10,11 @@ use std::thread;
 use std::time::Duration;
 
 use ttyp_core::api::{
-    Account, Board, Daily, DailySummary, Leaderboard, Profile, ResultDetail, StartResponse,
-    SubmitRequest, SubmitResponse,
+    Account, Daily, DailySummary, Leaderboard, Profile, ResultDetail, StartResponse, SubmitRequest,
+    SubmitResponse,
 };
+
+use ttyp_core::boards::Target;
 
 use super::client::{Client, OnlineError};
 use super::device;
@@ -34,9 +36,10 @@ pub enum Request {
         /// The queue file this came from, if it's a retry.
         queued: Option<PathBuf>,
     },
+    /// A page of one board (`boards::BoardSpec::id`).
     Leaderboard {
-        daily_id: i64,
-        board: Board,
+        board: &'static str,
+        target: Target,
         offset: u32,
         limit: u32,
     },
@@ -76,8 +79,8 @@ pub enum RemoteEvent {
         result: Result<SubmitResponse, OnlineError>,
     },
     Leaderboard {
-        daily_id: i64,
-        board: Board,
+        board: &'static str,
+        target: Target,
         offset: u32,
         result: Result<Leaderboard, OnlineError>,
     },
@@ -201,16 +204,16 @@ impl Online {
                 });
             }
             Request::Leaderboard {
-                daily_id,
                 board,
+                target,
                 offset,
                 limit,
             } => {
                 thread::spawn(move || {
-                    let result = client.leaderboard(daily_id, board, offset, limit);
+                    let result = client.board(board, &target, offset, limit);
                     let _ = tx.send(RemoteEvent::Leaderboard {
-                        daily_id,
                         board,
+                        target,
                         offset,
                         result,
                     });

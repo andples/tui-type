@@ -102,9 +102,12 @@ pub struct LeaderboardRow {
     pub acc: f64,
     pub consistency: f64,
     pub result_id: i64,
+    /// UTC date of the daily the run was on. Absent from servers before 2.1.2.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub date: Option<String>,
 }
 
-/// `GET /leaderboard/{daily_id}`.
+/// `GET /leaderboard/{daily_id}` and `GET /boards/{id}` (`boards::BOARDS`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Leaderboard {
     pub board: Board,

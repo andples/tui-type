@@ -25,6 +25,7 @@ then `tmux send-keys -t t -l 'text'` and `tmux capture-pane -t t -p`.
 
 - `crates/ttyp-core/src/test/` — engine (state machine), generator (`WordGenerator` trait), metrics, mode. No UI. Re-exported as `ttyp::test`.
 - `crates/ttyp-core/src/language/` — language registry: built-ins via `include_str!` from `crates/ttyp-core/assets/languages/`, user files in the config dir override by name. Re-exported as `ttyp::language`.
+- `crates/ttyp-core/src/boards.rs` — the leaderboards as data: `BOARDS` lists every board (`BoardSpec`: wire `id`, `label`, `Period` daily/all-time, `rule` = `api::Board` first/best, `columns` of `Stat`). The server serves any of them at `GET /boards/{id}?<Target::query>` from one query (`leaderboard::board_cte(rule, &Scope)`; `/leaderboard/{daily_id}` stays for pre-2.1.2 clients); the client's leaderboard screen has one page per `periods()` (`a` cycles) and one pane per `on(period)` board, columns drawn from the spec.
 - `src/command/` — command specs + parser (`mod.rs`), palette/fuzzy state (`palette.rs`).
 - `src/config/` — `Config` (TOML, `#[serde(default)]`), `Paths` (XDG).
 - `src/theme/` — theme registry: built-ins via `include_str!` from `assets/themes/`, user files in config dir override by name.
@@ -46,6 +47,7 @@ Images can't be seen in tmux. To check graphics output, run ttyp under a pty tha
 - Engine methods that depend on time take an `Instant` (`*_at`) so tests are deterministic.
 - Config changes are saved immediately via `App::save_config`.
 - Building a list screen: keep a `widgets::Selection` in the screen's state and move it from `App::dispatch` (`move_by`, `page`, `home`, `end`); in `src/ui/<screen>.rs` build `Column`s and `Row`s of `Cell`s with a `Role`, render them with `SelectTable::new(&columns, rows, &selection)` (`.pinned(i, row)` keeps a row on screen, `.focused(false)` hides the marker), use `panes::split` for side-by-side tables and `hints::render` for the key line. The profile list (`src/ui/profiles.rs`) is the reference. Every selectable list looks the same (owner's decision, 2026-10-01): the selected item gets the ` › ` marker, moves one column right and takes `Palette::selected`. `SelectTable` does this itself; a hand-drawn list uses `widgets::cursor::lead` and `cursor::style`, never its own marker.
+- Adding a leaderboard: one `BoardSpec` in `ttyp_core::boards::BOARDS` (a new `Period` or rule also needs a `Scope`/filter in `crates/ttyp-server/src/leaderboard.rs`); rebuild the server.
 - Adding a command: add a `CommandSpec` to `COMMANDS`, a `Command` variant, a `parse` arm, and an `App::execute` arm.
 - Adding a setting: add the field to `Config` and `ProfileSettings`, and a line to `settings!` in `src/profile/mod.rs` (plus `Editor::cycle` for its ←/→ behaviour).
 - Font sizes: `FontSize` wraps a block set + scale; `fontsize` levels 1–16 are a fixed ladder (`from_level`), while fullscreen (`FontSize::fit`, called from `App::typing_frame`) searches every set/scale.

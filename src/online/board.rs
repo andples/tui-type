@@ -1,8 +1,11 @@
-//! Leaderboard screen state, no rendering: which daily is shown (date,
-//! language, mode), the two boards' rows and cursors, and which board has
-//! focus. The app feeds it server replies; the UI reads it.
+//! Leaderboard screen state, no rendering: which period is shown (one page
+//! per `boards::periods()`), which daily or language and mode, the rows and
+//! cursor of each of that period's boards, and which board has focus. The
+//! boards themselves come from `ttyp_core::boards::BOARDS`. The app feeds it
+//! server replies; the UI reads it.
 
-use ttyp_core::api::{Board, DailySummary, Leaderboard, LeaderboardRow};
+use ttyp_core::api::{DailySummary, Leaderboard, LeaderboardRow};
+use ttyp_core::boards::{self, BoardSpec, Period, Target};
 use ttyp_core::test::Mode;
 
 use crate::ui::widgets::Selection;
@@ -73,23 +76,19 @@ impl BoardPane {
 
 #[derive(Debug)]
 pub struct BoardView {
+    pub period: Period,
     pub date: String,
     pub language: String,
     pub mode: Mode,
-    /// The dailies of `date`, once fetched.
+    /// The dailies of `date`, once fetched. All-time boards offer the
+    /// languages and modes of these too.
     pub dailies: Vec<DailySummary>,
     pub dailies_loading: bool,
-    /// `[first try, best]`.
-    pub panes: [BoardPane; 2],
-    pub focus: Board,
+    /// One per board of `period`, in `boards::on(period)` order.
+    pub panes: Vec<BoardPane>,
+    /// Index into `panes`.
+    pub focus: usize,
     pub error: Option<String>,
-}
-
-fn index(b: Board) -> usize {
-    match b {
-        Board::First => 0,
-        Board::Best => 1,
-    }
 }
 
 /// Time modes first, then words, each ascending.
@@ -102,16 +101,52 @@ fn mode_key(m: &Mode) -> (u8, u16) {
 
 impl BoardView {
     pub fn new(date: String, language: String, mode: Mode) -> Self {
+        let period = boards::periods()[0];
         Self {
+            period,
             date,
             language,
             mode,
             dailies: Vec::new(),
             dailies_loading: true,
-            panes: [BoardPane::default(), BoardPane::default()],
-            focus: Board::First,
+            panes: Self::panes_for(period),
+            focus: 0,
             error: None,
         }
+    }
+
+    fn panes_for(period: Period) -> Vec<BoardPane> {
+        boards::on(period)
+            .iter()
+            .map(|_| BoardPane::default())
+            .collect()
+    }
+
+    /// The boards on screen, parallel to `panes`.
+    pub fn boards(&self) -> Vec<&'static BoardSpec> {
+        boards::on(self.period)
+    }
+
+    /// Show the next period's boards, wrapping, focusing the first.
+    pub fn cycle_period(&mut self) {
+        let periods = boards::periods();
+        let i = periods.iter().position(|p| *p == self.period).unwrap_or(0);
+        self.period = periods[(i + 1) % periods.len()];
+        self.panes = Self::panes_for(self.period);
+        self.focus = 0;
+    }
+
+    /// What the boards rank: the shown daily, or the language and mode
+    /// across all dailies. `None` while there's nothing to show.
+    pub fn target(&self) -> Option<Target> {
+        let daily = self.daily()?;
+        Some(match self.period {
+            Period::Daily => Target::Daily(daily.id),
+            Period::AllTime => Target::Mode {
+                language: daily.language.clone(),
+                mode: daily.mode,
+            },
+        })
     }
 
     /// The daily currently shown, if the day has one for the selection.
@@ -162,23 +197,23 @@ impl BoardView {
         v
     }
 
-    pub fn pane(&self, b: Board) -> &BoardPane {
-        &self.panes[index(b)]
-    }
-
-    pub fn pane_mut(&mut self, b: Board) -> &mut BoardPane {
-        &mut self.panes[index(b)]
+    /// The pane of the board with this id, if it's on screen.
+    pub fn pane_mut(&mut self, id: &str) -> Option<&mut BoardPane> {
+        let i = self.boards().iter().position(|b| b.id == id)?;
+        self.panes.get_mut(i)
     }
 
     pub fn focused(&mut self) -> &mut BoardPane {
-        &mut self.panes[index(self.focus)]
+        &mut self.panes[self.focus]
     }
 
-    pub fn toggle_focus(&mut self) {
-        self.focus = match self.focus {
-            Board::First => Board::Best,
-            Board::Best => Board::First,
-        };
+    pub fn focused_board(&self) -> &'static BoardSpec {
+        self.boards()[self.focus]
+    }
+
+    /// Focus the next board, wrapping.
+    pub fn next_focus(&mut self) {
+        self.focus = (self.focus + 1) % self.panes.len().max(1);
     }
 
     /// Forget both boards' rows (before a reload).
@@ -236,6 +271,7 @@ impl BoardView {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ttyp_core::api::Board;
 
     fn daily(id: i64, language: &str, mode: Mode) -> DailySummary {
         DailySummary {
@@ -255,6 +291,7 @@ mod tests {
             acc: 97.0,
             consistency: 70.0,
             result_id: rank as i64 * 10,
+            date: None,
         }
     }
 
@@ -290,6 +327,29 @@ mod tests {
         assert_eq!(v.shift_day(-1), "2026-09-28");
         assert!(v.dailies_loading && v.dailies.is_empty());
         assert!(v.panes.iter().all(|p| p.loading));
+    }
+
+    #[test]
+    fn periods_swap_the_boards_and_target() {
+        let mut v = view();
+        assert_eq!(v.period, Period::Daily);
+        assert_eq!(v.target(), Some(Target::Daily(2)));
+        v.next_focus();
+        assert_eq!(v.focused_board().id, "daily-best");
+        v.cycle_period();
+        assert_eq!((v.period, v.focus), (Period::AllTime, 0));
+        assert_eq!(v.panes.len(), boards::on(Period::AllTime).len());
+        assert_eq!(
+            v.target(),
+            Some(Target::Mode {
+                language: "english".into(),
+                mode: Mode::Time(30)
+            })
+        );
+        assert!(v.pane_mut("alltime-best").is_some());
+        assert!(v.pane_mut("daily-best").is_none(), "not on screen");
+        v.cycle_period();
+        assert_eq!(v.period, Period::Daily, "wraps");
     }
 
     #[test]

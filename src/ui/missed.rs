@@ -93,7 +93,7 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
         frame.render_widget(Paragraph::new(line), row);
     }
 
-    let hint = "←→ range  ·  1–4 pick  ·  :keyboard layout  ·  s stats  ·  esc back";
+    let hint = "←→ range  ·  1–5 pick  ·  :keyboard layout  ·  s stats  ·  esc back";
     let hint = if hint.chars().count() as u16 <= width {
         hint
     } else {
@@ -109,8 +109,8 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
     hints::render(frame, area, col, p, hint);
 }
 
-/// `last day    7 days    30 days    all time`, the shown one picked out;
-/// `day  week  month  all` when that doesn't fit in `width`.
+/// `last test    last day    7 days    30 days    all time`, the shown one picked out;
+/// `last  day  week  month  all` when that doesn't fit in `width`.
 fn ranges(current: MissedRange, width: u16, p: &Palette) -> Line<'static> {
     let long: usize = MissedRange::ALL.iter().map(|r| r.label().len() + 4).sum();
     let short = long - 4 > width as usize;
@@ -127,18 +127,12 @@ fn ranges(current: MissedRange, width: u16, p: &Palette) -> Line<'static> {
 
 /// `12 tests  ·  37 misses in 2 960 keys  ·  1.2%`.
 fn summary(app: &App, keys: &KeyMisses, p: &Palette) -> Line<'static> {
-    let since = app.missed_range.since(Utc::now());
-    let tests = app
-        .stats
-        .all()
-        .iter()
-        .filter(|r| r.counts() && since.is_none_or(|t| r.ts >= t))
-        .count();
+    let tests = app.missed_range.runs(app.stats.all(), Utc::now()).len();
     let typed: u32 = app.missed.typed.values().sum();
     let missed = app.missed.total();
     if tests == 0 {
         let what = match app.missed_range {
-            MissedRange::All => "no tests yet".to_string(),
+            MissedRange::All | MissedRange::Last => "no tests yet".to_string(),
             r => format!("no tests in the {}", r.label().trim_start_matches("last ")),
         };
         return Line::from(Span::styled(what, p.sub()));

@@ -1,7 +1,8 @@
 //! The leaderboard screen's behaviour: opening it, moving around, switching
-//! daily, paging, and the graph view of one run.
+//! period, daily, language and mode, paging, and the graph view of one run.
 
-use ttyp_core::api::{Board, DailySummary, Leaderboard, ResultDetail};
+use ttyp_core::api::{DailySummary, Leaderboard, ResultDetail};
+use ttyp_core::boards::{Period, Target};
 
 use super::action::BoardAction;
 use super::{App, Screen};
@@ -42,22 +43,22 @@ impl App {
         self.push_screen(Screen::Leaderboard);
     }
 
-    /// Fetch the first page of both boards for the shown daily.
+    /// Fetch the first page of every board on screen.
     fn load_boards(&mut self) {
         let (Some(view), Some(online)) = (&mut self.board, &mut self.online) else {
             return;
         };
         view.reset_panes();
-        let Some(daily_id) = view.daily().map(|d| d.id) else {
+        let Some(target) = view.target() else {
             for p in &mut view.panes {
                 p.loading = view.dailies_loading;
             }
             return;
         };
-        for board in [Board::First, Board::Best] {
+        for board in view.boards() {
             online.request(Request::Leaderboard {
-                daily_id,
-                board,
+                board: board.id,
+                target: target.clone(),
                 offset: 0,
                 limit: PAGE,
             });
@@ -69,16 +70,16 @@ impl App {
         let (Some(view), Some(online)) = (&mut self.board, &mut self.online) else {
             return;
         };
-        let Some(daily_id) = view.daily().map(|d| d.id) else {
+        let Some(target) = view.target() else {
             return;
         };
-        let board = view.focus;
+        let board = view.focused_board().id;
         let pane = view.focused();
         if pane.wants_more() {
             pane.loading = true;
             online.request(Request::Leaderboard {
-                daily_id,
                 board,
+                target,
                 offset: pane.rows.len() as u32,
                 limit: PAGE,
             });
@@ -103,7 +104,11 @@ impl App {
             B::Bottom => view.focused().selection.end(),
             B::PageUp => view.focused().selection.page(-1),
             B::PageDown => view.focused().selection.page(1),
-            B::SwitchBoard => view.toggle_focus(),
+            B::SwitchBoard => view.next_focus(),
+            B::NextPeriod => {
+                view.cycle_period();
+                self.load_boards();
+            }
             B::NextMode | B::PrevMode => {
                 if view.cycle_mode(if action == B::NextMode { 1 } else { -1 }) {
                     self.load_boards();
@@ -114,6 +119,8 @@ impl App {
                     self.load_boards();
                 }
             }
+            // All-time boards have no day.
+            B::PrevDay | B::NextDay if view.period != Period::Daily => {}
             B::PrevDay | B::NextDay => {
                 let date = view.shift_day(if action == B::NextDay { 1 } else { -1 });
                 if let Some(o) = &mut self.online {
@@ -172,16 +179,18 @@ impl App {
 
     pub(super) fn board_page(
         &mut self,
-        daily_id: i64,
-        board: Board,
+        board: &str,
+        target: &Target,
         offset: u32,
         result: Result<Leaderboard, OnlineError>,
     ) {
         let Some(view) = &mut self.board else { return };
-        if view.daily().map(|d| d.id) != Some(daily_id) {
+        if view.target().as_ref() != Some(target) {
             return;
         }
-        let pane = view.pane_mut(board);
+        let Some(pane) = view.pane_mut(board) else {
+            return;
+        };
         match result {
             Ok(lb) => pane.apply(lb),
             Err(e) if offset == 0 => pane.fail(e.to_string()),

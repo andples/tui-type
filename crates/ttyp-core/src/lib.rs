@@ -3,5 +3,6 @@
 //! the language registry. No ratatui or crossterm here.
 
 pub mod api;
+pub mod boards;
 pub mod language;
 pub mod test;

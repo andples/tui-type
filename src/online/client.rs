@@ -5,9 +5,10 @@ use std::time::Duration;
 
 use serde::de::DeserializeOwned;
 use ttyp_core::api::{
-    Account, AccountUpdate, AuthRequest, AuthResponse, Board, Daily, DailySummary, ErrorBody,
-    Leaderboard, Profile, ResultDetail, StartResponse, SubmitRequest, SubmitResponse,
+    Account, AccountUpdate, AuthRequest, AuthResponse, Daily, DailySummary, ErrorBody, Leaderboard,
+    Profile, ResultDetail, StartResponse, SubmitRequest, SubmitResponse,
 };
+use ttyp_core::boards::Target;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OnlineError {
@@ -133,19 +134,17 @@ impl Client {
         self.call("/results", Some(req))
     }
 
-    pub fn leaderboard(
+    /// A page of one board of `boards::BOARDS`.
+    pub fn board(
         &self,
-        daily_id: i64,
-        board: Board,
+        id: &str,
+        target: &Target,
         offset: u32,
         limit: u32,
     ) -> Result<Leaderboard, OnlineError> {
-        let board = match board {
-            Board::First => "first",
-            Board::Best => "best",
-        };
         self.get(&format!(
-            "/leaderboard/{daily_id}?board={board}&offset={offset}&limit={limit}"
+            "/boards/{id}?{}&offset={offset}&limit={limit}",
+            target.query()
         ))
     }
 

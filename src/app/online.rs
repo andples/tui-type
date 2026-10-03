@@ -123,11 +123,11 @@ impl App {
             } => self.submitted(body, date, queued.as_deref(), result),
             RemoteEvent::DailiesFor { date, result } => self.board_dailies(date, result),
             RemoteEvent::Leaderboard {
-                daily_id,
                 board,
+                target,
                 offset,
                 result,
-            } => self.board_page(daily_id, board, offset, result),
+            } => self.board_page(board, &target, offset, result),
             RemoteEvent::ResultDetail(result) => self.board_result(result),
             RemoteEvent::Account(result) => self.account_reply(result),
             RemoteEvent::User { login, result } => self.user_reply(&login, result),

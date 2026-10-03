@@ -75,7 +75,8 @@ pub fn map_key(key: KeyEvent, ctx: InputContext) -> Action {
             KeyCode::Tab | KeyCode::Enter => Action::Restart,
             KeyCode::Esc | KeyCode::Char(':') => Action::OpenCommandLine,
             KeyCode::Char('s') => Action::ShowStats,
-            KeyCode::Char('m') => Action::ShowMissed(None),
+            // The test just finished.
+            KeyCode::Char('m') => Action::ShowMissed(Some(MissedRange::Last)),
             KeyCode::Char('?') => Action::ShowHelp,
             // Back to the words, like `:q` here; quitting is from there.
             KeyCode::Char('q') => Action::Restart,
@@ -134,7 +135,7 @@ pub fn map_key(key: KeyEvent, ctx: InputContext) -> Action {
             KeyCode::Char(':') => Action::OpenCommandLine,
             KeyCode::Right | KeyCode::Char('l') | KeyCode::Tab => Action::MissedStep(1),
             KeyCode::Left | KeyCode::Char('h') | KeyCode::BackTab => Action::MissedStep(-1),
-            KeyCode::Char(c @ '1'..='4') => {
+            KeyCode::Char(c @ '1'..='5') => {
                 Action::ShowMissed(Some(MissedRange::ALL[c as usize - '1' as usize]))
             }
             KeyCode::Char('s') => Action::ShowStats,
@@ -216,6 +217,7 @@ fn map_leaderboard(key: KeyEvent, ctrl: bool) -> Action {
         KeyCode::Left => b(B::PrevMode),
         KeyCode::Right => b(B::NextMode),
         KeyCode::Char('l') => b(B::NextLanguage),
+        KeyCode::Char('a') => b(B::NextPeriod),
         KeyCode::Char('[') => b(B::PrevDay),
         KeyCode::Char(']') => b(B::NextDay),
         KeyCode::Enter => b(B::Open),

@@ -833,8 +833,7 @@ impl App {
                     self.missed_range = r;
                 }
                 self.missed = Misses::from_records(
-                    self.stats.all(),
-                    self.missed_range.since(chrono::Utc::now()),
+                    self.missed_range.runs(self.stats.all(), chrono::Utc::now()),
                 );
                 if self.screen != Screen::Missed {
                     self.push_screen(Screen::Missed);
@@ -1175,7 +1174,10 @@ impl App {
             }
             Command::Restart => self.restart(),
             Command::Stats => self.dispatch(Action::ShowStats),
-            Command::Missed(range) => self.dispatch(Action::ShowMissed(range)),
+            // From the command line it's the last week unless asked.
+            Command::Missed(range) => {
+                self.dispatch(Action::ShowMissed(Some(range.unwrap_or(MissedRange::Week))))
+            }
             Command::Help => self.dispatch(Action::ShowHelp),
             Command::Daily(mode) => {
                 self.open_daily(mode);

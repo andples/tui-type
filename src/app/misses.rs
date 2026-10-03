@@ -40,15 +40,11 @@ impl Misses {
         m
     }
 
-    /// The misses of every run in `records` that counts, at or after
-    /// `since` (all of them without it). Runs from before misses were
-    /// recorded add nothing.
-    pub fn from_records(records: &[TestRecord], since: Option<DateTime<Utc>>) -> Self {
+    /// The misses of `runs` added up (pick them with `MissedRange::runs`).
+    /// Runs from before misses were recorded add nothing.
+    pub fn from_records<'a>(runs: impl IntoIterator<Item = &'a TestRecord>) -> Self {
         let mut m = Self::default();
-        for r in records
-            .iter()
-            .filter(|r| r.counts() && since.is_none_or(|t| r.ts >= t))
-        {
+        for r in runs {
             for (c, n) in &r.missed_chars {
                 *m.chars.entry(*c).or_default() += n;
             }
@@ -87,6 +83,8 @@ impl Misses {
 /// How far back the `:missed` screen looks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum MissedRange {
+    /// The newest run, whether or not it counts.
+    Last,
     Day,
     #[default]
     Week,
@@ -95,7 +93,8 @@ pub enum MissedRange {
 }
 
 impl MissedRange {
-    pub const ALL: [MissedRange; 4] = [
+    pub const ALL: [MissedRange; 5] = [
+        MissedRange::Last,
         MissedRange::Day,
         MissedRange::Week,
         MissedRange::Month,
@@ -104,6 +103,7 @@ impl MissedRange {
 
     pub fn label(self) -> &'static str {
         match self {
+            MissedRange::Last => "last test",
             MissedRange::Day => "last day",
             MissedRange::Week => "7 days",
             MissedRange::Month => "30 days",
@@ -114,6 +114,7 @@ impl MissedRange {
     /// The `:missed` argument for it.
     pub fn arg(self) -> &'static str {
         match self {
+            MissedRange::Last => "last",
             MissedRange::Day => "day",
             MissedRange::Week => "week",
             MissedRange::Month => "month",
@@ -123,23 +124,32 @@ impl MissedRange {
 
     pub fn parse(s: &str) -> Result<Self, String> {
         match s.trim().to_lowercase().as_str() {
+            "last" | "test" | "last test" => Ok(MissedRange::Last),
             "day" | "1" | "1d" | "today" | "24h" => Ok(MissedRange::Day),
             "week" | "7" | "7d" => Ok(MissedRange::Week),
             "month" | "30" | "30d" => Ok(MissedRange::Month),
             "all" | "all time" | "alltime" | "ever" => Ok(MissedRange::All),
-            _ => Err(format!("expected day, week, month or all, got `{s}`")),
+            _ => Err(format!("expected last, day, week, month or all, got `{s}`")),
         }
     }
 
-    /// The oldest run it takes, counting back from `now`.
-    pub fn since(self, now: DateTime<Utc>) -> Option<DateTime<Utc>> {
+    /// The runs of `records` it covers, counting back from `now`: the
+    /// newest one for `Last`, else every run that counts since the cutoff.
+    pub fn runs(self, records: &[TestRecord], now: DateTime<Utc>) -> Vec<&TestRecord> {
         let days = match self {
+            MissedRange::Last => return records.iter().max_by_key(|r| r.ts).into_iter().collect(),
             MissedRange::Day => 1,
             MissedRange::Week => 7,
             MissedRange::Month => 30,
-            MissedRange::All => return None,
+            MissedRange::All => {
+                return records.iter().filter(|r| r.counts()).collect();
+            }
         };
-        Some(now - Duration::days(days))
+        let since = now - Duration::days(days);
+        records
+            .iter()
+            .filter(|r| r.counts() && r.ts >= since)
+            .collect()
     }
 
     /// The next range, `by` steps on, wrapping.
@@ -470,17 +480,21 @@ mod tests {
             run(0, &[], &[('e', 5)]),
             invalid,
         ];
-        let all = Misses::from_records(&records, MissedRange::All.since(now));
+        let all = Misses::from_records(MissedRange::All.runs(&records, now));
         assert_eq!(all.chars.get(&'e'), Some(&3));
         assert_eq!(all.typed.get(&'e'), Some(&25));
-        let week =
-            Misses::from_records(&records, MissedRange::Week.since(now)).on(Keyboard::Qwerty);
+        let week = Misses::from_records(MissedRange::Week.runs(&records, now)).on(Keyboard::Qwerty);
         assert_eq!(week.get('e'), 2);
         assert_eq!(week.get('t'), 1, "`T` lands on the t key");
         assert_eq!(week.percent('t'), Some(20.0));
-        let day = Misses::from_records(&records, MissedRange::Day.since(now));
+        let day = Misses::from_records(MissedRange::Day.runs(&records, now));
         assert_eq!(day.total(), 0);
         assert_eq!(day.typed.get(&'e'), Some(&5));
+        // The newest run (`invalid`, 0 days ago, last in the list), counted or not.
+        let last = MissedRange::Last.runs(&records, now);
+        assert_eq!(last.len(), 1);
+        assert_eq!(Misses::from_records(last).chars.get(&'e'), Some(&50));
+        assert!(MissedRange::Last.runs(&[], now).is_empty());
     }
 
     #[test]
@@ -490,8 +504,8 @@ mod tests {
         }
         assert_eq!(MissedRange::parse("30d"), Ok(MissedRange::Month));
         assert!(MissedRange::parse("year").is_err());
-        assert_eq!(MissedRange::All.step(1), MissedRange::Day);
-        assert_eq!(MissedRange::Day.step(-1), MissedRange::All);
+        assert_eq!(MissedRange::All.step(1), MissedRange::Last);
+        assert_eq!(MissedRange::Last.step(-1), MissedRange::All);
         assert_eq!(MissedRange::Week.step(1), MissedRange::Month);
     }
 

@@ -49,7 +49,7 @@ pub enum Command {
     Uninstall(String),
     Restart,
     Stats,
-    /// The missed-keys screen; `None` keeps the range it showed last.
+    /// The missed-keys screen; `None` is the last week.
     Missed(Option<MissedRange>),
     Help,
     /// Today's online daily: `None` uses the current mode.
@@ -92,7 +92,7 @@ pub enum ArgKind {
     Pace,
     /// Keyboard layouts for the missed-keys heatmap.
     Keyboards,
-    /// day, week, month, all: how far back `:missed` looks.
+    /// last, day, week, month, all: how far back `:missed` looks.
     MissedRanges,
     /// both, confetti, trophy, off.
     PbEffects,
@@ -330,7 +330,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     CommandSpec {
         name: "missed",
         aliases: &["misses"],
-        usage: "[day|week|month|all]",
+        usage: "[last|day|week|month|all]",
         help: "missed keys across your tests",
         arg: ArgKind::MissedRanges,
         requires_arg: false,
@@ -363,7 +363,7 @@ pub const COMMANDS: &[CommandSpec] = &[
         name: "leaderboard",
         aliases: &["lb"],
         usage: "",
-        help: "daily leaderboards",
+        help: "daily and all-time leaderboards",
         arg: ArgKind::None,
         requires_arg: false,
     },

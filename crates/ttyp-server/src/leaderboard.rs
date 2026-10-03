@@ -1,36 +1,80 @@
-//! The two boards of a daily. *First try* ranks each user's attempt 1
-//! (when the server saw it start, see `api::start`);
-//! *best* ranks each user's highest-wpm valid run. Both order by wpm, then
-//! accuracy, then who got there first.
+//! Every board in `ttyp_core::boards::BOARDS` comes from one query: the
+//! runs in a `Scope` (one daily, or every daily of a language and mode),
+//! cut down by the board's rule to one run per player, ranked. *First try*
+//! keeps attempt 1 (when the server saw it start, see `api::start`); *best*
+//! keeps every valid run. Each player's highest run is kept, and the board
+//! orders by wpm, then accuracy, then who got there first.
 
 use anyhow::Result;
-use sqlx::sqlite::{SqlitePool, SqliteRow};
+use sqlx::sqlite::{Sqlite, SqliteArguments, SqlitePool, SqliteRow};
 use sqlx::{AssertSqlSafe, Row};
 use ttyp_core::api::{Board, LeaderboardRow};
+use ttyp_core::test::Mode;
 
 /// Which `results r` rows are on the first-try board (plus `r.valid = 1`).
 pub const FIRST_TRY: &str = "r.attempt = 1 AND r.first_eligible = 1";
 /// How every board orders its rows.
 pub const RANK_ORDER: &str = "r.wpm DESC, r.acc DESC, r.created_at ASC";
 
-/// The ranked rows of one board as a common table expression `board`.
-fn board_cte(board: Board) -> String {
-    let filter = match board {
-        Board::First => FIRST_TRY,
-        // Each user's best run: the one that sorts first among theirs.
-        Board::Best => {
-            "r.id = (SELECT b.id FROM results b \
-             WHERE b.user_id = r.user_id AND b.daily_id = r.daily_id AND b.valid = 1 \
-             ORDER BY b.wpm DESC, b.acc DESC, b.created_at ASC LIMIT 1)"
+/// The runs a board ranks.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Scope {
+    Daily(i64),
+    /// Every daily of a language and mode.
+    Mode {
+        language: String,
+        mode: Mode,
+    },
+}
+
+impl Scope {
+    /// The `daily_tests d` filter, using parameters `?1`..`?{params}`.
+    fn filter(&self) -> &'static str {
+        match self {
+            Scope::Daily(_) => "d.id = ?1",
+            Scope::Mode { .. } => "d.language = ?1 AND d.mode_kind = ?2 AND d.mode_value = ?3",
         }
+    }
+
+    fn params(&self) -> usize {
+        match self {
+            Scope::Daily(_) => 1,
+            Scope::Mode { .. } => 3,
+        }
+    }
+
+    fn bind<'q>(
+        &self,
+        q: sqlx::query::Query<'q, Sqlite, SqliteArguments>,
+    ) -> sqlx::query::Query<'q, Sqlite, SqliteArguments> {
+        match self {
+            Scope::Daily(id) => q.bind(*id),
+            Scope::Mode { language, mode } => q
+                .bind(language.clone())
+                .bind(mode.kind())
+                .bind(i64::from(mode.value())),
+        }
+    }
+}
+
+/// The ranked rows of one board as a common table expression `board`.
+fn board_cte(rule: Board, scope: &Scope) -> String {
+    let rule = match rule {
+        Board::First => FIRST_TRY,
+        Board::Best => "1",
     };
+    let scope = scope.filter();
     format!(
-        "WITH board AS (\
+        "WITH runs AS (\
+           SELECT r.*, d.date, \
+                  ROW_NUMBER() OVER (PARTITION BY r.user_id ORDER BY {RANK_ORDER}) AS n \
+           FROM results r JOIN daily_tests d ON d.id = r.daily_id \
+           WHERE {scope} AND r.valid = 1 AND {rule}), \
+         board AS (\
            SELECT r.id AS result_id, r.user_id, u.github_login AS user, \
-                  r.wpm, r.raw, r.acc, r.consistency, \
+                  r.wpm, r.raw, r.acc, r.consistency, r.date, \
                   ROW_NUMBER() OVER (ORDER BY {RANK_ORDER}) AS rank \
-           FROM results r JOIN users u ON u.id = r.user_id \
-           WHERE r.daily_id = ?1 AND r.valid = 1 AND {filter}) "
+           FROM runs r JOIN users u ON u.id = r.user_id WHERE r.n = 1) "
     )
 }
 
@@ -43,22 +87,28 @@ fn row_from(row: &SqliteRow) -> LeaderboardRow {
         acc: row.get("acc"),
         consistency: row.get("consistency"),
         result_id: row.get("result_id"),
+        date: Some(row.get("date")),
     }
 }
 
 /// `limit` rows from `offset`, plus the board's size.
 pub async fn page(
     pool: &SqlitePool,
-    daily_id: i64,
-    board: Board,
+    rule: Board,
+    scope: &Scope,
     offset: u32,
     limit: u32,
 ) -> Result<(Vec<LeaderboardRow>, u32)> {
-    let sql = board_cte(board)
-        + "SELECT *, (SELECT count(*) FROM board) AS total FROM board \
-           ORDER BY rank LIMIT ?2 OFFSET ?3";
-    let rows = sqlx::query(AssertSqlSafe(sql))
-        .bind(daily_id)
+    let n = scope.params();
+    let sql = board_cte(rule, scope)
+        + &format!(
+            "SELECT *, (SELECT count(*) FROM board) AS total FROM board \
+             ORDER BY rank LIMIT ?{} OFFSET ?{}",
+            n + 1,
+            n + 2
+        );
+    let rows = scope
+        .bind(sqlx::query(AssertSqlSafe(sql)))
         .bind(i64::from(limit))
         .bind(i64::from(offset))
         .fetch_all(pool)
@@ -67,11 +117,12 @@ pub async fn page(
         Some(r) => r.get::<i64, _>("total") as u32,
         // Past the end: count separately.
         None => {
-            let sql = board_cte(board) + "SELECT count(*) FROM board";
-            sqlx::query_scalar::<_, i64>(AssertSqlSafe(sql))
-                .bind(daily_id)
+            let sql = board_cte(rule, scope) + "SELECT count(*) FROM board";
+            scope
+                .bind(sqlx::query(AssertSqlSafe(sql)))
                 .fetch_one(pool)
-                .await? as u32
+                .await?
+                .get::<i64, _>(0) as u32
         }
     };
     Ok((rows.iter().map(row_from).collect(), total))
@@ -80,13 +131,17 @@ pub async fn page(
 /// One user's row on a board.
 pub async fn me(
     pool: &SqlitePool,
-    daily_id: i64,
-    board: Board,
+    rule: Board,
+    scope: &Scope,
     user_id: i64,
 ) -> Result<Option<LeaderboardRow>> {
-    let sql = board_cte(board) + "SELECT * FROM board WHERE user_id = ?2";
-    let row = sqlx::query(AssertSqlSafe(sql))
-        .bind(daily_id)
+    let sql = board_cte(rule, scope)
+        + &format!(
+            "SELECT * FROM board WHERE user_id = ?{}",
+            scope.params() + 1
+        );
+    let row = scope
+        .bind(sqlx::query(AssertSqlSafe(sql)))
         .bind(user_id)
         .fetch_optional(pool)
         .await?;
@@ -135,14 +190,19 @@ mod tests {
     }
 
     pub async fn daily(pool: &SqlitePool) -> i64 {
+        daily_on(pool, 29, Mode::Words(10)).await
+    }
+
+    /// A daily on 2026-09-`day`.
+    pub async fn daily_on(pool: &SqlitePool, day: u32, mode: Mode) -> i64 {
         let langs = ttyp_core::language::LanguageRegistry::builtin();
-        let date = chrono::NaiveDate::from_ymd_opt(2026, 9, 29).unwrap();
+        let date = chrono::NaiveDate::from_ymd_opt(2026, 9, day).unwrap();
         crate::daily::insert(
             &pool.clone(),
             &langs,
             date,
             "english",
-            ttyp_core::test::Mode::Words(10),
+            mode,
             "schedule",
             None,
         )
@@ -167,27 +227,74 @@ mod tests {
         let e = user(&pool, "tie").await;
         seed(&pool, e, d, 1, 142.0, 99.5).await;
 
-        let (first, total) = page(&pool, d, Board::First, 0, 50).await.unwrap();
+        let (first, total) = page(&pool, Board::First, &Scope::Daily(d), 0, 50)
+            .await
+            .unwrap();
         assert_eq!(total, 4);
         let names: Vec<&str> = first.iter().map(|r| r.user.as_str()).collect();
         assert_eq!(names, ["tie", "sprinter", "quietkeys", "andples"]);
         assert_eq!(first[1].rank, 2);
 
-        let (best, total) = page(&pool, d, Board::Best, 0, 50).await.unwrap();
+        let (best, total) = page(&pool, Board::Best, &Scope::Daily(d), 0, 50)
+            .await
+            .unwrap();
         assert_eq!(total, 4);
         let names: Vec<&str> = best.iter().map(|r| r.user.as_str()).collect();
         assert_eq!(names, ["quietkeys", "tie", "sprinter", "andples"]);
         assert_eq!(best[0].wpm, 151.0);
         assert_eq!(best[3].wpm, 131.0, "best, not latest");
 
-        let (page2, total) = page(&pool, d, Board::Best, 3, 2).await.unwrap();
+        let (page2, total) = page(&pool, Board::Best, &Scope::Daily(d), 3, 2)
+            .await
+            .unwrap();
         assert_eq!((page2.len(), total), (1, 4));
         assert_eq!(page2[0].rank, 4);
-        let (empty, total) = page(&pool, d, Board::Best, 10, 2).await.unwrap();
+        let (empty, total) = page(&pool, Board::Best, &Scope::Daily(d), 10, 2)
+            .await
+            .unwrap();
         assert_eq!((empty.len(), total), (0, 4));
 
-        let mine = me(&pool, d, Board::Best, c).await.unwrap().unwrap();
+        let mine = me(&pool, Board::Best, &Scope::Daily(d), c)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!((mine.rank, mine.wpm), (4, 131.0));
-        assert_eq!(me(&pool, d, Board::First, 999).await.unwrap(), None);
+        assert_eq!(
+            me(&pool, Board::First, &Scope::Daily(d), 999)
+                .await
+                .unwrap(),
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn all_time_keeps_each_players_best_across_dailies() {
+        let pool = crate::db::open_memory().await;
+        let d1 = daily_on(&pool, 27, Mode::Time(30)).await;
+        let d2 = daily_on(&pool, 28, Mode::Time(30)).await;
+        let other = daily_on(&pool, 28, Mode::Time(15)).await;
+        let a = user(&pool, "sprinter").await;
+        let b = user(&pool, "quietkeys").await;
+        seed(&pool, a, d1, 1, 120.0, 98.0).await;
+        seed(&pool, a, d2, 1, 110.0, 98.0).await;
+        seed(&pool, a, d2, 2, 140.0, 97.0).await;
+        seed(&pool, b, d2, 1, 130.0, 99.0).await;
+        seed(&pool, b, other, 1, 200.0, 99.0).await;
+
+        let scope = Scope::Mode {
+            language: "english".into(),
+            mode: Mode::Time(30),
+        };
+        let (best, total) = page(&pool, Board::Best, &scope, 0, 50).await.unwrap();
+        assert_eq!(total, 2, "one row per player, other modes left out");
+        let got: Vec<(&str, f64)> = best.iter().map(|r| (r.user.as_str(), r.wpm)).collect();
+        assert_eq!(got, [("sprinter", 140.0), ("quietkeys", 130.0)]);
+        assert_eq!(best[0].date.as_deref(), Some("2026-09-28"));
+
+        let (first, _) = page(&pool, Board::First, &scope, 0, 50).await.unwrap();
+        let got: Vec<(&str, f64)> = first.iter().map(|r| (r.user.as_str(), r.wpm)).collect();
+        assert_eq!(got, [("quietkeys", 130.0), ("sprinter", 120.0)]);
+        let mine = me(&pool, Board::First, &scope, a).await.unwrap().unwrap();
+        assert_eq!((mine.rank, mine.date.as_deref()), (2, Some("2026-09-27")));
     }
 }

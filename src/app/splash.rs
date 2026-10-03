@@ -68,13 +68,13 @@ const OFFLINE: [SplashItem; 2] = [
     item("?", "help", SplashChoice::Help),
 ];
 const LOGGED_OUT: [SplashItem; 2] = [
-    item("l", "login with github", SplashChoice::Login),
     item("tab", "start typing", SplashChoice::StartTyping),
+    item("l", "login with github", SplashChoice::Login),
 ];
 const LOGGED_IN: [SplashItem; 3] = [
+    item("tab", "start typing", SplashChoice::StartTyping),
     item("d", "today's daily", SplashChoice::Daily),
     item("b", "leaderboard", SplashChoice::Leaderboard),
-    item("tab", "start typing", SplashChoice::StartTyping),
 ];
 
 impl SplashMenu {
@@ -324,19 +324,13 @@ mod tests {
     }
 
     #[test]
-    fn menus_start_with_their_primary_action() {
-        assert_eq!(SplashMenu::LoggedOut.items()[0].action, SplashChoice::Login);
-        assert_eq!(SplashMenu::LoggedIn.items()[0].action, SplashChoice::Daily);
+    fn menus_start_with_start_typing() {
         for m in [
             SplashMenu::Offline,
             SplashMenu::LoggedOut,
             SplashMenu::LoggedIn,
         ] {
-            assert!(
-                m.items()
-                    .iter()
-                    .any(|it| it.action == SplashChoice::StartTyping)
-            );
+            assert_eq!(m.items()[0].action, SplashChoice::StartTyping);
         }
     }
 
@@ -346,10 +340,9 @@ mod tests {
         let items = SplashMenu::LoggedIn.items();
         assert_eq!(s.selected, 0);
         s.move_by(-1, items.len());
-        assert_eq!(items[s.selected].action, SplashChoice::StartTyping);
-        s.move_by(1, items.len());
-        s.move_by(1, items.len());
         assert_eq!(items[s.selected].action.action(), Action::ShowLeaderboard);
+        s.move_by(1, items.len());
+        assert_eq!(items[s.selected].action, SplashChoice::StartTyping);
         assert_eq!(SplashChoice::Daily.action(), Action::Daily);
     }
 

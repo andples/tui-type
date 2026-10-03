@@ -121,8 +121,10 @@ pub enum BoardAction {
     Bottom,
     PageUp,
     PageDown,
-    /// Focus the other board (side by side) or show it (tabs).
+    /// Focus the next board (side by side) or show it (tabs).
     SwitchBoard,
+    /// Show the next period's boards (daily, all time, …).
+    NextPeriod,
     NextMode,
     PrevMode,
     NextLanguage,
