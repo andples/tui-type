@@ -1,6 +1,6 @@
 [package]
 name = "ttyp"
-version = "2.1.2"
+version = "2.2.0"
 edition = "2024"
 description = "Minimal monkeytype-style typing test for the terminal"
 license = "MIT"
