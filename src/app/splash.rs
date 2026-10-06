@@ -248,6 +248,9 @@ impl App {
                     | Screen::Catalog
                     | Screen::Modules
             )
+            // Not while a player search is being typed.
+            && !(self.screen == Screen::Players
+                && self.players.as_ref().is_some_and(|v| v.editing))
     }
 
     pub(super) fn close_splash(&mut self) {

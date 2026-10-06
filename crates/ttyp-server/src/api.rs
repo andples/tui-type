@@ -13,7 +13,8 @@ use sqlx::Row;
 use sqlx::sqlite::SqlitePool;
 use ttyp_core::api::{
     Account, AccountUpdate, AuthRequest, AuthResponse, Board, Daily, DailySummary, ErrorBody,
-    Leaderboard, Profile, ResultDetail, StartResponse, SubmitRequest, SubmitResponse,
+    FollowUpdate, Leaderboard, PlayerList, PlayerSummary, Profile, ResultDetail, StartResponse,
+    SubmitRequest, SubmitResponse,
 };
 use ttyp_core::boards::Period;
 use ttyp_core::language::LanguageRegistry;
@@ -21,7 +22,8 @@ use ttyp_core::test::{Rejected, replay};
 
 use crate::auth::{self, User};
 use crate::leaderboard::Scope;
-use crate::{daily, leaderboard, profile};
+use crate::players::FollowError;
+use crate::{daily, leaderboard, players, profile};
 
 /// Attempts (starts and submissions) per user per daily.
 const MAX_ATTEMPTS: i64 = 30;
@@ -59,7 +61,9 @@ pub fn router(state: AppState) -> Router {
         .route("/leaderboard/{daily_id}", get(leaderboard))
         .route("/boards/{id}", get(board))
         .route("/account", get(account).post(update_account))
+        .route("/users", get(search_players))
         .route("/users/{login}", get(user_profile))
+        .route("/follows", get(follow_list).post(update_follow))
         .route("/auth/github", post(auth_github))
         .route("/auth/logout", post(auth_logout))
         .with_state(state)
@@ -364,6 +368,74 @@ async fn user_profile(
         .await?
         .map(Json)
         .ok_or(ApiError::NotFound)
+}
+
+#[derive(Debug, Deserialize)]
+struct PlayerQuery {
+    #[serde(default)]
+    q: String,
+    #[serde(default)]
+    offset: u32,
+    #[serde(default = "default_limit")]
+    limit: u32,
+}
+
+/// Public players whose login contains `q`.
+async fn search_players(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(q): Query<PlayerQuery>,
+) -> ApiResult<PlayerList> {
+    if q.q.chars().count() > 64 {
+        return Err(ApiError::BadRequest("search too long".into()));
+    }
+    let viewer = auth::user_from_headers(&state.pool, &headers).await?;
+    let list = players::search(
+        &state.pool,
+        &q.q,
+        viewer.map(|u| u.id),
+        q.offset,
+        q.limit.clamp(1, MAX_PAGE),
+        daily::today(),
+    )
+    .await?;
+    Ok(Json(list))
+}
+
+/// Who the caller follows.
+async fn follow_list(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> ApiResult<Vec<PlayerSummary>> {
+    let user = require_user(&state, &headers).await?;
+    Ok(Json(
+        players::list(&state.pool, user.id, daily::today()).await?,
+    ))
+}
+
+/// Follow or unfollow someone; answers with the new follow list.
+async fn update_follow(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(req): Json<FollowUpdate>,
+) -> ApiResult<Vec<PlayerSummary>> {
+    let user = require_user(&state, &headers).await?;
+    match players::set_follow(&state.pool, user.id, &req.login, req.follow).await? {
+        Ok(()) => {}
+        Err(FollowError::NotFound) => return Err(ApiError::NotFound),
+        Err(FollowError::SelfFollow) => {
+            return Err(ApiError::BadRequest("you can't follow yourself".into()));
+        }
+        Err(FollowError::TooMany) => {
+            return Err(ApiError::BadRequest(format!(
+                "you already follow {} players",
+                players::MAX_FOLLOWS
+            )));
+        }
+    }
+    Ok(Json(
+        players::list(&state.pool, user.id, daily::today()).await?,
+    ))
 }
 
 /// Revoke the presented token.
@@ -1048,6 +1120,102 @@ mod tests {
         let (status, _) = call(&app, get("/users/alice", None)).await;
         assert_eq!(status, StatusCode::NOT_FOUND);
         let (status, _) = call(&app, get("/users/nobody", None)).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn players_are_searched_and_followed() {
+        let (app, state) = app().await;
+        let (_, body) = call(&app, get("/dailies/today", None)).await;
+        let list: Vec<DailySummary> = serde_json::from_value(body).unwrap();
+        let t30 = list
+            .iter()
+            .find(|d| d.language == "english" && d.mode == Mode::Time(30))
+            .unwrap();
+        let (_, body) = call(&app, get(&format!("/dailies/{}", t30.id), None)).await;
+        let daily: Daily = serde_json::from_value(body).unwrap();
+        let (_, ann) = auth::issue(&state.pool, 1, "ann").await.unwrap();
+        let (_, anna) = auth::issue(&state.pool, 2, "Anna").await.unwrap();
+        let (_, joanne) = auth::issue(&state.pool, 3, "joanne").await.unwrap();
+        auth::issue(&state.pool, 4, "bo").await.unwrap();
+        let s = start(&app, &anna, daily.id).await;
+        let (shown, keylog) = type_daily(&daily, 120, false);
+        let req = SubmitRequest {
+            daily_id: daily.id,
+            keylog,
+            start_id: Some(s.start_id),
+        };
+        let (status, _) = call(&app, post("/results", Some(&anna), &req)).await;
+        assert_eq!(status, StatusCode::OK);
+
+        // Exact match, then prefix, then anywhere; any case.
+        let (status, body) = call(&app, get("/users?q=ANN", None)).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        let found: PlayerList = serde_json::from_value(body).unwrap();
+        let names: Vec<&str> = found.rows.iter().map(|r| r.login.as_str()).collect();
+        assert_eq!(names, ["ann", "Anna", "joanne"]);
+        assert_eq!(found.total, 3);
+        assert_eq!(found.rows[1].bests, [None, Some(shown.wpm), None]);
+        assert!(found.rows.iter().all(|r| r.public && !r.following));
+        // Wildcards are literal; paging works.
+        let (_, body) = call(&app, get("/users?q=%25", None)).await;
+        let none: PlayerList = serde_json::from_value(body).unwrap();
+        assert_eq!(none.total, 0);
+        let (_, body) = call(&app, get("/users?offset=1&limit=2", None)).await;
+        let page: PlayerList = serde_json::from_value(body).unwrap();
+        assert_eq!((page.total, page.rows.len()), (4, 2));
+        assert_eq!(page.rows[0].login, "Anna");
+
+        // Following needs a login and someone else's public profile.
+        let follow = |login: &str, follow| FollowUpdate {
+            login: login.into(),
+            follow,
+        };
+        let (status, _) = call(&app, post("/follows", None, &follow("anna", true))).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        let (status, _) = call(&app, post("/follows", Some(&ann), &follow("ann", true))).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        let (status, _) = call(&app, post("/follows", Some(&ann), &follow("nobody", true))).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        call(&app, post("/follows", Some(&ann), &follow("anna", true))).await;
+        call(&app, post("/follows", Some(&ann), &follow("JOANNE", true))).await;
+        let (status, body) = call(&app, post("/follows", Some(&ann), &follow("anna", true))).await;
+        assert_eq!(status, StatusCode::OK, "following twice is fine");
+        let mine: Vec<PlayerSummary> = serde_json::from_value(body).unwrap();
+        let names: Vec<&str> = mine.iter().map(|r| r.login.as_str()).collect();
+        assert_eq!(names, ["joanne", "Anna"], "newest follow first");
+        assert!(mine.iter().all(|r| r.following));
+        // One way: anna doesn't follow ann back.
+        let (_, body) = call(&app, get("/follows", Some(&anna))).await;
+        assert_eq!(body, serde_json::json!([]));
+        let (_, body) = call(&app, get("/users?q=ann", Some(&ann))).await;
+        let found: PlayerList = serde_json::from_value(body).unwrap();
+        let flags: Vec<bool> = found.rows.iter().map(|r| r.following).collect();
+        assert_eq!(flags, [false, true, true]);
+        let (_, body) = call(&app, get("/users/anna", Some(&ann))).await;
+        assert_eq!(body["following"], true);
+        let (_, body) = call(&app, get("/users/anna", None)).await;
+        assert_eq!(body["following"], false);
+
+        // Going private hides joanne from search and blanks her row, but
+        // she can still be unfollowed; she can't be followed anew.
+        call(
+            &app,
+            post("/account", Some(&joanne), &AccountUpdate { public: false }),
+        )
+        .await;
+        let (_, body) = call(&app, get("/users?q=ann", None)).await;
+        let found: PlayerList = serde_json::from_value(body).unwrap();
+        assert_eq!(found.total, 2);
+        let (_, body) = call(&app, get("/follows", Some(&ann))).await;
+        let mine: Vec<PlayerSummary> = serde_json::from_value(body).unwrap();
+        assert!(!mine[0].public);
+        let (status, body) =
+            call(&app, post("/follows", Some(&ann), &follow("joanne", false))).await;
+        assert_eq!(status, StatusCode::OK);
+        let mine: Vec<PlayerSummary> = serde_json::from_value(body).unwrap();
+        assert_eq!(mine.len(), 1);
+        let (status, _) = call(&app, post("/follows", Some(&ann), &follow("joanne", true))).await;
         assert_eq!(status, StatusCode::NOT_FOUND);
     }
 }

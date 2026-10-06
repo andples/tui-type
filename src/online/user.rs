@@ -80,6 +80,7 @@ mod tests {
             bests: vec![run(1)],
             recent: vec![run(3), run(2)],
             badges: Default::default(),
+            following: false,
         });
         assert!(!v.loading);
         assert_eq!(v.selected().map(|r| r.result_id), Some(3));

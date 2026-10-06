@@ -7,7 +7,7 @@ license = "MIT"
 publish = false
 
 [dependencies]
-ttyp-core = { version = "2.1.0", path = "../ttyp-core" }
+ttyp-core = { version = "2.2.0", path = "../ttyp-core" }
 anyhow = "1.0.104"
 axum = "0.8"
 chrono = { version = "0.4.45", features = ["serde"] }

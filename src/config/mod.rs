@@ -702,6 +702,8 @@ pub struct Paths {
     pub token_file: PathBuf,
     /// Daily results that couldn't be submitted, retried on the next start.
     pub queue_dir: PathBuf,
+    /// When each profile was last opened, to order the follow list.
+    pub views_file: PathBuf,
 }
 
 impl Paths {
@@ -724,6 +726,7 @@ impl Paths {
             history_file: data_dir.join("history.jsonl"),
             token_file: data_dir.join("token"),
             queue_dir: data_dir.join("queue"),
+            views_file: data_dir.join("profile_views.json"),
         }
     }
 }

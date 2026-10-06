@@ -11,6 +11,7 @@ pub mod leaderboard;
 pub mod login;
 pub mod missed;
 pub mod modules;
+pub mod players;
 pub mod profiles;
 pub mod results;
 pub mod slider;
@@ -66,6 +67,7 @@ pub fn render(frame: &mut Frame, app: &App) -> Vec<ImageLine> {
         Screen::Leaderboard => leaderboard::render(frame, app, body, &p),
         Screen::Graph => graph::render(frame, app, body, &p),
         Screen::User => user::render(frame, app, body, &p),
+        Screen::Players => players::render(frame, app, body, &p),
         Screen::Splash => images = splash::render(frame, app, body, &p),
     }
 

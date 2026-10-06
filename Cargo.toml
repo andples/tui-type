@@ -20,7 +20,7 @@ default-members = [".", "crates/ttyp-core"]
 all = "warn"
 
 [dependencies]
-ttyp-core = { version = "2.1.0", path = "crates/ttyp-core" }
+ttyp-core = { version = "2.2.0", path = "crates/ttyp-core" }
 anyhow = "1.0.104"
 base64 = "0.23.1"
 rand = "0.10.2"

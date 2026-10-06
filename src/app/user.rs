@@ -1,5 +1,5 @@
-//! Profiles: `:user [login]` (also `p` on a leaderboard row) and
-//! `:account [public on|off]`.
+//! Profiles: `:user [login]` (also `p` on a leaderboard row, enter or `p`
+//! on the players screen) and `:account [public on|off]`.
 
 use ttyp_core::api::{Account, Profile};
 
@@ -28,6 +28,8 @@ impl App {
             }
         };
         online.request(Request::User(login.clone()));
+        self.follows.viewed(&login, chrono::Utc::now().timestamp());
+        self.follows_changed();
         self.user = Some(UserView::new(login));
         // Esc goes back to whatever opened it (the graph goes back past
         // itself, since its run is gone by then).
@@ -60,6 +62,7 @@ impl App {
                     o.request(Request::Result(id));
                 }
             }
+            U::Follow => self.toggle_follow_profile(),
             U::Close => {}
         }
     }

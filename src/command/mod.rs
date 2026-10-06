@@ -61,6 +61,12 @@ pub enum Command {
     Account(Option<bool>),
     /// A user's profile; `None` is your own.
     User(Option<String>),
+    /// Search public profiles; `None` opens an empty search to type in.
+    Search(Option<String>),
+    /// `None` lists who you follow; a name opens their profile if you
+    /// follow them, and follows them otherwise.
+    Follow(Option<String>),
+    Unfollow(String),
     Quit,
     Results {
         section: String,
@@ -100,6 +106,8 @@ pub enum ArgKind {
     DailyModes,
     /// `public on` / `public off`.
     Account,
+    /// Players you follow, most recently viewed first.
+    Follows,
     /// Numeric setting in an inclusive range. Typing a number sets it
     /// directly; Enter with no number opens an interactive slider.
     Slider {
@@ -119,6 +127,7 @@ impl ArgKind {
             ArgKind::TimePresets
                 | ArgKind::WordPresets
                 | ArgKind::DailyModes
+                | ArgKind::Follows
                 | ArgKind::Fonts
                 | ArgKind::Installable
                 | ArgKind::Free
@@ -400,6 +409,30 @@ pub const COMMANDS: &[CommandSpec] = &[
         requires_arg: false,
     },
     CommandSpec {
+        name: "search",
+        aliases: &["players", "find"],
+        usage: "[name]",
+        help: "search public profiles: bests and medals (enter or p opens one)",
+        arg: ArgKind::Free,
+        requires_arg: false,
+    },
+    CommandSpec {
+        name: "follow",
+        aliases: &["following", "fl"],
+        usage: "[login]",
+        help: "players you follow; a followed name opens their profile, a new one follows",
+        arg: ArgKind::Follows,
+        requires_arg: false,
+    },
+    CommandSpec {
+        name: "unfollow",
+        aliases: &[],
+        usage: "<login>",
+        help: "stop following a player",
+        arg: ArgKind::Follows,
+        requires_arg: true,
+    },
+    CommandSpec {
         name: "help",
         aliases: &["h", "?"],
         usage: "",
@@ -500,6 +533,9 @@ pub fn parse(line: &str) -> Result<Command, String> {
             },
         }),
         "user" => Command::User(Some(rest.to_string()).filter(|r| !r.is_empty())),
+        "search" => Command::Search(Some(rest.to_string()).filter(|r| !r.is_empty())),
+        "follow" => Command::Follow(Some(rest.to_string()).filter(|r| !r.is_empty())),
+        "unfollow" => Command::Unfollow(need(spec.usage)?.to_string()),
         "quit" => Command::Quit,
         "results" => {
             let mut a = rest.split_whitespace();
@@ -589,6 +625,7 @@ pub fn arg_candidates(kind: ArgKind, comps: &Completions) -> Vec<String> {
         ArgKind::Keyboards => Keyboard::ALL.iter().map(|k| k.label().into()).collect(),
         ArgKind::MissedRanges => MissedRange::ALL.iter().map(|r| r.arg().into()).collect(),
         ArgKind::Account => vec!["public on".into(), "public off".into()],
+        ArgKind::Follows => comps.follows.clone(),
         ArgKind::DailyModes => ttyp_core::api::DAILY_MODES
             .iter()
             .map(Mode::label)
@@ -654,6 +691,18 @@ mod tests {
             parse("whois octocat"),
             Ok(Command::User(Some("octocat".into())))
         );
+        assert_eq!(parse("search"), Ok(Command::Search(None)));
+        assert_eq!(parse("find ann"), Ok(Command::Search(Some("ann".into()))));
+        assert_eq!(parse("follow"), Ok(Command::Follow(None)));
+        assert_eq!(
+            parse("fl octocat"),
+            Ok(Command::Follow(Some("octocat".into())))
+        );
+        assert_eq!(
+            parse("unfollow octocat"),
+            Ok(Command::Unfollow("octocat".into()))
+        );
+        assert!(parse("unfollow").is_err());
         assert_eq!(parse("d time 30"), Ok(Command::Daily(Some(Mode::Time(30)))));
         assert_eq!(
             parse("daily w25"),

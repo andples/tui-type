@@ -20,6 +20,9 @@ pub struct Completions {
     pub installable: Vec<String>,
     /// Installed languages and themes that aren't built in.
     pub removable: Vec<String>,
+    /// Followed players, most recently viewed first, at most
+    /// `online::players::RECENT_FOLLOWS`.
+    pub follows: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -197,6 +200,17 @@ impl CommandLine {
             if !kind.accepts_free_text() || self.navigated || no_arg {
                 return Some(s.completion.clone());
             }
+            // A followed player's name, started: `follow spr` is sprinter.
+            let arg = self
+                .input
+                .trim()
+                .split_once(char::is_whitespace)
+                .map(|(_, a)| a.trim());
+            if kind == ArgKind::Follows
+                && arg.is_some_and(|a| s.label.to_lowercase().starts_with(&a.to_lowercase()))
+            {
+                return Some(s.completion.clone());
+            }
         }
         Some(self.input.trim().to_string())
     }
@@ -230,7 +244,7 @@ impl CommandLine {
         match rest {
             None => {
                 self.stage = Stage::Command;
-                self.suggestions = self.rank(head, super::COMMANDS.iter().map(command_item));
+                self.suggestions = self.rank(head, super::COMMANDS.iter().map(command_item), false);
             }
             Some(arg) => {
                 let Some(spec) = find_spec(head) else {
@@ -239,6 +253,8 @@ impl CommandLine {
                     return;
                 };
                 self.stage = Stage::Arg(spec.arg);
+                // Followed players keep their recency order on ties.
+                let ordered = spec.arg == ArgKind::Follows;
                 let name = spec.name;
                 let items = arg_candidates(spec.arg, comps)
                     .into_iter()
@@ -247,12 +263,19 @@ impl CommandLine {
                         label: v,
                         detail: String::new(),
                     });
-                self.suggestions = self.rank(arg, items);
+                self.suggestions = self.rank(arg, items, ordered);
             }
         }
     }
 
-    fn rank(&mut self, needle: &str, items: impl Iterator<Item = Suggestion>) -> Vec<Suggestion> {
+    /// Fuzzy-match `items`, best first; ties go alphabetically, or keep
+    /// the given order when `ordered` (which also allows a longer list).
+    fn rank(
+        &mut self,
+        needle: &str,
+        items: impl Iterator<Item = Suggestion>,
+        ordered: bool,
+    ) -> Vec<Suggestion> {
         let pattern = Pattern::parse(needle, CaseMatching::Ignore, Normalization::Smart);
         let mut buf = Vec::new();
         let mut scored: Vec<(u32, Suggestion)> = items
@@ -261,12 +284,17 @@ impl CommandLine {
                 Some((score, s))
             })
             .collect();
-        scored.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.label.cmp(&b.1.label)));
-        scored
-            .into_iter()
-            .map(|(_, s)| s)
-            .take(MAX_SUGGESTIONS)
-            .collect()
+        if ordered {
+            scored.sort_by_key(|s| std::cmp::Reverse(s.0));
+        } else {
+            scored.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.label.cmp(&b.1.label)));
+        }
+        let max = if ordered {
+            crate::online::players::RECENT_FOLLOWS
+        } else {
+            MAX_SUGGESTIONS
+        };
+        scored.into_iter().map(|(_, s)| s).take(max).collect()
     }
 }
 
@@ -385,6 +413,32 @@ mod tests {
         cl.open(&comps());
         type_in(&mut cl, "daily");
         assert_eq!(cl.submit(&comps()), Some("daily".into()));
+    }
+
+    #[test]
+    fn followed_players_keep_their_recency_order() {
+        let mut comps = comps();
+        comps.follows = (0..10).map(|i| format!("p{i}")).rev().collect();
+        let mut cl = CommandLine::new();
+        cl.open(&comps);
+        for c in "follow ".chars() {
+            cl.insert(c, &comps);
+        }
+        let labels: Vec<&str> = cl.suggestions.iter().map(|s| s.label.as_str()).collect();
+        assert_eq!(labels.len(), 10, "all ten, past the usual eight");
+        assert_eq!(labels[..3], ["p9", "p8", "p7"]);
+        // `follow ` + enter opens the most recently viewed.
+        assert_eq!(cl.submit(&comps), Some("follow p9".into()));
+        // A started name completes; anything else is a new name.
+        for c in "P3".chars() {
+            cl.insert(c, &comps);
+        }
+        assert_eq!(cl.submit(&comps), Some("follow p3".into()));
+        cl.delete_word(&comps);
+        for c in "octocat".chars() {
+            cl.insert(c, &comps);
+        }
+        assert_eq!(cl.submit(&comps), Some("follow octocat".into()));
     }
 
     #[test]

@@ -95,6 +95,8 @@ pub enum Action {
     Board(BoardAction),
     /// Keys on a user's profile screen.
     User(UserAction),
+    /// Keys on the players screen (search and follow list).
+    Players(PlayersAction),
     /// A reply from a background network request (boxed: replies carry
     /// whole leaderboards, and every other action is a few bytes).
     Remote(Box<RemoteEvent>),
@@ -147,7 +149,35 @@ pub enum UserAction {
     Bottom,
     /// Open the selected recent run's graph.
     Open,
+    /// Follow or unfollow this player.
+    Follow,
     /// Back to where the profile was opened from.
+    Close,
+}
+
+/// Keys on the players screen (`:search`, `:follow`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlayersAction {
+    Up,
+    Down,
+    Top,
+    Bottom,
+    PageUp,
+    PageDown,
+    /// Open the selected player's profile.
+    Open,
+    /// Follow or unfollow the selected player.
+    Follow,
+    /// Search ↔ following.
+    SwitchTab,
+    /// Start typing into the search.
+    Edit,
+    /// Stop typing; letters are keys again.
+    StopEditing,
+    SearchChar(char),
+    SearchBackspace,
+    SearchDeleteWord,
+    /// Back to where the screen was opened from.
     Close,
 }
 

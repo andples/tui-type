@@ -10,8 +10,8 @@ use std::thread;
 use std::time::Duration;
 
 use ttyp_core::api::{
-    Account, Daily, DailySummary, Leaderboard, Profile, ResultDetail, StartResponse, SubmitRequest,
-    SubmitResponse,
+    Account, Daily, DailySummary, Leaderboard, PlayerList, PlayerSummary, Profile, ResultDetail,
+    StartResponse, SubmitRequest, SubmitResponse,
 };
 
 use ttyp_core::boards::Target;
@@ -47,6 +47,19 @@ pub enum Request {
     Account,
     SetPublic(bool),
     User(String),
+    /// A page of the player search.
+    Players {
+        query: String,
+        offset: u32,
+        limit: u32,
+    },
+    /// Who we follow.
+    Follows,
+    /// Follow (`true`) or unfollow someone.
+    SetFollow {
+        login: String,
+        follow: bool,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -89,6 +102,18 @@ pub enum RemoteEvent {
     User {
         login: String,
         result: Result<Profile, OnlineError>,
+    },
+    Players {
+        query: String,
+        offset: u32,
+        result: Result<PlayerList, OnlineError>,
+    },
+    Follows(Result<Vec<PlayerSummary>, OnlineError>),
+    /// A follow change went through (the new list) or didn't.
+    Followed {
+        login: String,
+        follow: bool,
+        result: Result<Vec<PlayerSummary>, OnlineError>,
     },
 }
 
@@ -238,6 +263,35 @@ impl Online {
                 thread::spawn(move || {
                     let result = client.user(&login);
                     let _ = tx.send(RemoteEvent::User { login, result });
+                });
+            }
+            Request::Players {
+                query,
+                offset,
+                limit,
+            } => {
+                thread::spawn(move || {
+                    let result = client.players(&query, offset, limit);
+                    let _ = tx.send(RemoteEvent::Players {
+                        query,
+                        offset,
+                        result,
+                    });
+                });
+            }
+            Request::Follows => {
+                thread::spawn(move || {
+                    let _ = tx.send(RemoteEvent::Follows(client.follows()));
+                });
+            }
+            Request::SetFollow { login, follow } => {
+                thread::spawn(move || {
+                    let result = client.set_follow(&login, follow);
+                    let _ = tx.send(RemoteEvent::Followed {
+                        login,
+                        follow,
+                        result,
+                    });
                 });
             }
         }

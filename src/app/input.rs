@@ -4,7 +4,8 @@ use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use super::Screen;
 use super::action::{
-    Action, BoardAction, CatalogAction, ListMove, ModuleAction, ProfileAction, UserAction,
+    Action, BoardAction, CatalogAction, ListMove, ModuleAction, PlayersAction, ProfileAction,
+    UserAction,
 };
 use super::misses::MissedRange;
 use super::splash::SplashMenu;
@@ -28,6 +29,8 @@ pub struct InputContext {
     pub splash_idle: bool,
     /// The results screen's new-best confetti is playing.
     pub celebrating: bool,
+    /// The players screen's search has the keyboard.
+    pub players_editing: bool,
 }
 
 /// Which part of the profile screen has the keyboard.
@@ -102,12 +105,14 @@ pub fn map_key(key: KeyEvent, ctx: InputContext) -> Action {
                 KeyCode::Home | KeyCode::Char('g') => u(U::Top),
                 KeyCode::End | KeyCode::Char('G') => u(U::Bottom),
                 KeyCode::Enter => u(U::Open),
+                KeyCode::Char('f') => u(U::Follow),
                 KeyCode::Esc | KeyCode::Char('q') => u(U::Close),
                 KeyCode::Char(':') => Action::OpenCommandLine,
                 KeyCode::Char('?') => Action::ShowHelp,
                 _ => Action::Nop,
             }
         }
+        Screen::Players => map_players(key, ctrl || alt, ctx.players_editing),
         Screen::Graph => match key.code {
             KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter => {
                 Action::Board(BoardAction::CloseGraph)
@@ -223,6 +228,52 @@ fn map_leaderboard(key: KeyEvent, ctrl: bool) -> Action {
         KeyCode::Enter => b(B::Open),
         KeyCode::Char('p') => b(B::Profile),
         KeyCode::Esc | KeyCode::Char('q') => Action::Back,
+        KeyCode::Char(':') => Action::OpenCommandLine,
+        KeyCode::Char('?') => Action::ShowHelp,
+        _ => Action::Nop,
+    }
+}
+
+/// While the search is being typed, letters go to it and only arrows,
+/// enter, tab and esc are keys; otherwise letters are shortcuts.
+fn map_players(key: KeyEvent, modified: bool, editing: bool) -> Action {
+    use PlayersAction as P;
+    let p = Action::Players;
+    match key.code {
+        KeyCode::Up => return p(P::Up),
+        KeyCode::Down => return p(P::Down),
+        KeyCode::PageUp => return p(P::PageUp),
+        KeyCode::PageDown => return p(P::PageDown),
+        KeyCode::Enter => return p(P::Open),
+        KeyCode::Tab | KeyCode::BackTab => return p(P::SwitchTab),
+        KeyCode::Char('u') if modified && !editing => return p(P::PageUp),
+        KeyCode::Char('d') if modified && !editing => return p(P::PageDown),
+        _ => {}
+    }
+    if editing {
+        return match key.code {
+            KeyCode::Esc => p(P::StopEditing),
+            KeyCode::Char('n') if modified => p(P::Down),
+            KeyCode::Char('p') if modified => p(P::Up),
+            KeyCode::Char('w') | KeyCode::Char('h') | KeyCode::Char('u') if modified => {
+                p(P::SearchDeleteWord)
+            }
+            KeyCode::Backspace if modified => p(P::SearchDeleteWord),
+            KeyCode::Backspace => p(P::SearchBackspace),
+            KeyCode::Char(c) if !modified => p(P::SearchChar(c)),
+            _ => Action::Nop,
+        };
+    }
+    match key.code {
+        KeyCode::Char('k') => p(P::Up),
+        KeyCode::Char('j') => p(P::Down),
+        KeyCode::Home | KeyCode::Char('g') => p(P::Top),
+        KeyCode::End | KeyCode::Char('G') => p(P::Bottom),
+        KeyCode::Char('p') => p(P::Open),
+        KeyCode::Char('f') => p(P::Follow),
+        KeyCode::Char('/') | KeyCode::Char('s') => p(P::Edit),
+        KeyCode::Left | KeyCode::Right | KeyCode::Char('h') | KeyCode::Char('l') => p(P::SwitchTab),
+        KeyCode::Esc | KeyCode::Char('q') => p(P::Close),
         KeyCode::Char(':') => Action::OpenCommandLine,
         KeyCode::Char('?') => Action::ShowHelp,
         _ => Action::Nop,
@@ -395,7 +446,28 @@ mod tests {
             splash_menu: SplashMenu::Offline,
             splash_idle: false,
             celebrating: false,
+            players_editing: false,
         }
+    }
+
+    #[test]
+    fn players_keys_depend_on_the_search_having_the_keyboard() {
+        let mut c = ctx(Screen::Players, false, Status::Idle);
+        let k = |code| key(code, KeyModifiers::NONE);
+        let p = Action::Players;
+        assert_eq!(map_key(k(KeyCode::Char('p')), c), p(PlayersAction::Open));
+        assert_eq!(map_key(k(KeyCode::Enter), c), p(PlayersAction::Open));
+        assert_eq!(map_key(k(KeyCode::Char('f')), c), p(PlayersAction::Follow));
+        assert_eq!(map_key(k(KeyCode::Char('/')), c), p(PlayersAction::Edit));
+        assert_eq!(map_key(k(KeyCode::Esc), c), p(PlayersAction::Close));
+        c.players_editing = true;
+        assert_eq!(
+            map_key(k(KeyCode::Char('p')), c),
+            p(PlayersAction::SearchChar('p'))
+        );
+        assert_eq!(map_key(k(KeyCode::Enter), c), p(PlayersAction::Open));
+        assert_eq!(map_key(k(KeyCode::Down), c), p(PlayersAction::Down));
+        assert_eq!(map_key(k(KeyCode::Esc), c), p(PlayersAction::StopEditing));
     }
 
     #[test]

@@ -10,6 +10,7 @@ pub mod misses;
 mod modules;
 mod online;
 pub mod pace;
+mod players;
 mod profiles;
 pub mod splash;
 mod user;
@@ -29,7 +30,7 @@ use crate::config::{Config, Pace, Paths};
 use crate::config::{FONT_SIZE_RANGE, FontSize, LINES_RANGE, WORDS_PER_LINE_RANGE};
 use crate::gfx::{self, Gfx};
 use crate::language::LanguageRegistry;
-use crate::online::{BoardView, Online, UserView};
+use crate::online::{BoardView, Follows, Online, PlayersTab, PlayersView, UserView};
 use crate::profile::{ProfileMenu, ProfileRegistry};
 use crate::stats::{Activity, LocalJsonlStore, StatsStore, Summary, TestRecord, personal_best};
 use crate::test::{Metrics, Mode, Modifiers, RandomGenerator, Status, TestEngine};
@@ -69,6 +70,8 @@ pub enum Screen {
     Graph,
     /// A player's profile.
     User,
+    /// `:search` and `:follow`: finding players and the ones you follow.
+    Players,
     /// The landing screen played on start (`splash = true`).
     Splash,
     /// A language's modules as a checklist (download or mix in).
@@ -242,6 +245,12 @@ pub struct App {
     user_from: Screen,
     /// `:user` with no name: show ours once the account says who we are.
     own_profile_pending: bool,
+    /// The players screen, while open.
+    pub players: Option<PlayersView>,
+    /// Where the players screen was opened from.
+    players_from: Screen,
+    /// Who we follow (when logged in), most recently viewed first.
+    pub follows: Follows,
     /// `enter` on a row: waiting for the run to arrive.
     graph_loading: bool,
     /// Screen to return to from stats/help.
@@ -318,6 +327,7 @@ impl App {
         let engine = Self::build_engine(&config, &languages, &modules);
         let summary = Summary::from_records(store.all());
         let online = Self::connect(&config, &paths);
+        let follows = Follows::load(&paths.views_file);
         let fetcher = Self::catalog_fetcher(&config);
         let splash = config.splash.then(|| Splash::new(Instant::now()));
         let mut app = Self {
@@ -370,6 +380,9 @@ impl App {
             user: None,
             user_from: Screen::Typing,
             own_profile_pending: false,
+            players: None,
+            players_from: Screen::Typing,
+            follows,
             graph_loading: false,
             previous_screen: Screen::Typing,
             fresh_notice: false,
@@ -382,6 +395,7 @@ impl App {
         app.install_missing();
         app.check_catalog_updates();
         app.retry_queued_submissions();
+        app.fetch_follows();
         Ok(app)
     }
 
@@ -674,6 +688,8 @@ impl App {
                     .outcome
                     .as_ref()
                     .is_some_and(|o| o.celebrating_at(Instant::now())),
+            players_editing: self.screen == Screen::Players
+                && self.players.as_ref().is_some_and(|v| v.editing),
         }
     }
 
@@ -863,6 +879,7 @@ impl App {
             }
             Action::Board(a) => self.board_action(a),
             Action::User(a) => self.user_action(a),
+            Action::Players(a) => self.players_action(a),
             Action::Remote(ev) => self.remote_event(ev),
             Action::ScrollDown => self.scroll += 1,
             Action::ScrollUp => self.scroll = self.scroll.saturating_sub(1),
@@ -1192,6 +1209,22 @@ impl App {
             }
             Command::User(login) => {
                 self.open_user(login);
+                return;
+            }
+            Command::Search(query) => {
+                self.open_players(PlayersTab::Search, query);
+                return;
+            }
+            Command::Follow(None) => {
+                self.open_players(PlayersTab::Following, None);
+                return;
+            }
+            Command::Follow(Some(login)) => {
+                self.follow_command(login);
+                return;
+            }
+            Command::Unfollow(login) => {
+                self.set_follow(login, false);
                 return;
             }
             Command::Quit => self.quit_or_back(),

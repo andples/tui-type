@@ -70,6 +70,8 @@ impl App {
         }
         online.request(Request::Logout);
         online.client.set_token(None);
+        self.follows.clear();
+        self.follows_changed();
         if let Err(e) = token::delete(&self.paths.token_file) {
             self.notify(format!("could not remove token: {e}"));
         } else {
@@ -93,6 +95,7 @@ impl App {
                         "logged in as {login}, but could not save token: {e}"
                     )),
                 }
+                self.fetch_follows();
                 self.leave_login();
             }
             RemoteEvent::LoginFailed(e) => {
@@ -131,6 +134,17 @@ impl App {
             RemoteEvent::ResultDetail(result) => self.board_result(result),
             RemoteEvent::Account(result) => self.account_reply(result),
             RemoteEvent::User { login, result } => self.user_reply(&login, result),
+            RemoteEvent::Players {
+                query,
+                offset,
+                result,
+            } => self.players_reply(&query, offset, result),
+            RemoteEvent::Follows(result) => self.follows_reply(result),
+            RemoteEvent::Followed {
+                login,
+                follow,
+                result,
+            } => self.followed_reply(&login, follow, result),
         }
     }
 

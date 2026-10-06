@@ -5,8 +5,9 @@ use std::time::Duration;
 
 use serde::de::DeserializeOwned;
 use ttyp_core::api::{
-    Account, AccountUpdate, AuthRequest, AuthResponse, Daily, DailySummary, ErrorBody, Leaderboard,
-    Profile, ResultDetail, StartResponse, SubmitRequest, SubmitResponse,
+    Account, AccountUpdate, AuthRequest, AuthResponse, Daily, DailySummary, ErrorBody,
+    FollowUpdate, Leaderboard, PlayerList, PlayerSummary, Profile, ResultDetail, StartResponse,
+    SubmitRequest, SubmitResponse,
 };
 use ttyp_core::boards::Target;
 
@@ -34,6 +35,19 @@ impl From<ureq::Error> for OnlineError {
     fn from(e: ureq::Error) -> Self {
         OnlineError::Unreachable(e.to_string())
     }
+}
+
+/// `s` percent-encoded for a query string.
+fn encode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'~') {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
 }
 
 #[derive(Clone)]
@@ -166,6 +180,30 @@ impl Client {
         self.get(&format!("/users/{login}"))
     }
 
+    /// A page of public players whose login contains `query`.
+    pub fn players(&self, query: &str, offset: u32, limit: u32) -> Result<PlayerList, OnlineError> {
+        self.get(&format!(
+            "/users?q={}&offset={offset}&limit={limit}",
+            encode(query)
+        ))
+    }
+
+    /// Who we follow.
+    pub fn follows(&self) -> Result<Vec<PlayerSummary>, OnlineError> {
+        self.get("/follows")
+    }
+
+    /// Follow or unfollow `login`; answers with the new follow list.
+    pub fn set_follow(&self, login: &str, follow: bool) -> Result<Vec<PlayerSummary>, OnlineError> {
+        self.call(
+            "/follows",
+            Some(&FollowUpdate {
+                login: login.to_string(),
+                follow,
+            }),
+        )
+    }
+
     /// Trade a GitHub access token for a ttyp token.
     pub fn auth_github(&self, access_token: &str) -> Result<AuthResponse, OnlineError> {
         self.call(
@@ -180,5 +218,14 @@ impl Client {
     pub fn logout(&self) -> Result<(), OnlineError> {
         self.call::<serde_json::Value>("/auth/logout", Some(&()))
             .map(|_| ())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn queries_are_percent_encoded() {
+        assert_eq!(super::encode("ann-1_x"), "ann-1_x");
+        assert_eq!(super::encode("a b&c=%é"), "a%20b%26c%3D%25%C3%A9");
     }
 }

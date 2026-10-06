@@ -39,13 +39,18 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
     };
 
     let visibility = if profile.public { "public" } else { "private" };
-    let title = Line::from(vec![
+    let mut title = vec![
         Span::styled(profile.login.clone(), p.main_bold()),
         Span::styled(
             format!("  ·  {visibility} · joined {}", profile.joined),
             p.sub(),
         ),
-    ]);
+    ];
+    if profile.following {
+        title.push(Span::styled(" · ", p.sub()));
+        title.push(Span::styled("following", p.main()));
+    }
+    let title = Line::from(title);
     frame.render_widget(Paragraph::new(title), title_area);
     let stats = format!(
         "streak {} · {} {}",
@@ -113,7 +118,13 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
         recent_area,
         p,
     );
-    hints::render(frame, area, col, p, "enter graph · ↑↓ move · esc back");
+    let logged_in = app.online.as_ref().is_some_and(|o| o.logged_in());
+    let hint = match (logged_in, profile.following) {
+        (false, _) => "enter graph · ↑↓ move · esc back",
+        (true, false) => "enter graph · ↑↓ move · f follow · esc back",
+        (true, true) => "enter graph · ↑↓ move · f unfollow · esc back",
+    };
+    hints::render(frame, area, col, p, hint);
 }
 
 /// Medals from the main dailies (english time 15/30/60) on top; every

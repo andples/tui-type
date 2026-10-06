@@ -170,6 +170,42 @@ pub struct Profile {
     /// Absent from servers before 1.3.0.
     #[serde(default)]
     pub badges: Badges,
+    /// Whether the caller follows this player. Absent from servers before
+    /// 2.2.0 and false when logged out.
+    #[serde(default)]
+    pub following: bool,
+}
+
+/// One player in a list (`GET /users?q=`, `GET /follows`): the headline
+/// numbers of their profile.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PlayerSummary {
+    pub login: String,
+    /// Best valid wpm on each of `MEDAL_DAILIES`, in that order.
+    pub bests: [Option<f64>; 3],
+    pub badges: Badges,
+    /// Whether the caller follows them; false when logged out.
+    pub following: bool,
+    /// False only in a follow list, for a player who has since gone
+    /// private: their numbers are left out.
+    pub public: bool,
+}
+
+/// `GET /users?q=&offset=&limit=`: public players whose login contains
+/// `q` (any case), exact and prefix matches first.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PlayerList {
+    pub rows: Vec<PlayerSummary>,
+    pub offset: u32,
+    pub total: u32,
+}
+
+/// `POST /follows`: follow or unfollow a player. Answers with the
+/// caller's follow list, like `GET /follows`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FollowUpdate {
+    pub login: String,
+    pub follow: bool,
 }
 
 /// The main dailies: medals are only awarded on these.

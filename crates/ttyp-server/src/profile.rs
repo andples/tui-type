@@ -2,6 +2,8 @@
 //! and recent dailies of one user. Public unless the user turned
 //! `users.public` off; a user can always see their own.
 
+use std::collections::HashMap;
+
 use anyhow::Result;
 use chrono::NaiveDate;
 use sqlx::sqlite::{SqlitePool, SqliteRow};
@@ -97,6 +99,10 @@ pub async fn load(
     let dates: Vec<NaiveDate> = dates.iter().filter_map(|d| d.parse().ok()).collect();
 
     let badges = badges(pool, id, today).await?;
+    let following = match viewer {
+        Some(v) => crate::players::follows(pool, v, id).await?,
+        None => false,
+    };
 
     let created: String = user.get("created_at");
     Ok(Some(Profile {
@@ -108,6 +114,7 @@ pub async fn load(
         bests: bests.iter().filter_map(run).collect(),
         recent: recent.iter().filter_map(run).collect(),
         badges,
+        following,
     }))
 }
 
@@ -116,21 +123,34 @@ pub async fn load(
 /// `leaderboard::page`'s first-try board: medals on the main dailies
 /// (`MEDAL_DAILIES`), one count for every other daily.
 async fn badges(pool: &SqlitePool, user_id: i64, today: NaiveDate) -> Result<Badges> {
+    Ok(badges_of(pool, &[user_id], today)
+        .await?
+        .remove(&user_id)
+        .unwrap_or_default())
+}
+
+/// `badges` for several users at once; users without a finish are absent.
+pub async fn badges_of(
+    pool: &SqlitePool,
+    user_ids: &[i64],
+    today: NaiveDate,
+) -> Result<HashMap<i64, Badges>> {
     let rows = sqlx::query(AssertSqlSafe(format!(
         "WITH ranked AS ( \
            SELECT r.user_id, d.language, d.mode_kind, d.mode_value, \
                   ROW_NUMBER() OVER (PARTITION BY r.daily_id ORDER BY {RANK_ORDER}) AS rank \
            FROM results r JOIN daily_tests d ON d.id = r.daily_id \
            WHERE r.valid = 1 AND {FIRST_TRY} AND d.date < ?2) \
-         SELECT language, mode_kind, mode_value, rank FROM ranked \
-         WHERE user_id = ?1 AND rank <= 3"
+         SELECT user_id, language, mode_kind, mode_value, rank FROM ranked \
+         WHERE user_id IN (SELECT value FROM json_each(?1)) AND rank <= 3"
     )))
-    .bind(user_id)
+    .bind(id_list(user_ids))
     .bind(today.to_string())
     .fetch_all(pool)
     .await?;
-    let mut b = Badges::default();
+    let mut all: HashMap<i64, Badges> = HashMap::new();
     for row in &rows {
+        let b = all.entry(row.get("user_id")).or_default();
         let language: String = row.get("language");
         let mode = daily::mode_from(row.get("mode_kind"), row.get("mode_value"));
         let main = mode.is_some_and(|m| MEDAL_DAILIES.contains(&(language.as_str(), m)));
@@ -141,7 +161,42 @@ async fn badges(pool: &SqlitePool, user_id: i64, today: NaiveDate) -> Result<Bad
             (false, _) => b.other += 1,
         }
     }
-    Ok(b)
+    Ok(all)
+}
+
+/// Users' best valid wpm on each of `MEDAL_DAILIES`, in that order.
+pub async fn main_bests(
+    pool: &SqlitePool,
+    user_ids: &[i64],
+) -> Result<HashMap<i64, [Option<f64>; 3]>> {
+    let rows = sqlx::query(
+        "SELECT r.user_id, d.language, d.mode_kind, d.mode_value, max(r.wpm) AS wpm \
+         FROM results r JOIN daily_tests d ON d.id = r.daily_id \
+         WHERE r.valid = 1 AND r.user_id IN (SELECT value FROM json_each(?1)) \
+         GROUP BY r.user_id, d.language, d.mode_kind, d.mode_value",
+    )
+    .bind(id_list(user_ids))
+    .fetch_all(pool)
+    .await?;
+    let mut all: HashMap<i64, [Option<f64>; 3]> = HashMap::new();
+    for row in &rows {
+        let language: String = row.get("language");
+        let Some(mode) = daily::mode_from(row.get("mode_kind"), row.get("mode_value")) else {
+            continue;
+        };
+        if let Some(i) = MEDAL_DAILIES
+            .iter()
+            .position(|&(l, m)| l == language && m == mode)
+        {
+            all.entry(row.get("user_id")).or_default()[i] = Some(row.get("wpm"));
+        }
+    }
+    Ok(all)
+}
+
+/// Ids as a JSON array, for `IN (SELECT value FROM json_each(?))`.
+pub fn id_list(ids: &[i64]) -> String {
+    serde_json::to_string(ids).unwrap_or_else(|_| "[]".into())
 }
 
 fn run(row: &SqliteRow) -> Option<ProfileRun> {

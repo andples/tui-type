@@ -347,6 +347,18 @@ ttyp. `:set server …` changes it live.
   `:user` alone shows yours. Profiles are public; `:account public off`
   hides yours from everyone else, and `:account` shows which it is. Leaderboards list your
   GitHub login either way.
+  `f` on a profile follows or unfollows that player.
+- `:search [name]` (or `:players`, `:find`) searches every public profile:
+  each row shows the player's personal bests on english time 15, 30 and 60
+  and their gold, silver, bronze and other top-3 counts. Type to narrow it
+  (`esc` stops typing, `/` starts again), `↑↓` move, `enter` or `p` opens
+  the profile, `f` follows or unfollows, `tab` switches to the follow list.
+- Following is one way and needs `:login`. `:follow` lists who you follow,
+  most recently viewed profile first. `:follow <login>` opens that profile
+  when you already follow them and follows them otherwise; the palette
+  offers your 10 most recently viewed follows. `:unfollow <login>` stops.
+  When each profile was last opened is kept in `profile_views.json` in the
+  data dir, on your machine only.
 - Medals: the main dailies are `english` time 15, 30 and 60. Finishing 1st,
   2nd or 3rd on one of their *first try* boards earns gold, silver or bronze
   once that daily's UTC day is over; profiles show them at the top. A top-3
