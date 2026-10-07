@@ -48,6 +48,9 @@ pub enum Command {
     TrimSyntax(Option<bool>),
     /// `None` opens the config menu; a name switches that config on.
     ConfigProfile(Option<String>),
+    /// `None` opens the custom page; a name types that set (installing a
+    /// shared one first), `off` goes back to the language.
+    Custom(Option<String>),
     /// `None` opens the install menu; a name installs that language/theme.
     Install(Option<String>),
     Uninstall(String),
@@ -114,6 +117,8 @@ pub enum ArgKind {
     Account,
     /// Players you follow, most recently viewed first.
     Follows,
+    /// Custom sets on this machine, and `off`.
+    Customs,
     /// Numeric setting in an inclusive range. Typing a number sets it
     /// directly; Enter with no number opens an interactive slider.
     Slider {
@@ -134,6 +139,7 @@ impl ArgKind {
                 | ArgKind::WordPresets
                 | ArgKind::DailyModes
                 | ArgKind::Follows
+                | ArgKind::Customs
                 | ArgKind::Fonts
                 | ArgKind::Installable
                 | ArgKind::Free
@@ -336,6 +342,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         requires_arg: false,
     },
     CommandSpec {
+        name: "custom",
+        aliases: &["wordset", "cw"],
+        usage: "[name|off]",
+        help: "type your own word sets or shared ones (enter opens the custom page)",
+        arg: ArgKind::Customs,
+        requires_arg: false,
+    },
+    CommandSpec {
         name: "uninstall",
         aliases: &["remove"],
         usage: "<name>",
@@ -534,6 +548,7 @@ pub fn parse(line: &str) -> Result<Command, String> {
         "config" => Command::ConfigProfile(Some(rest.to_string()).filter(|r| !r.is_empty())),
         "install" => Command::Install(Some(rest.to_string()).filter(|r| !r.is_empty())),
         "uninstall" => Command::Uninstall(need(spec.usage)?.to_string()),
+        "custom" => Command::Custom(Some(rest.to_string()).filter(|r| !r.is_empty())),
         "restart" => Command::Restart,
         "stats" => Command::Stats,
         "missed" => Command::Missed(if rest.is_empty() {
@@ -652,6 +667,7 @@ pub fn arg_candidates(kind: ArgKind, comps: &Completions) -> Vec<String> {
         ArgKind::MissedRanges => MissedRange::ALL.iter().map(|r| r.arg().into()).collect(),
         ArgKind::Account => vec!["public on".into(), "public off".into()],
         ArgKind::Follows => comps.follows.clone(),
+        ArgKind::Customs => comps.customs.clone(),
         ArgKind::DailyModes => ttyp_core::api::DAILY_MODES
             .iter()
             .map(Mode::label)
@@ -726,6 +742,8 @@ mod tests {
             parse("whois octocat"),
             Ok(Command::User(Some("octocat".into())))
         );
+        assert_eq!(parse("custom"), Ok(Command::Custom(None)));
+        assert_eq!(parse("cw birds"), Ok(Command::Custom(Some("birds".into()))));
         assert_eq!(parse("search"), Ok(Command::Search(None)));
         assert_eq!(parse("find ann"), Ok(Command::Search(Some("ann".into()))));
         assert_eq!(parse("follow"), Ok(Command::Follow(None)));

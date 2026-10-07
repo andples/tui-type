@@ -70,6 +70,11 @@ impl App {
             C::Down => self.catalog_menu.move_by(1, len),
             C::Top => self.catalog_menu.jump(false, len),
             C::Bottom => self.catalog_menu.jump(true, len),
+            // Languages → themes → the custom page → languages.
+            C::SwitchTab if kind == Kind::Theme => {
+                self.catalog_menu.confirm_remove = false;
+                self.open_custom();
+            }
             C::SwitchTab => {
                 self.catalog_menu.switch_tab();
                 self.sync_catalog();
@@ -428,7 +433,8 @@ impl App {
     /// update that lands while nothing is being typed.
     pub(super) fn refresh_words(&mut self) {
         if self.engine.status() == Status::Idle && self.daily.is_none() {
-            self.engine = Self::build_engine(&self.config, &self.languages, &self.modules);
+            self.engine =
+                Self::build_engine(&self.config, &self.languages, &self.modules, &self.customs);
         }
     }
 

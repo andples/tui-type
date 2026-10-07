@@ -14,6 +14,7 @@ use ttyp_core::language::LanguageRegistry;
 
 mod api;
 mod auth;
+mod custom;
 mod daily;
 mod db;
 mod leaderboard;

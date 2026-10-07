@@ -5,9 +5,9 @@ use std::time::Duration;
 
 use serde::de::DeserializeOwned;
 use ttyp_core::api::{
-    Account, AccountUpdate, AuthRequest, AuthResponse, Daily, DailySummary, ErrorBody,
-    FollowUpdate, Leaderboard, PlayerList, PlayerSummary, Profile, ResultDetail, StartResponse,
-    SubmitRequest, SubmitResponse,
+    Account, AccountUpdate, AuthRequest, AuthResponse, CustomList, CustomPublish, CustomSet,
+    CustomSummary, Daily, DailySummary, ErrorBody, FollowUpdate, Leaderboard, PlayerList,
+    PlayerSummary, Profile, ResultDetail, StartResponse, SubmitRequest, SubmitResponse,
 };
 use ttyp_core::boards::Target;
 
@@ -202,6 +202,34 @@ impl Client {
                 follow,
             }),
         )
+    }
+
+    /// A page of published custom sets matching `query`, most installed first.
+    pub fn custom_list(
+        &self,
+        query: &str,
+        offset: u32,
+        limit: u32,
+    ) -> Result<CustomList, OnlineError> {
+        self.get(&format!(
+            "/custom?q={}&offset={offset}&limit={limit}",
+            encode(query)
+        ))
+    }
+
+    /// Download a set, counting us as installing it when logged in. Set
+    /// names are checked (`custom::valid_name`) before they get here.
+    pub fn custom_install(&self, name: &str) -> Result<CustomSet, OnlineError> {
+        self.call(&format!("/custom/{}/install", encode(name)), Some(&()))
+    }
+
+    pub fn custom_publish(&self, set: &CustomPublish) -> Result<CustomSummary, OnlineError> {
+        self.call("/custom", Some(set))
+    }
+
+    pub fn custom_unpublish(&self, name: &str) -> Result<(), OnlineError> {
+        self.call::<serde_json::Value>(&format!("/custom/{}/unpublish", encode(name)), Some(&()))
+            .map(|_| ())
     }
 
     /// Trade a GitHub access token for a ttyp token.

@@ -4,6 +4,7 @@
 pub mod bigtext;
 pub mod catalog;
 pub mod command_line;
+pub mod custom;
 pub mod font;
 pub mod graph;
 pub mod help;
@@ -68,6 +69,8 @@ pub fn render(frame: &mut Frame, app: &App) -> Vec<ImageLine> {
         Screen::Graph => graph::render(frame, app, body, &p),
         Screen::User => user::render(frame, app, body, &p),
         Screen::Players => players::render(frame, app, body, &p),
+        Screen::Custom => custom::render(frame, app, body, &p),
+        Screen::CustomEdit => custom::render_edit(frame, app, body, &p),
         Screen::Splash => images = splash::render(frame, app, body, &p),
     }
 

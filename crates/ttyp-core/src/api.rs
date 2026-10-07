@@ -253,6 +253,44 @@ pub struct ProfileRun {
     pub attempt: u32,
 }
 
+/// A published custom word set in a list (`GET /custom`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CustomSummary {
+    pub name: String,
+    /// GitHub login of whoever published it.
+    pub author: String,
+    /// How many words it has.
+    pub words: u32,
+    /// Players who installed it (each counted once, its author never).
+    pub installs: u32,
+    /// UTC date it was last published (`YYYY-MM-DD`).
+    pub updated: String,
+}
+
+/// `GET /custom?q=&offset=&limit=`: published sets, most installed first.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CustomList {
+    pub rows: Vec<CustomSummary>,
+    pub offset: u32,
+    pub total: u32,
+}
+
+/// `GET /custom/{name}` and `POST /custom/{name}/install`: a set's words.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CustomSet {
+    pub name: String,
+    pub author: String,
+    pub words: Vec<String>,
+    pub installs: u32,
+}
+
+/// `POST /custom`: publish a set, or a new version of your own.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CustomPublish {
+    pub name: String,
+    pub words: Vec<String>,
+}
+
 /// `POST /auth/github`: trade a GitHub access token for a ttyp token.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuthRequest {

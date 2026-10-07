@@ -4,6 +4,7 @@ pub mod action;
 mod board;
 mod catalog;
 pub mod celebrate;
+mod custom;
 mod difficulty;
 pub mod idle;
 pub mod input;
@@ -29,6 +30,8 @@ use crate::catalog::{CatalogMenu, Fetcher, ModuleRegistry};
 use crate::command::{self, Command, CommandLine, Completions};
 use crate::config::{Config, Pace, Paths};
 use crate::config::{FONT_SIZE_RANGE, FontSize, LINES_RANGE, WORDS_PER_LINE_RANGE};
+use crate::custom::CustomStore;
+use crate::custom::menu::{CustomEditor, CustomMenu};
 use crate::gfx::{self, Gfx};
 use crate::language::LanguageRegistry;
 use crate::online::{BoardView, Follows, Online, PlayersTab, PlayersView, UserView};
@@ -77,6 +80,11 @@ pub enum Screen {
     Splash,
     /// A language's modules as a checklist (download or mix in).
     Modules,
+    /// Custom word sets: yours and shared ones (the install screen's
+    /// custom tab).
+    Custom,
+    /// Making or changing a custom set.
+    CustomEdit,
 }
 
 /// Which config value a slider edits.
@@ -254,6 +262,11 @@ pub struct App {
     pub follows: Follows,
     /// The leaderboard was last switched to only the players we follow.
     board_following: bool,
+    /// Custom word sets on this machine.
+    pub customs: CustomStore,
+    pub custom_menu: CustomMenu,
+    /// The custom set editor, while open.
+    pub custom_editor: Option<CustomEditor>,
     /// Why the test being finished failed (sudden death, minimum speed).
     failed: Option<crate::stats::validity::Invalid>,
     /// `enter` on a row: waiting for the run to arrive.
@@ -329,7 +342,8 @@ impl App {
             profiles: profiles.names().map(str::to_string).collect(),
             ..Default::default()
         };
-        let engine = Self::build_engine(&config, &languages, &modules);
+        let customs = CustomStore::load(&paths.custom_dir, |w| warnings.push(w));
+        let engine = Self::build_engine(&config, &languages, &modules, &customs);
         let summary = Summary::from_records(store.all());
         let online = Self::connect(&config, &paths);
         let follows = Follows::load(&paths.views_file);
@@ -390,12 +404,16 @@ impl App {
             follows,
             board_following: false,
             failed: None,
+            customs,
+            custom_menu: CustomMenu::default(),
+            custom_editor: None,
             graph_loading: false,
             previous_screen: Screen::Typing,
             fresh_notice: false,
             dirty: true,
         };
         app.refresh_catalog_lists();
+        app.refresh_custom_names();
         if let Some(w) = warnings.first() {
             app.notify(w.clone());
         }
@@ -410,7 +428,17 @@ impl App {
         config: &Config,
         languages: &LanguageRegistry,
         modules: &ModuleRegistry,
+        customs: &CustomStore,
     ) -> TestEngine {
+        let mods = Modifiers {
+            punctuation: config.punctuation,
+            numbers: config.numbers,
+        };
+        // A custom set replaces the language (and its modules).
+        if let Some(set) = customs.get(&config.custom).filter(|s| !s.words.is_empty()) {
+            let generator = RandomGenerator::new(set.words.clone(), mods);
+            return TestEngine::new(config.mode, Box::new(generator));
+        }
         let lang = languages.get_or_default(&config.language);
         let wanted = config
             .modules
@@ -419,10 +447,7 @@ impl App {
         let mixed = modules.selected(&lang.name, wanted);
         let generator = RandomGenerator::new(
             crate::catalog::modules::word_pool(lang, &mixed, config.trim_syntax),
-            Modifiers {
-                punctuation: config.punctuation,
-                numbers: config.numbers,
-            },
+            mods,
         );
         TestEngine::new(config.mode, Box::new(generator))
     }
@@ -696,6 +721,7 @@ impl App {
                     .outcome
                     .as_ref()
                     .is_some_and(|o| o.celebrating_at(Instant::now())),
+            custom: self.custom_input(),
             players_editing: self.screen == Screen::Players
                 && self.players.as_ref().is_some_and(|v| v.editing),
         }
@@ -876,6 +902,9 @@ impl App {
             Action::ShowCatalog => self.open_catalog(),
             Action::Catalog(a) => self.catalog_action(a),
             Action::Modules(a) => self.module_action(a),
+            Action::ShowCustom => self.open_custom(),
+            Action::Custom(a) => self.custom_action(a),
+            Action::CustomEdit(a) => self.custom_edit_action(a),
             Action::CatalogFetched(ev) => self.catalog_event(*ev),
             Action::Login => self.login(),
             Action::CancelLogin => self.cancel_login(),
@@ -972,7 +1001,8 @@ impl App {
         }
         self.daily = None;
         self.daily_start = DailyStart::None;
-        self.engine = Self::build_engine(&self.config, &self.languages, &self.modules);
+        self.engine =
+            Self::build_engine(&self.config, &self.languages, &self.modules, &self.customs);
         self.outcome = None;
         self.screen = Screen::Typing;
         self.previous_screen = Screen::Typing;
@@ -989,11 +1019,16 @@ impl App {
         }
         if matches!(
             self.screen,
-            Screen::Profiles | Screen::Catalog | Screen::Modules
+            Screen::Profiles
+                | Screen::Catalog
+                | Screen::Modules
+                | Screen::Custom
+                | Screen::CustomEdit
         ) {
             self.daily = None;
             self.daily_start = DailyStart::None;
-            self.engine = Self::build_engine(&self.config, &self.languages, &self.modules);
+            self.engine =
+                Self::build_engine(&self.config, &self.languages, &self.modules, &self.customs);
             self.outcome = None;
             self.previous_screen = Screen::Typing;
         } else {
@@ -1072,6 +1107,8 @@ impl App {
                     return;
                 }
                 self.config.language = name.clone();
+                // A language means leaving the custom set.
+                self.config.custom.clear();
                 changed_test = true;
                 self.offer_modules(&name);
             }
@@ -1218,6 +1255,17 @@ impl App {
             }
             Command::Install(Some(name)) => {
                 self.install(None, &name, true);
+                return;
+            }
+            Command::Custom(None) => {
+                self.open_custom();
+                return;
+            }
+            Command::Custom(Some(name)) => {
+                match name.as_str() {
+                    "off" => self.set_custom(""),
+                    n => self.use_custom(n),
+                }
                 return;
             }
             Command::Uninstall(name) => {

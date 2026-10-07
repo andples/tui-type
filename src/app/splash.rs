@@ -247,6 +247,8 @@ impl App {
                     | Screen::Profiles
                     | Screen::Catalog
                     | Screen::Modules
+                    | Screen::Custom
+                    | Screen::CustomEdit
             )
             // Not while a player search is being typed.
             && !(self.screen == Screen::Players

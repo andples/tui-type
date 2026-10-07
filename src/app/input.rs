@@ -4,8 +4,8 @@ use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use super::Screen;
 use super::action::{
-    Action, BoardAction, CatalogAction, ListMove, ModuleAction, PlayersAction, ProfileAction,
-    UserAction,
+    Action, BoardAction, CatalogAction, CustomAction, EditAction, ListMove, ModuleAction,
+    PlayersAction, ProfileAction, UserAction,
 };
 use super::misses::MissedRange;
 use super::splash::SplashMenu;
@@ -31,6 +31,22 @@ pub struct InputContext {
     pub celebrating: bool,
     /// The players screen's search has the keyboard.
     pub players_editing: bool,
+    /// What the custom page and editor are doing with keys.
+    pub custom: CustomInput,
+}
+
+/// Which part of the custom page or editor has the keyboard.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CustomInput {
+    #[default]
+    List,
+    Searching,
+    /// Asking y/n (remove, unpublish, or add the typed words).
+    Confirm,
+    /// Editor: typing the name or words.
+    Typing,
+    /// Editor: moving through the words.
+    Words,
 }
 
 /// Which part of the profile screen has the keyboard.
@@ -113,6 +129,8 @@ pub fn map_key(key: KeyEvent, ctx: InputContext) -> Action {
             }
         }
         Screen::Players => map_players(key, ctrl || alt, ctx.players_editing),
+        Screen::Custom => map_custom(key, ctrl || alt, ctx.custom),
+        Screen::CustomEdit => map_custom_edit(key, ctrl || alt, ctx.custom),
         Screen::Graph => match key.code {
             KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter => {
                 Action::Board(BoardAction::CloseGraph)
@@ -278,6 +296,81 @@ fn map_players(key: KeyEvent, modified: bool, editing: bool) -> Action {
         KeyCode::Char(':') => Action::OpenCommandLine,
         KeyCode::Char('?') => Action::ShowHelp,
         _ => Action::Nop,
+    }
+}
+
+fn map_custom(key: KeyEvent, modified: bool, mode: CustomInput) -> Action {
+    use CustomAction as C;
+    let c = Action::Custom;
+    match mode {
+        CustomInput::Confirm => {
+            return match key.code {
+                KeyCode::Char('y') => c(C::Yes),
+                _ => c(C::No),
+            };
+        }
+        CustomInput::Searching => {
+            return match key.code {
+                KeyCode::Enter | KeyCode::Esc => c(C::StopSearch),
+                KeyCode::Up => c(C::Up),
+                KeyCode::Down => c(C::Down),
+                KeyCode::Backspace => c(C::SearchBackspace),
+                KeyCode::Char(ch) if !modified => c(C::SearchChar(ch)),
+                _ => Action::Nop,
+            };
+        }
+        _ => {}
+    }
+    match key.code {
+        KeyCode::Up | KeyCode::Char('k') => c(C::Up),
+        KeyCode::Down | KeyCode::Char('j') => c(C::Down),
+        KeyCode::Home | KeyCode::Char('g') => c(C::Top),
+        KeyCode::End | KeyCode::Char('G') => c(C::Bottom),
+        KeyCode::Enter => c(C::Use),
+        KeyCode::Char('n') | KeyCode::Char('a') => c(C::New),
+        KeyCode::Char('e') => c(C::Edit),
+        KeyCode::Char('x') | KeyCode::Char('d') | KeyCode::Delete => c(C::Remove),
+        KeyCode::Char('p') => c(C::Publish),
+        KeyCode::Char('u') => c(C::Unpublish),
+        KeyCode::Char('/') | KeyCode::Char('s') => c(C::Search),
+        KeyCode::Tab | KeyCode::BackTab | KeyCode::Left | KeyCode::Right => c(C::SwitchTab),
+        KeyCode::Esc | KeyCode::Char('q') => c(C::Close),
+        KeyCode::Char(':') => Action::OpenCommandLine,
+        KeyCode::Char('?') => Action::ShowHelp,
+        _ => Action::Nop,
+    }
+}
+
+fn map_custom_edit(key: KeyEvent, modified: bool, mode: CustomInput) -> Action {
+    use EditAction as E;
+    let e = Action::CustomEdit;
+    match mode {
+        CustomInput::Confirm => match key.code {
+            KeyCode::Char('y') | KeyCode::Enter => e(E::Yes),
+            _ => e(E::No),
+        },
+        CustomInput::Words => match key.code {
+            KeyCode::Up | KeyCode::Char('k') => e(E::Up),
+            KeyCode::Down | KeyCode::Char('j') => e(E::Down),
+            KeyCode::Char('x') | KeyCode::Char('d') | KeyCode::Delete | KeyCode::Backspace => {
+                e(E::Remove)
+            }
+            KeyCode::Tab | KeyCode::BackTab | KeyCode::Char('i') => e(E::ToggleFocus),
+            KeyCode::Esc | KeyCode::Char('q') => e(E::Escape),
+            _ => Action::Nop,
+        },
+        _ => match key.code {
+            KeyCode::Enter => e(E::Enter),
+            KeyCode::Esc => e(E::Escape),
+            KeyCode::Tab | KeyCode::BackTab => e(E::ToggleFocus),
+            KeyCode::Backspace if modified => e(E::DeleteWord),
+            KeyCode::Char('w') | KeyCode::Char('h') | KeyCode::Char('u') if modified => {
+                e(E::DeleteWord)
+            }
+            KeyCode::Backspace => e(E::Backspace),
+            KeyCode::Char(ch) if !modified => e(E::Char(ch)),
+            _ => Action::Nop,
+        },
     }
 }
 
@@ -448,7 +541,30 @@ mod tests {
             splash_idle: false,
             celebrating: false,
             players_editing: false,
+            custom: CustomInput::List,
         }
+    }
+
+    #[test]
+    fn the_custom_editor_types_words_and_asks() {
+        let mut c = ctx(Screen::CustomEdit, false, Status::Idle);
+        let k = |code| key(code, KeyModifiers::NONE);
+        let e = Action::CustomEdit;
+        c.custom = CustomInput::Typing;
+        assert_eq!(map_key(k(KeyCode::Char('x')), c), e(EditAction::Char('x')));
+        assert_eq!(map_key(k(KeyCode::Char(' ')), c), e(EditAction::Char(' ')));
+        assert_eq!(map_key(k(KeyCode::Enter), c), e(EditAction::Enter));
+        c.custom = CustomInput::Confirm;
+        assert_eq!(map_key(k(KeyCode::Char('y')), c), e(EditAction::Yes));
+        assert_eq!(map_key(k(KeyCode::Char('n')), c), e(EditAction::No));
+        c.custom = CustomInput::Words;
+        assert_eq!(map_key(k(KeyCode::Char('x')), c), e(EditAction::Remove));
+        c.screen = Screen::Custom;
+        c.custom = CustomInput::List;
+        assert_eq!(
+            map_key(k(KeyCode::Char('n')), c),
+            Action::Custom(CustomAction::New)
+        );
     }
 
     #[test]

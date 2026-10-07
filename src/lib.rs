@@ -9,6 +9,7 @@ pub mod app;
 pub mod catalog;
 pub mod command;
 pub mod config;
+pub mod custom;
 pub mod gfx;
 pub mod online;
 pub mod profile;

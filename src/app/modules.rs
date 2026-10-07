@@ -12,6 +12,9 @@ impl App {
     /// What the current test's runs are recorded as: the language plus its
     /// mixed-in modules (`code_python+numpy`).
     pub fn language_key(&self) -> String {
+        if let Some(set) = self.active_custom() {
+            return format!("custom:{}", set.name);
+        }
         let lang = self.languages.get_or_default(&self.config.language);
         modules::language_key(&lang.name, &self.selected_modules(&lang.name))
     }

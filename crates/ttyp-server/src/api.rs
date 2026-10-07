@@ -12,18 +12,19 @@ use serde::Deserialize;
 use sqlx::Row;
 use sqlx::sqlite::SqlitePool;
 use ttyp_core::api::{
-    Account, AccountUpdate, AuthRequest, AuthResponse, Board, Daily, DailySummary, ErrorBody,
-    FollowUpdate, Leaderboard, PlayerList, PlayerSummary, Profile, ResultDetail, StartResponse,
-    SubmitRequest, SubmitResponse,
+    Account, AccountUpdate, AuthRequest, AuthResponse, Board, CustomList, CustomPublish, CustomSet,
+    CustomSummary, Daily, DailySummary, ErrorBody, FollowUpdate, Leaderboard, PlayerList,
+    PlayerSummary, Profile, ResultDetail, StartResponse, SubmitRequest, SubmitResponse,
 };
 use ttyp_core::boards::Period;
 use ttyp_core::language::LanguageRegistry;
 use ttyp_core::test::{Rejected, replay};
 
 use crate::auth::{self, User};
+use crate::custom::CustomError;
 use crate::leaderboard::Scope;
 use crate::players::FollowError;
-use crate::{daily, leaderboard, players, profile};
+use crate::{custom, daily, leaderboard, players, profile};
 
 /// Attempts (starts and submissions) per user per daily.
 const MAX_ATTEMPTS: i64 = 30;
@@ -64,6 +65,10 @@ pub fn router(state: AppState) -> Router {
         .route("/users", get(search_players))
         .route("/users/{login}", get(user_profile))
         .route("/follows", get(follow_list).post(update_follow))
+        .route("/custom", get(custom_list).post(custom_publish))
+        .route("/custom/{name}", get(custom_get))
+        .route("/custom/{name}/install", post(custom_install))
+        .route("/custom/{name}/unpublish", post(custom_unpublish))
         .route("/auth/github", post(auth_github))
         .route("/auth/logout", post(auth_logout))
         .with_state(state)
@@ -451,6 +456,81 @@ async fn update_follow(
     Ok(Json(
         players::list(&state.pool, user.id, daily::today()).await?,
     ))
+}
+
+/// Published custom sets, most installed first.
+async fn custom_list(
+    State(state): State<AppState>,
+    Query(q): Query<PlayerQuery>,
+) -> ApiResult<CustomList> {
+    if q.q.chars().count() > 64 {
+        return Err(ApiError::BadRequest("search too long".into()));
+    }
+    let list = custom::list(&state.pool, &q.q, q.offset, q.limit.clamp(1, MAX_PAGE)).await?;
+    Ok(Json(list))
+}
+
+/// A set's words, without counting an install.
+async fn custom_get(
+    State(state): State<AppState>,
+    Path(name): Path<String>,
+) -> ApiResult<CustomSet> {
+    custom::get(&state.pool, &name, None)
+        .await?
+        .map(Json)
+        .ok_or(ApiError::NotFound)
+}
+
+/// A set's words, counting the caller (when logged in) as installing it.
+async fn custom_install(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(name): Path<String>,
+) -> ApiResult<CustomSet> {
+    let user = auth::user_from_headers(&state.pool, &headers).await?;
+    custom::get(&state.pool, &name, user.map(|u| u.id))
+        .await?
+        .map(Json)
+        .ok_or(ApiError::NotFound)
+}
+
+fn custom_error(e: CustomError) -> ApiError {
+    match e {
+        CustomError::Invalid(m) => ApiError::BadRequest(m),
+        CustomError::Taken => ApiError::BadRequest("that name is taken: pick another".into()),
+        CustomError::TooMany => ApiError::BadRequest(format!(
+            "you already have {} published sets",
+            custom::MAX_SETS
+        )),
+        CustomError::NotFound => ApiError::NotFound,
+        CustomError::NotYours => ApiError::BadRequest("that set isn't yours".into()),
+    }
+}
+
+/// Publish a set, or a new version of the caller's own.
+async fn custom_publish(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(req): Json<CustomPublish>,
+) -> ApiResult<CustomSummary> {
+    let user = require_user(&state, &headers).await?;
+    let done = custom::publish(&state.pool, user.id, &req.name, &req.words).await?;
+    let summary = done.map_err(custom_error)?;
+    tracing::info!("custom set {} published by {}", summary.name, user.login);
+    Ok(Json(summary))
+}
+
+/// Take down one of the caller's sets.
+async fn custom_unpublish(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(name): Path<String>,
+) -> ApiResult<serde_json::Value> {
+    let user = require_user(&state, &headers).await?;
+    custom::unpublish(&state.pool, user.id, &name)
+        .await?
+        .map_err(custom_error)?;
+    Ok(Json(serde_json::json!({})))
 }
 
 /// Revoke the presented token.
@@ -1277,6 +1357,71 @@ mod tests {
         let mine: Vec<PlayerSummary> = serde_json::from_value(body).unwrap();
         assert_eq!(mine.len(), 1);
         let (status, _) = call(&app, post("/follows", Some(&ann), &follow("joanne", true))).await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn custom_sets_are_published_installed_and_ranked() {
+        let (app, state) = app().await;
+        let (_, ann) = auth::issue(&state.pool, 1, "ann").await.unwrap();
+        let (_, bo) = auth::issue(&state.pool, 2, "bo").await.unwrap();
+        let (_, cy) = auth::issue(&state.pool, 3, "cy").await.unwrap();
+        let set = |name: &str, words: &[&str]| CustomPublish {
+            name: name.into(),
+            words: words.iter().map(|w| w.to_string()).collect(),
+        };
+        let (status, _) = call(&app, post("/custom", None, &set("rust", &["fn"]))).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        let (status, _) = call(&app, post("/custom", Some(&ann), &set("Rust", &["fn"]))).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "names are lowercase");
+        let (status, body) = call(
+            &app,
+            post("/custom", Some(&ann), &set("rust", &["fn", "impl"])),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        let s: CustomSummary = serde_json::from_value(body).unwrap();
+        assert_eq!((s.author.as_str(), s.words, s.installs), ("ann", 2, 0));
+        call(&app, post("/custom", Some(&bo), &set("birds", &["owl"]))).await;
+        // Someone else's name can't be taken over; the owner can update.
+        let (status, _) = call(&app, post("/custom", Some(&bo), &set("rust", &["x"]))).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        call(
+            &app,
+            post("/custom", Some(&ann), &set("rust", &["fn", "impl", "mut"])),
+        )
+        .await;
+
+        // Installs: once per player, never the author, never logged out.
+        for token in [Some(&bo), Some(&bo), Some(&ann), None] {
+            let (status, body) = call(
+                &app,
+                post("/custom/rust/install", token.map(|t| t.as_str()), &()),
+            )
+            .await;
+            assert_eq!(status, StatusCode::OK, "{body}");
+        }
+        let (_, body) = call(&app, post("/custom/birds/install", Some(&bo), &())).await;
+        assert_eq!(body["installs"], 0, "the author doesn't count");
+        call(&app, post("/custom/rust/install", Some(&cy), &())).await;
+        let (_, body) = call(&app, get("/custom/rust", None)).await;
+        let got: CustomSet = serde_json::from_value(body).unwrap();
+        assert_eq!(got.words, ["fn", "impl", "mut"]);
+        assert_eq!(got.installs, 2);
+
+        let (_, body) = call(&app, get("/custom", None)).await;
+        let list: CustomList = serde_json::from_value(body).unwrap();
+        let names: Vec<&str> = list.rows.iter().map(|r| r.name.as_str()).collect();
+        assert_eq!(names, ["rust", "birds"], "most installed first");
+        let (_, body) = call(&app, get("/custom?q=bo", None)).await;
+        let list: CustomList = serde_json::from_value(body).unwrap();
+        assert_eq!(list.total, 1, "matches the author too");
+
+        let (status, _) = call(&app, post("/custom/rust/unpublish", Some(&bo), &())).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        let (status, _) = call(&app, post("/custom/rust/unpublish", Some(&ann), &())).await;
+        assert_eq!(status, StatusCode::OK);
+        let (status, _) = call(&app, get("/custom/rust", None)).await;
         assert_eq!(status, StatusCode::NOT_FOUND);
     }
 }

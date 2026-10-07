@@ -10,8 +10,8 @@ use std::thread;
 use std::time::Duration;
 
 use ttyp_core::api::{
-    Account, Daily, DailySummary, Leaderboard, PlayerList, PlayerSummary, Profile, ResultDetail,
-    StartResponse, SubmitRequest, SubmitResponse,
+    Account, CustomList, CustomPublish, CustomSet, CustomSummary, Daily, DailySummary, Leaderboard,
+    PlayerList, PlayerSummary, Profile, ResultDetail, StartResponse, SubmitRequest, SubmitResponse,
 };
 
 use ttyp_core::boards::Target;
@@ -62,6 +62,15 @@ pub enum Request {
         login: String,
         follow: bool,
     },
+    /// A page of published custom sets.
+    CustomList {
+        query: String,
+        offset: u32,
+        limit: u32,
+    },
+    CustomInstall(String),
+    CustomPublish(CustomPublish),
+    CustomUnpublish(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -117,6 +126,22 @@ pub enum RemoteEvent {
         login: String,
         follow: bool,
         result: Result<Vec<PlayerSummary>, OnlineError>,
+    },
+    CustomList {
+        query: String,
+        result: Result<CustomList, OnlineError>,
+    },
+    CustomInstalled {
+        name: String,
+        result: Result<CustomSet, OnlineError>,
+    },
+    CustomPublished {
+        name: String,
+        result: Result<CustomSummary, OnlineError>,
+    },
+    CustomUnpublished {
+        name: String,
+        result: Result<(), OnlineError>,
     },
 }
 
@@ -287,6 +312,37 @@ impl Online {
             Request::Follows => {
                 thread::spawn(move || {
                     let _ = tx.send(RemoteEvent::Follows(client.follows()));
+                });
+            }
+            Request::CustomList {
+                query,
+                offset,
+                limit,
+            } => {
+                thread::spawn(move || {
+                    let result = client.custom_list(&query, offset, limit);
+                    let _ = tx.send(RemoteEvent::CustomList { query, result });
+                });
+            }
+            Request::CustomInstall(name) => {
+                thread::spawn(move || {
+                    let result = client.custom_install(&name);
+                    let _ = tx.send(RemoteEvent::CustomInstalled { name, result });
+                });
+            }
+            Request::CustomPublish(set) => {
+                thread::spawn(move || {
+                    let result = client.custom_publish(&set);
+                    let _ = tx.send(RemoteEvent::CustomPublished {
+                        name: set.name,
+                        result,
+                    });
+                });
+            }
+            Request::CustomUnpublish(name) => {
+                thread::spawn(move || {
+                    let result = client.custom_unpublish(&name);
+                    let _ = tx.send(RemoteEvent::CustomUnpublished { name, result });
                 });
             }
             Request::SetFollow { login, follow } => {

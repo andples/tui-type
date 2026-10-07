@@ -141,6 +141,12 @@ impl App {
                 result,
             } => self.players_reply(&query, offset, result),
             RemoteEvent::Follows(result) => self.follows_reply(result),
+            RemoteEvent::CustomList { query, result } => self.custom_list_reply(&query, result),
+            RemoteEvent::CustomInstalled { name, result } => self.custom_installed(&name, result),
+            RemoteEvent::CustomPublished { name, result } => self.custom_published(&name, result),
+            RemoteEvent::CustomUnpublished { name, result } => {
+                self.custom_unpublished(&name, result)
+            }
             RemoteEvent::Followed {
                 login,
                 follow,

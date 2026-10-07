@@ -23,6 +23,8 @@ pub struct Completions {
     /// Followed players, most recently viewed first, at most
     /// `online::players::RECENT_FOLLOWS`.
     pub follows: Vec<String>,
+    /// Custom sets on this machine, plus `off`.
+    pub customs: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

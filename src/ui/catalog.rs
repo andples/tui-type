@@ -34,6 +34,11 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
             p.sub(),
         ));
     }
+    tabs.push(Span::styled("custom", p.sub()));
+    tabs.push(Span::styled(
+        format!(" {}    ", app.customs.all().count()),
+        p.sub(),
+    ));
     // The search line: a prompt until something is typed.
     let search = if menu.query.is_empty() {
         Line::from(Span::styled("  type to search", p.sub()))

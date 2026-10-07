@@ -260,6 +260,27 @@ fetched from GitHub. Set `catalog` in the config to use another base URL or a
 local directory, or `catalog = ""` to turn it off. With `server = ""` ttyp
 never installs anything on its own at startup.
 
+### Custom word sets
+
+Type your own words instead of a language, or sets other players shared.
+
+- `:custom` opens the custom page (also the install screen's third tab):
+  your sets, then shared ones from the server, most installed first. `/`
+  searches by name or author.
+- `n` makes a set: give it a name (lowercase letters, digits, `_`, `-`),
+  then type words separated by spaces and press enter. ttyp lists what it
+  would add (and anything it left out: duplicates, words over 40
+  characters) and asks; `y` adds them, `n` lets you keep editing. `tab`
+  moves to the word list, where `x` removes a word. Every change is saved
+  at once to `custom/<name>.toml` in the config dir.
+- `enter` types the selected set; on a shared set it installs it first.
+  `:custom <name>` does the same, and `:custom off` (or `:language …`) goes
+  back to a language. Runs on a custom set are kept apart in your history
+  as `custom:<name>`.
+- `p` publishes a set you made so anyone can install it (needs `:login`);
+  `p` again publishes the new version, `u` takes it off the server (your copy
+  stays). An install counts once per player, never the author's own.
+
 ### Configs
 
 A config is a named set of settings — any subset of them. `:config`

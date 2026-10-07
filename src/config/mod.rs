@@ -152,6 +152,10 @@ pub struct Config {
     /// Strip each language's boilerplate (its `trim` list, e.g. Python's
     /// `()`) from the words.
     pub trim_syntax: bool,
+    /// The custom word set (`custom/<name>.toml`) typed instead of the
+    /// language; empty for none. Not a profile setting.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub custom: String,
     /// Installed language modules to mix in, by language
     /// (`code_python = ["numpy", "pandas"]`). Not a profile setting.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
@@ -612,6 +616,7 @@ impl Default for Config {
             min_wpm: MinWpm::OFF,
             keyboard: Keyboard::Qwerty,
             trim_syntax: false,
+            custom: String::new(),
             modules: BTreeMap::new(),
         }
     }
@@ -677,6 +682,12 @@ impl Config {
             "splash" => self.splash = parse_bool(value)?,
             "pb_effect" | "pbeffect" | "celebrate" => self.pb_effect = PbEffect::parse(value)?,
             "pace" => self.pace = Pace::parse(value)?,
+            "custom" => {
+                self.custom = match value {
+                    "off" | "\"\"" => String::new(),
+                    v => v.to_string(),
+                };
+            }
             "sudden_death" | "suddendeath" => self.sudden_death = parse_bool(value)?,
             "min_wpm" | "minwpm" => self.min_wpm = MinWpm::parse(value)?,
             "keyboard" | "layout" => self.keyboard = Keyboard::parse(value)?,
@@ -757,6 +768,8 @@ pub struct Paths {
     pub queue_dir: PathBuf,
     /// When each profile was last opened, to order the follow list.
     pub views_file: PathBuf,
+    /// Custom word sets, one TOML file each.
+    pub custom_dir: PathBuf,
 }
 
 impl Paths {
@@ -780,6 +793,7 @@ impl Paths {
             token_file: data_dir.join("token"),
             queue_dir: data_dir.join("queue"),
             views_file: data_dir.join("profile_views.json"),
+            custom_dir: config_dir.join("custom"),
         }
     }
 }

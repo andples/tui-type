@@ -82,6 +82,12 @@ pub enum Action {
     Catalog(CatalogAction),
     /// Keys on the modules checklist.
     Modules(ModuleAction),
+    /// Open the custom page (the install screen's custom tab).
+    ShowCustom,
+    /// Keys on the custom page.
+    Custom(CustomAction),
+    /// Keys in the custom set editor.
+    CustomEdit(EditAction),
     /// A catalogue download finished.
     CatalogFetched(Box<CatalogEvent>),
 
@@ -181,6 +187,57 @@ pub enum PlayersAction {
     SearchDeleteWord,
     /// Back to where the screen was opened from.
     Close,
+}
+
+/// Keys on the custom page (`Screen::Custom`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CustomAction {
+    Up,
+    Down,
+    Top,
+    Bottom,
+    /// Type the selected set (installing it first if it's shared).
+    Use,
+    New,
+    Edit,
+    /// Ask to delete the selected set from this machine.
+    Remove,
+    /// Publish (or update) the selected set of yours.
+    Publish,
+    /// Ask to take the selected set of yours off the server.
+    Unpublish,
+    Yes,
+    No,
+    /// Start typing a search.
+    Search,
+    StopSearch,
+    SearchChar(char),
+    SearchBackspace,
+    /// On to the install screen's languages tab.
+    SwitchTab,
+    Close,
+}
+
+/// Keys in the custom set editor (`Screen::CustomEdit`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EditAction {
+    Char(char),
+    Backspace,
+    DeleteWord,
+    /// Take the name, or ask to add the typed words.
+    Enter,
+    /// Add the words asked about.
+    Yes,
+    /// Don't add them; keep the typing.
+    No,
+    /// Typing ↔ the word list.
+    ToggleFocus,
+    Up,
+    Down,
+    /// Remove the word under the cursor.
+    Remove,
+    /// Clear the typing, or leave when it's empty.
+    Escape,
 }
 
 /// Keys on the modules checklist (`Screen::Modules`).
