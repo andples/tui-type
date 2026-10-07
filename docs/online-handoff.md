@@ -52,6 +52,8 @@ Decided by the owner along the way:
   letters (`l`, `d`, `b`) stay as shortcuts.
 - Monkeytype-derived themes (25 in `catalog/themes/`) keep GPL-3.0 and are
   credited in `catalog/themes/MONKEYTYPE.md` and the README.
+- Seeing a daily's words before the first keystroke is fine (2026-10-07):
+  opening a daily and backing out doesn't use an attempt, and that stays.
 - The owner allowed `cargo publish` explicitly (2026-09-30); releases and
   pushes to `main` are done on the owner's say-so.
 
@@ -70,10 +72,6 @@ Open items:
   replay of every kitty image command through typing → `:login` → back left
   no stray placements. Needs the owner's terminal, a screenshot, when it
   appears, and whether `:set graphics off` makes it go away.
-- **Daily word preview:** the words are visible before the first
-  keystroke, so opening a daily and backing out previews it without using
-  an attempt. Closing it means counting the fetch instead (stricter than
-  the owner asked for; offered, not chosen).
 - **README install section** still only says `cargo install --path .`: add
   `brew tap andples/ttyp`, `brew trust andples/ttyp` (Homebrew 6+ refuses
   untrusted taps), `brew install ttyp`, and `cargo install ttyp`. Users have
