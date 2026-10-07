@@ -13,6 +13,7 @@ mod modules;
 mod online;
 pub mod pace;
 mod players;
+pub mod practice;
 mod profiles;
 pub mod splash;
 mod user;
@@ -27,7 +28,7 @@ use ratatui::layout::Rect;
 
 use crate::catalog::module_menu::ModuleMenu;
 use crate::catalog::{CatalogMenu, Fetcher, ModuleRegistry};
-use crate::command::{self, Command, CommandLine, Completions};
+use crate::command::{self, Command, CommandLine, Completions, PracticeArg};
 use crate::config::{Config, Pace, Paths};
 use crate::config::{FONT_SIZE_RANGE, FontSize, LINES_RANGE, WORDS_PER_LINE_RANGE};
 use crate::custom::CustomStore;
@@ -267,6 +268,12 @@ pub struct App {
     pub custom_menu: CustomMenu,
     /// The custom set editor, while open.
     pub custom_editor: Option<CustomEditor>,
+    /// Words missed per language (`:pm` practises them).
+    pub missed_words: crate::stats::missed_words::MissedWords,
+    /// This test's missed words, (language, word), not yet saved.
+    missed_now: Vec<(String, String)>,
+    /// `:pm`: practising the top this-many missed words.
+    pub practice: Option<usize>,
     /// Why the test being finished failed (sudden death, minimum speed).
     failed: Option<crate::stats::validity::Invalid>,
     /// `enter` on a row: waiting for the run to arrive.
@@ -342,6 +349,7 @@ impl App {
             profiles: profiles.names().map(str::to_string).collect(),
             ..Default::default()
         };
+        let missed_words = crate::stats::missed_words::MissedWords::load(&paths.missed_words_file);
         let customs = CustomStore::load(&paths.custom_dir, |w| warnings.push(w));
         let engine = Self::build_engine(&config, &languages, &modules, &customs);
         let summary = Summary::from_records(store.all());
@@ -405,6 +413,9 @@ impl App {
             board_following: false,
             failed: None,
             customs,
+            missed_words,
+            missed_now: Vec::new(),
+            practice: None,
             custom_menu: CustomMenu::default(),
             custom_editor: None,
             graph_loading: false,
@@ -553,6 +564,7 @@ impl App {
             *s = Splash::new(Instant::now());
         }
         let result = self.event_loop(terminal);
+        self.flush_missed_words();
         self.gfx.clear(terminal.backend_mut())?;
         result
     }
@@ -722,6 +734,7 @@ impl App {
                     .as_ref()
                     .is_some_and(|o| o.celebrating_at(Instant::now())),
             custom: self.custom_input(),
+            practicing: self.practice.is_some() && self.daily.is_none(),
             players_editing: self.screen == Screen::Players
                 && self.players.as_ref().is_some_and(|v| v.editing),
         }
@@ -826,7 +839,9 @@ impl App {
             Action::TypeChar(c) => {
                 let was_finished = self.engine.is_finished();
                 let was_idle = self.engine.status() == Status::Idle;
+                let (word, keys) = (self.engine.current_index(), self.engine.keystrokes().len());
                 self.engine.type_char(c);
+                self.note_miss(word, keys);
                 if was_idle && self.engine.status() != Status::Idle {
                     self.daily_began();
                 }
@@ -836,6 +851,7 @@ impl App {
                     self.check_difficulty(Instant::now());
                 }
             }
+            Action::PracticeStep(by) => self.practice_step(by),
             Action::Backspace => self.engine.backspace(),
             Action::DeleteWord => self.engine.delete_word(),
             Action::Restart => self.restart(),
@@ -1001,8 +1017,8 @@ impl App {
         }
         self.daily = None;
         self.daily_start = DailyStart::None;
-        self.engine =
-            Self::build_engine(&self.config, &self.languages, &self.modules, &self.customs);
+        self.flush_missed_words();
+        self.engine = self.fresh_engine();
         self.outcome = None;
         self.screen = Screen::Typing;
         self.previous_screen = Screen::Typing;
@@ -1027,8 +1043,8 @@ impl App {
         ) {
             self.daily = None;
             self.daily_start = DailyStart::None;
-            self.engine =
-                Self::build_engine(&self.config, &self.languages, &self.modules, &self.customs);
+            self.flush_missed_words();
+            self.engine = self.fresh_engine();
             self.outcome = None;
             self.previous_screen = Screen::Typing;
         } else {
@@ -1047,6 +1063,7 @@ impl App {
                 self.config.numbers,
             ),
         };
+        self.flush_missed_words();
         let mut record = TestRecord::new(
             &metrics,
             self.engine.mode(),
@@ -1094,10 +1111,12 @@ impl App {
         let mut changed_test = false;
         match cmd {
             Command::Time(s) => {
+                self.practice = None;
                 self.config.mode = Mode::Time(s);
                 changed_test = true;
             }
             Command::Words(n) => {
+                self.practice = None;
                 self.config.mode = Mode::Words(n);
                 changed_test = true;
             }
@@ -1255,6 +1274,13 @@ impl App {
             }
             Command::Install(Some(name)) => {
                 self.install(None, &name, true);
+                return;
+            }
+            Command::Practice(arg) => {
+                match arg {
+                    PracticeArg::Off => self.stop_practice(),
+                    PracticeArg::Top(n) => self.start_practice(n),
+                }
                 return;
             }
             Command::Custom(None) => {

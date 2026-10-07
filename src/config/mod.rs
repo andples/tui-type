@@ -770,6 +770,8 @@ pub struct Paths {
     pub views_file: PathBuf,
     /// Custom word sets, one TOML file each.
     pub custom_dir: PathBuf,
+    /// Words missed per language, for `:pm`.
+    pub missed_words_file: PathBuf,
 }
 
 impl Paths {
@@ -794,6 +796,7 @@ impl Paths {
             queue_dir: data_dir.join("queue"),
             views_file: data_dir.join("profile_views.json"),
             custom_dir: config_dir.join("custom"),
+            missed_words_file: data_dir.join("missed_words.json"),
         }
     }
 }

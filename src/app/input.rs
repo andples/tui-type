@@ -33,6 +33,8 @@ pub struct InputContext {
     pub players_editing: bool,
     /// What the custom page and editor are doing with keys.
     pub custom: CustomInput,
+    /// `:pm` is on (←/→ change how many words).
+    pub practicing: bool,
 }
 
 /// Which part of the custom page or editor has the keyboard.
@@ -87,6 +89,13 @@ pub fn map_key(key: KeyEvent, ctx: InputContext) -> Action {
     }
 
     match ctx.screen {
+        Screen::Typing
+            if ctx.practicing
+                && ctx.test_status == Status::Idle
+                && matches!(key.code, KeyCode::Left | KeyCode::Right) =>
+        {
+            Action::PracticeStep(if key.code == KeyCode::Left { -1 } else { 1 })
+        }
         Screen::Typing => map_typing(key, ctrl, alt, ctx.test_status),
         Screen::Splash if ctx.splash_idle => Action::IdleWake,
         Screen::Splash => map_splash(key, ctrl || alt, ctx.splash_playing, ctx.splash_menu),
@@ -542,7 +551,19 @@ mod tests {
             celebrating: false,
             players_editing: false,
             custom: CustomInput::List,
+            practicing: false,
         }
+    }
+
+    #[test]
+    fn arrows_resize_practice_only_before_typing() {
+        let mut c = ctx(Screen::Typing, false, Status::Idle);
+        let right = key(KeyCode::Right, KeyModifiers::NONE);
+        assert_eq!(map_key(right, c), Action::Nop);
+        c.practicing = true;
+        assert_eq!(map_key(right, c), Action::PracticeStep(1));
+        c.test_status = Status::Running;
+        assert_eq!(map_key(right, c), Action::Nop);
     }
 
     #[test]

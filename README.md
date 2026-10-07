@@ -91,6 +91,21 @@ starts with your first key, and the mode line says what it's set to
 see it. Set it in the config as `pace = "pb"` / `"last"` / `87`, with
 `:set pace …`, or in a saved config.
 
+### Practice missed words
+
+Every word you get wrong is remembered per language (or custom set), even
+when you fix the mistake: your 500 most-missed words, in
+`missed_words.json` in the data dir.
+
+- `:pm` (or `:practice`) types your 10 most-missed words at random, with no
+  time or word limit: the counter counts up, `tab` starts over and `:pm off`
+  (or `:time`, `:words`) goes back.
+- `:pm 5` practises the top 5. Before the first key, `←` and `→` step through
+  top 1, 3, 5, 10, 25 and 50; top 1 is your single most-missed word, over
+  and over.
+- Practice runs aren't saved as tests, but words you miss while practising
+  still count.
+
 ### Difficulty
 
 - `:suddendeath` (`:sd`) toggles sudden death: one wrong key ends the test.

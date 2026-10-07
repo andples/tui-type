@@ -10,6 +10,8 @@ use crate::online::RemoteEvent;
 pub enum Action {
     // Typing screen
     TypeChar(char),
+    /// `:pm`, before the first key: fewer (-1) or more (1) missed words.
+    PracticeStep(i8),
     Backspace,
     DeleteWord,
     Restart,

@@ -21,7 +21,10 @@ impl App {
     /// End the running test if it just failed a difficulty setting.
     /// Returns whether it did.
     pub(super) fn check_difficulty(&mut self, now: Instant) -> bool {
-        if self.daily.is_some() || self.engine.status() != Status::Running {
+        if self.daily.is_some()
+            || self.practice.is_some()
+            || self.engine.status() != Status::Running
+        {
             return false;
         }
         let Some(why) = self.failure_at(now) else {

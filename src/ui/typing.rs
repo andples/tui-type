@@ -189,6 +189,11 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) -> Vec<Imag
 
     let status = app.engine.status();
     let counter = match app.engine.mode() {
+        // Practice has no end: count up.
+        _ if app.practice.is_some() && app.daily.is_none() => {
+            let s = app.engine.elapsed_at(Instant::now()).as_secs();
+            format!("{}:{:02}", s / 60, s % 60)
+        }
         Mode::Time(secs) => {
             let remaining = app
                 .engine
@@ -270,7 +275,8 @@ pub fn mode_line(app: &App) -> String {
         .collect::<Vec<_>>()
         .join("  ·  ");
     }
-    let mut parts = vec![c.mode.label(), app.language_key().replace('+', " + ")];
+    let mode = app.practice_label().unwrap_or_else(|| c.mode.label());
+    let mut parts = vec![mode, app.language_key().replace('+', " + ")];
     if c.trim_syntax {
         parts.push("trim".into());
     }

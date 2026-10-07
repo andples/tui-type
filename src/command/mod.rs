@@ -48,6 +48,8 @@ pub enum Command {
     TrimSyntax(Option<bool>),
     /// `None` opens the config menu; a name switches that config on.
     ConfigProfile(Option<String>),
+    /// `:pm`: practise your most-missed words.
+    Practice(PracticeArg),
     /// `None` opens the custom page; a name types that set (installing a
     /// shared one first), `off` goes back to the language.
     Custom(Option<String>),
@@ -85,6 +87,14 @@ pub enum Command {
     },
 }
 
+/// `:pm`'s argument.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PracticeArg {
+    /// The top this-many (`None`: the last size, or 10).
+    Top(Option<usize>),
+    Off,
+}
+
 /// What the palette should offer for a command's argument.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArgKind {
@@ -119,6 +129,8 @@ pub enum ArgKind {
     Follows,
     /// Custom sets on this machine, and `off`.
     Customs,
+    /// How many missed words to practise, and `off`.
+    PracticeSizes,
     /// Numeric setting in an inclusive range. Typing a number sets it
     /// directly; Enter with no number opens an interactive slider.
     Slider {
@@ -140,6 +152,7 @@ impl ArgKind {
                 | ArgKind::DailyModes
                 | ArgKind::Follows
                 | ArgKind::Customs
+                | ArgKind::PracticeSizes
                 | ArgKind::Fonts
                 | ArgKind::Installable
                 | ArgKind::Free
@@ -339,6 +352,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         usage: "[name]",
         help: "get more languages and themes (enter opens the menu)",
         arg: ArgKind::Installable,
+        requires_arg: false,
+    },
+    CommandSpec {
+        name: "pm",
+        aliases: &["practice", "practicemissed"],
+        usage: "[n|off]",
+        help: "practise the n words you miss most, endlessly (←→ before typing changes n)",
+        arg: ArgKind::PracticeSizes,
         requires_arg: false,
     },
     CommandSpec {
@@ -548,6 +569,16 @@ pub fn parse(line: &str) -> Result<Command, String> {
         "config" => Command::ConfigProfile(Some(rest.to_string()).filter(|r| !r.is_empty())),
         "install" => Command::Install(Some(rest.to_string()).filter(|r| !r.is_empty())),
         "uninstall" => Command::Uninstall(need(spec.usage)?.to_string()),
+        "pm" => Command::Practice(match rest {
+            "" => PracticeArg::Top(None),
+            "off" | "stop" => PracticeArg::Off,
+            n => PracticeArg::Top(Some(
+                n.parse::<usize>()
+                    .ok()
+                    .filter(|n| (1..=crate::stats::missed_words::MAX_WORDS).contains(n))
+                    .ok_or_else(|| format!("expected 1-500 or off, got `{n}`"))?,
+            )),
+        }),
         "custom" => Command::Custom(Some(rest.to_string()).filter(|r| !r.is_empty())),
         "restart" => Command::Restart,
         "stats" => Command::Stats,
@@ -668,6 +699,11 @@ pub fn arg_candidates(kind: ArgKind, comps: &Completions) -> Vec<String> {
         ArgKind::Account => vec!["public on".into(), "public off".into()],
         ArgKind::Follows => comps.follows.clone(),
         ArgKind::Customs => comps.customs.clone(),
+        ArgKind::PracticeSizes => crate::app::practice::PRACTICE_SIZES
+            .iter()
+            .map(usize::to_string)
+            .chain(std::iter::once("off".to_string()))
+            .collect(),
         ArgKind::DailyModes => ttyp_core::api::DAILY_MODES
             .iter()
             .map(Mode::label)
@@ -742,6 +778,14 @@ mod tests {
             parse("whois octocat"),
             Ok(Command::User(Some("octocat".into())))
         );
+        assert_eq!(parse("pm"), Ok(Command::Practice(PracticeArg::Top(None))));
+        assert_eq!(
+            parse("practice 1"),
+            Ok(Command::Practice(PracticeArg::Top(Some(1))))
+        );
+        assert_eq!(parse("pm off"), Ok(Command::Practice(PracticeArg::Off)));
+        assert!(parse("pm 0").is_err());
+        assert!(parse("pm lots").is_err());
         assert_eq!(parse("custom"), Ok(Command::Custom(None)));
         assert_eq!(parse("cw birds"), Ok(Command::Custom(Some("birds".into()))));
         assert_eq!(parse("search"), Ok(Command::Search(None)));

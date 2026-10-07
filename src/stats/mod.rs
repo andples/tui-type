@@ -2,6 +2,7 @@
 //! only implementation today appends JSON lines to a local file.
 
 pub mod activity;
+pub mod missed_words;
 pub mod validity;
 
 use std::collections::{BTreeMap, HashMap};

@@ -433,8 +433,7 @@ impl App {
     /// update that lands while nothing is being typed.
     pub(super) fn refresh_words(&mut self) {
         if self.engine.status() == Status::Idle && self.daily.is_none() {
-            self.engine =
-                Self::build_engine(&self.config, &self.languages, &self.modules, &self.customs);
+            self.engine = self.fresh_engine();
         }
     }
 

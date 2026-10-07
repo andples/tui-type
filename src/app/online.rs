@@ -222,6 +222,8 @@ impl App {
             Box::new(FixedGenerator::new(daily.words.clone())),
         );
         engine.record_keys();
+        self.flush_missed_words();
+        self.practice = None;
         self.engine = engine;
         self.outcome = None;
         self.daily_start = DailyStart::None;
