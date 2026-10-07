@@ -40,6 +40,8 @@ pub enum Request {
     Leaderboard {
         board: &'static str,
         target: Target,
+        /// Only us and who we follow.
+        following: bool,
         offset: u32,
         limit: u32,
     },
@@ -94,6 +96,7 @@ pub enum RemoteEvent {
     Leaderboard {
         board: &'static str,
         target: Target,
+        following: bool,
         offset: u32,
         result: Result<Leaderboard, OnlineError>,
     },
@@ -231,14 +234,16 @@ impl Online {
             Request::Leaderboard {
                 board,
                 target,
+                following,
                 offset,
                 limit,
             } => {
                 thread::spawn(move || {
-                    let result = client.board(board, &target, offset, limit);
+                    let result = client.board(board, &target, following, offset, limit);
                     let _ = tx.send(RemoteEvent::Leaderboard {
                         board,
                         target,
+                        following,
                         offset,
                         result,
                     });

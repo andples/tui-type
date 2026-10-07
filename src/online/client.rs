@@ -148,16 +148,19 @@ impl Client {
         self.call("/results", Some(req))
     }
 
-    /// A page of one board of `boards::BOARDS`.
+    /// A page of one board of `boards::BOARDS`; `following` ranks only us
+    /// and who we follow.
     pub fn board(
         &self,
         id: &str,
         target: &Target,
+        following: bool,
         offset: u32,
         limit: u32,
     ) -> Result<Leaderboard, OnlineError> {
+        let following = if following { "&following=true" } else { "" };
         self.get(&format!(
-            "/boards/{id}?{}&offset={offset}&limit={limit}",
+            "/boards/{id}?{}{following}&offset={offset}&limit={limit}",
             target.query()
         ))
     }

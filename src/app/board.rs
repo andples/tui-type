@@ -31,6 +31,8 @@ impl App {
             (None, None) => (self.config.language.clone(), self.config.mode),
         };
         let mut view = BoardView::new(today.clone(), language, mode);
+        // Keep everyone/following as last chosen, while still logged in.
+        view.following = self.board_following && online.logged_in();
         if let Some((date, list)) = &online.dailies
             && *date == today
         {
@@ -59,6 +61,7 @@ impl App {
             online.request(Request::Leaderboard {
                 board: board.id,
                 target: target.clone(),
+                following: view.following,
                 offset: 0,
                 limit: PAGE,
             });
@@ -74,12 +77,14 @@ impl App {
             return;
         };
         let board = view.focused_board().id;
+        let following = view.following;
         let pane = view.focused();
         if pane.wants_more() {
             pane.loading = true;
             online.request(Request::Leaderboard {
                 board,
                 target,
+                following,
                 offset: pane.rows.len() as u32,
                 limit: PAGE,
             });
@@ -118,6 +123,16 @@ impl App {
                 if view.cycle_language(1) {
                     self.load_boards();
                 }
+            }
+            B::ToggleFollowing => {
+                if !self.online.as_ref().is_some_and(|o| o.logged_in()) {
+                    self.notify("log in to rank the players you follow (:login)");
+                    return;
+                }
+                view.following = !view.following;
+                view.focused().selection.home();
+                self.board_following = view.following;
+                self.load_boards();
             }
             // All-time boards have no day.
             B::PrevDay | B::NextDay if view.period != Period::Daily => {}
@@ -181,11 +196,12 @@ impl App {
         &mut self,
         board: &str,
         target: &Target,
+        following: bool,
         offset: u32,
         result: Result<Leaderboard, OnlineError>,
     ) {
         let Some(view) = &mut self.board else { return };
-        if view.target().as_ref() != Some(target) {
+        if view.target().as_ref() != Some(target) || view.following != following {
             return;
         }
         let Some(pane) = view.pane_mut(board) else {

@@ -30,13 +30,18 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
         Period::Daily => view.date.as_str(),
         Period::AllTime => view.period.label(),
     };
-    let title = Line::from(vec![
+    let mut title = vec![
         Span::styled("leaderboard", p.main_bold()),
         Span::styled(
             format!("  {} · {} · {when}", view.language, view.mode.label()),
             p.fg(),
         ),
-    ]);
+    ];
+    if view.following {
+        title.push(Span::styled(" · ", p.fg()));
+        title.push(Span::styled("following", p.main()));
+    }
+    let title = Line::from(title);
     frame.render_widget(
         Paragraph::new(title),
         Rect::new(col.x, col.y + 2, col.width, 1),
@@ -55,6 +60,11 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
     if let Some(next) = next {
         switches.push_str(&format!(" · a {}", next.label()));
     }
+    switches.push_str(if view.following {
+        " · f everyone"
+    } else {
+        " · f following"
+    });
     let sw = switches.chars().count() as u16;
     if col.width > sw + 40 {
         frame.render_widget(

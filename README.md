@@ -1,7 +1,8 @@
 # ttyp
 
-A minimal, monkeytype-style typing test for the terminal. Rust, ratatui, no
-network. Themes and word lists are plain TOML files, installed from a small
+A minimal, monkeytype-style typing test for the terminal. Rust, ratatui.
+Online daily tests and leaderboards are optional (`server = ""` keeps it fully
+offline). Themes and word lists are plain TOML files, installed from a small
 catalogue as you want them (`:install`); your history stays on your machine.
 
 ```
@@ -10,9 +11,25 @@ ttyp
 
 ## Install
 
+Homebrew (macOS and Linux, prebuilt binaries):
+
 ```sh
+brew tap andples/ttyp
+brew trust andples/ttyp   # Homebrew 6+ refuses untrusted taps without this
+brew install ttyp
+```
+
+Upgrade with `brew update && brew upgrade ttyp`.
+
+With Rust (from crates.io, or from a clone of this repo):
+
+```sh
+cargo install ttyp
 cargo install --path .
 ```
+
+Prebuilt binaries for macOS (arm64, x86_64) and Linux (musl arm64, x86_64)
+are also attached to every [GitHub release](https://github.com/andples/tui-type/releases).
 
 Needs a terminal with true-color support.
 
@@ -340,7 +357,8 @@ ttyp. `:set server …` changes it live.
   language and mode, with the date it was set. `↑↓`/`jk` move, `g`/`G`
   top/bottom, `←→` mode, `l` language, `[` `]` day (daily boards),
   `enter` opens that run's wpm graph, `p` opens that player's
-  profile, `esc` goes back. Your own row stays visible at the bottom when it
+  profile, `f` switches between everyone and only you and the players you
+  follow (ranked among yourselves; needs `:login`), `esc` goes back. Your own row stays visible at the bottom when it
   scrolls off.
 - `:user <login>` (or `:profile`, `:me`, `:self`) shows a player's profile: daily streak, personal best per
   language and mode, and their latest runs (`enter` opens a run's graph).
@@ -357,6 +375,8 @@ ttyp. `:set server …` changes it live.
   most recently viewed profile first. `:follow <login>` opens that profile
   when you already follow them and follows them otherwise; the palette
   offers your 10 most recently viewed follows. `:unfollow <login>` stops.
+  After a daily, the results line also shows where you placed among the
+  players you follow.
   When each profile was last opened is kept in `profile_views.json` in the
   data dir, on your machine only.
 - Medals: the main dailies are `english` time 15, 30 and 60. Finishing 1st,

@@ -299,6 +299,15 @@ fn render_daily(frame: &mut Frame, d: &DailyOutcome, area: Rect, p: &Palette) {
             if let Some(n) = r.rank_best {
                 part(format!("#{n} best"), p.fg());
             }
+            let following = match (r.following_first, r.following_best) {
+                (Some(f), Some(b)) => Some(format!("following #{f} first · #{b} best")),
+                (None, Some(b)) => Some(format!("following #{b} best")),
+                (Some(f), None) => Some(format!("following #{f} first")),
+                (None, None) => None,
+            };
+            if let Some(text) = following {
+                part(text, p.main());
+            }
         }
     }
     frame.render_widget(Paragraph::new(Line::from(spans)), area);

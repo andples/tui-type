@@ -289,18 +289,31 @@ async fn submit(
     tx.commit().await?;
     let result_id = done.last_insert_rowid();
 
-    let (rank_first, rank_best) = if metrics.is_some() {
-        let first = if attempt == 1 && first_eligible {
-            leaderboard::me(&state.pool, Board::First, &Scope::Daily(daily.id), user.id).await?
+    let scope = Scope::Daily(daily.id);
+    let follows_anyone: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM follows WHERE follower_id = ?1)")
+            .bind(user.id)
+            .fetch_one(&state.pool)
+            .await?;
+    let mut ranks = [None; 4];
+    if metrics.is_some() {
+        let circles = if follows_anyone {
+            vec![None, Some(user.id)]
         } else {
-            None
+            vec![None]
         };
-        let best =
-            leaderboard::me(&state.pool, Board::Best, &Scope::Daily(daily.id), user.id).await?;
-        (first.map(|r| r.rank), best.map(|r| r.rank))
-    } else {
-        (None, None)
-    };
+        for (i, circle) in circles.into_iter().enumerate() {
+            if attempt == 1 && first_eligible {
+                ranks[i * 2] = leaderboard::me(&state.pool, Board::First, &scope, circle, user.id)
+                    .await?
+                    .map(|r| r.rank);
+            }
+            ranks[i * 2 + 1] = leaderboard::me(&state.pool, Board::Best, &scope, circle, user.id)
+                .await?
+                .map(|r| r.rank);
+        }
+    }
+    let [rank_first, rank_best, following_first, following_best] = ranks;
     if let Some(r) = &rejected {
         tracing::info!("rejected result {result_id} from {}: {r}", user.login);
     }
@@ -315,6 +328,8 @@ async fn submit(
         consistency,
         rank_first,
         rank_best,
+        following_first,
+        following_best,
     }))
 }
 
@@ -464,6 +479,9 @@ struct LeaderboardQuery {
     limit: u32,
     /// `me`: centre the page on the caller's own row.
     around: Option<String>,
+    /// Only the caller and who they follow.
+    #[serde(default)]
+    following: bool,
 }
 
 fn default_board() -> Board {
@@ -488,6 +506,7 @@ async fn leaderboard(
         offset: q.offset,
         limit: q.limit,
         around: q.around,
+        following: q.following,
     };
     ranked(&state, &headers, q.board, &Scope::Daily(daily_id), page).await
 }
@@ -505,6 +524,9 @@ struct BoardQuery {
     #[serde(default = "default_limit")]
     limit: u32,
     around: Option<String>,
+    /// Only the caller and who they follow.
+    #[serde(default)]
+    following: bool,
 }
 
 /// Any board of `boards::BOARDS`, by id, for the target its period needs.
@@ -540,6 +562,7 @@ async fn board(
         offset: q.offset,
         limit: q.limit,
         around: q.around,
+        following: q.following,
     };
     ranked(&state, &headers, spec.rule, &scope, page).await
 }
@@ -549,6 +572,7 @@ struct Paging {
     limit: u32,
     /// `me`: centre the page on the caller's own row.
     around: Option<String>,
+    following: bool,
 }
 
 /// A page of one board, with the caller's own row when logged in.
@@ -561,8 +585,13 @@ async fn ranked(
 ) -> ApiResult<Leaderboard> {
     let limit = page.limit.clamp(1, MAX_PAGE);
     let user = auth::user_from_headers(&state.pool, headers).await?;
+    let circle = match (&user, page.following) {
+        (Some(u), true) => Some(u.id),
+        (None, true) => return Err(ApiError::Unauthorized),
+        (_, false) => None,
+    };
     let me = match &user {
-        Some(u) => leaderboard::me(&state.pool, rule, scope, u.id).await?,
+        Some(u) => leaderboard::me(&state.pool, rule, scope, circle, u.id).await?,
         None => None,
     };
     let mut offset = page.offset;
@@ -571,7 +600,7 @@ async fn ranked(
     {
         offset = mine.rank.saturating_sub(1).saturating_sub(limit / 2);
     }
-    let (rows, total) = leaderboard::page(&state.pool, rule, scope, offset, limit).await?;
+    let (rows, total) = leaderboard::page(&state.pool, rule, scope, circle, offset, limit).await?;
     Ok(Json(Leaderboard {
         board: rule,
         rows,
@@ -1196,6 +1225,38 @@ mod tests {
         assert_eq!(body["following"], true);
         let (_, body) = call(&app, get("/users/anna", None)).await;
         assert_eq!(body["following"], false);
+
+        // Boards cut down to ann and who she follows; ranks start at 1.
+        let url = format!("/boards/daily-best?daily={}&following=true", daily.id);
+        let (status, _) = call(&app, get(&url, None)).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        let s = start(&app, &ann, daily.id).await;
+        let (_, keylog) = type_daily(&daily, 200, false);
+        let req = SubmitRequest {
+            daily_id: daily.id,
+            keylog,
+            start_id: Some(s.start_id),
+        };
+        let (_, body) = call(&app, post("/results", Some(&ann), &req)).await;
+        let r: SubmitResponse = serde_json::from_value(body).unwrap();
+        assert_eq!((r.rank_best, r.following_best), (Some(2), Some(2)));
+        assert_eq!(r.following_first, Some(2));
+        let (status, body) = call(&app, get(&url, Some(&ann))).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        let lb: Leaderboard = serde_json::from_value(body).unwrap();
+        let names: Vec<&str> = lb.rows.iter().map(|r| r.user.as_str()).collect();
+        assert_eq!(names, ["Anna", "ann"]);
+        assert_eq!(lb.me.map(|m| m.rank), Some(2));
+        // Anna follows nobody: her submission has no following ranks.
+        let s = start(&app, &anna, daily.id).await;
+        let (_, keylog) = type_daily(&daily, 120, false);
+        let req = SubmitRequest {
+            daily_id: daily.id,
+            keylog,
+            start_id: Some(s.start_id),
+        };
+        let (_, body) = call(&app, post("/results", Some(&anna), &req)).await;
+        assert!(body.get("following_best").is_none(), "{body}");
 
         // Going private hides joanne from search and blanks her row, but
         // she can still be unfollowed; she can't be followed anew.

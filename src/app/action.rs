@@ -138,6 +138,8 @@ pub enum BoardAction {
     CloseGraph,
     /// Open the profile of the selected row's user.
     Profile,
+    /// Everyone ↔ only you and the players you follow.
+    ToggleFollowing,
 }
 
 /// Keys on a user's profile screen.

@@ -251,6 +251,8 @@ pub struct App {
     players_from: Screen,
     /// Who we follow (when logged in), most recently viewed first.
     pub follows: Follows,
+    /// The leaderboard was last switched to only the players we follow.
+    board_following: bool,
     /// `enter` on a row: waiting for the run to arrive.
     graph_loading: bool,
     /// Screen to return to from stats/help.
@@ -383,6 +385,7 @@ impl App {
             players: None,
             players_from: Screen::Typing,
             follows,
+            board_following: false,
             graph_loading: false,
             previous_screen: Screen::Typing,
             fresh_notice: false,

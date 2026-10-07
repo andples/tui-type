@@ -75,6 +75,12 @@ pub struct SubmitResponse {
     pub consistency: f64,
     pub rank_first: Option<u32>,
     pub rank_best: Option<u32>,
+    /// `rank_first` and `rank_best` among you and the players you follow;
+    /// absent when you follow nobody, and from servers before 2.3.0.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub following_first: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub following_best: Option<u32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -108,6 +114,8 @@ pub struct LeaderboardRow {
 }
 
 /// `GET /leaderboard/{daily_id}` and `GET /boards/{id}` (`boards::BOARDS`).
+/// With `following=true` (logged in, servers from 2.3.0) a board ranks only
+/// the caller and the players they follow.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Leaderboard {
     pub board: Board,

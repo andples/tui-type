@@ -3,7 +3,8 @@
 //! cut down by the board's rule to one run per player, ranked. *First try*
 //! keeps attempt 1 (when the server saw it start, see `api::start`); *best*
 //! keeps every valid run. Each player's highest run is kept, and the board
-//! orders by wpm, then accuracy, then who got there first.
+//! orders by wpm, then accuracy, then who got there first. Any board can be
+//! cut down to one player's circle: them and the players they follow.
 
 use anyhow::Result;
 use sqlx::sqlite::{Sqlite, SqliteArguments, SqlitePool, SqliteRow};
@@ -58,10 +59,18 @@ impl Scope {
 }
 
 /// The ranked rows of one board as a common table expression `board`.
-fn board_cte(rule: Board, scope: &Scope) -> String {
+/// With `circle`, only that parameter's user and who they follow.
+fn board_cte(rule: Board, scope: &Scope, circle: Option<usize>) -> String {
     let rule = match rule {
         Board::First => FIRST_TRY,
         Board::Best => "1",
+    };
+    let circle = match circle {
+        Some(k) => format!(
+            " AND (r.user_id = ?{k} OR r.user_id IN \
+               (SELECT followee_id FROM follows WHERE follower_id = ?{k}))"
+        ),
+        None => String::new(),
     };
     let scope = scope.filter();
     format!(
@@ -69,7 +78,7 @@ fn board_cte(rule: Board, scope: &Scope) -> String {
            SELECT r.*, d.date, \
                   ROW_NUMBER() OVER (PARTITION BY r.user_id ORDER BY {RANK_ORDER}) AS n \
            FROM results r JOIN daily_tests d ON d.id = r.daily_id \
-           WHERE {scope} AND r.valid = 1 AND {rule}), \
+           WHERE {scope} AND r.valid = 1 AND {rule}{circle}), \
          board AS (\
            SELECT r.id AS result_id, r.user_id, u.github_login AS user, \
                   r.wpm, r.raw, r.acc, r.consistency, r.date, \
@@ -91,24 +100,28 @@ fn row_from(row: &SqliteRow) -> LeaderboardRow {
     }
 }
 
+/// Which players a board ranks: everyone, or one user's circle (them and
+/// who they follow).
+pub type Circle = Option<i64>;
+
 /// `limit` rows from `offset`, plus the board's size.
 pub async fn page(
     pool: &SqlitePool,
     rule: Board,
     scope: &Scope,
+    circle: Circle,
     offset: u32,
     limit: u32,
 ) -> Result<(Vec<LeaderboardRow>, u32)> {
-    let n = scope.params();
-    let sql = board_cte(rule, scope)
+    let (k, n) = slots(scope, circle);
+    let sql = board_cte(rule, scope, k)
         + &format!(
             "SELECT *, (SELECT count(*) FROM board) AS total FROM board \
              ORDER BY rank LIMIT ?{} OFFSET ?{}",
             n + 1,
             n + 2
         );
-    let rows = scope
-        .bind(sqlx::query(AssertSqlSafe(sql)))
+    let rows = bind_circle(scope.bind(sqlx::query(AssertSqlSafe(sql))), circle)
         .bind(i64::from(limit))
         .bind(i64::from(offset))
         .fetch_all(pool)
@@ -117,9 +130,8 @@ pub async fn page(
         Some(r) => r.get::<i64, _>("total") as u32,
         // Past the end: count separately.
         None => {
-            let sql = board_cte(rule, scope) + "SELECT count(*) FROM board";
-            scope
-                .bind(sqlx::query(AssertSqlSafe(sql)))
+            let sql = board_cte(rule, scope, k) + "SELECT count(*) FROM board";
+            bind_circle(scope.bind(sqlx::query(AssertSqlSafe(sql))), circle)
                 .fetch_one(pool)
                 .await?
                 .get::<i64, _>(0) as u32
@@ -133,19 +145,37 @@ pub async fn me(
     pool: &SqlitePool,
     rule: Board,
     scope: &Scope,
+    circle: Circle,
     user_id: i64,
 ) -> Result<Option<LeaderboardRow>> {
-    let sql = board_cte(rule, scope)
-        + &format!(
-            "SELECT * FROM board WHERE user_id = ?{}",
-            scope.params() + 1
-        );
-    let row = scope
-        .bind(sqlx::query(AssertSqlSafe(sql)))
+    let (k, n) = slots(scope, circle);
+    let sql =
+        board_cte(rule, scope, k) + &format!("SELECT * FROM board WHERE user_id = ?{}", n + 1);
+    let row = bind_circle(scope.bind(sqlx::query(AssertSqlSafe(sql))), circle)
         .bind(user_id)
         .fetch_optional(pool)
         .await?;
     Ok(row.as_ref().map(row_from))
+}
+
+/// The circle's parameter slot, if any, and how many parameters come
+/// before the query's own.
+fn slots(scope: &Scope, circle: Circle) -> (Option<usize>, usize) {
+    let n = scope.params();
+    match circle {
+        Some(_) => (Some(n + 1), n + 1),
+        None => (None, n),
+    }
+}
+
+fn bind_circle<'q>(
+    q: sqlx::query::Query<'q, Sqlite, SqliteArguments>,
+    circle: Circle,
+) -> sqlx::query::Query<'q, Sqlite, SqliteArguments> {
+    match circle {
+        Some(id) => q.bind(id),
+        None => q,
+    }
 }
 
 #[cfg(test)]
@@ -227,7 +257,7 @@ mod tests {
         let e = user(&pool, "tie").await;
         seed(&pool, e, d, 1, 142.0, 99.5).await;
 
-        let (first, total) = page(&pool, Board::First, &Scope::Daily(d), 0, 50)
+        let (first, total) = page(&pool, Board::First, &Scope::Daily(d), None, 0, 50)
             .await
             .unwrap();
         assert_eq!(total, 4);
@@ -235,7 +265,7 @@ mod tests {
         assert_eq!(names, ["tie", "sprinter", "quietkeys", "andples"]);
         assert_eq!(first[1].rank, 2);
 
-        let (best, total) = page(&pool, Board::Best, &Scope::Daily(d), 0, 50)
+        let (best, total) = page(&pool, Board::Best, &Scope::Daily(d), None, 0, 50)
             .await
             .unwrap();
         assert_eq!(total, 4);
@@ -244,23 +274,23 @@ mod tests {
         assert_eq!(best[0].wpm, 151.0);
         assert_eq!(best[3].wpm, 131.0, "best, not latest");
 
-        let (page2, total) = page(&pool, Board::Best, &Scope::Daily(d), 3, 2)
+        let (page2, total) = page(&pool, Board::Best, &Scope::Daily(d), None, 3, 2)
             .await
             .unwrap();
         assert_eq!((page2.len(), total), (1, 4));
         assert_eq!(page2[0].rank, 4);
-        let (empty, total) = page(&pool, Board::Best, &Scope::Daily(d), 10, 2)
+        let (empty, total) = page(&pool, Board::Best, &Scope::Daily(d), None, 10, 2)
             .await
             .unwrap();
         assert_eq!((empty.len(), total), (0, 4));
 
-        let mine = me(&pool, Board::Best, &Scope::Daily(d), c)
+        let mine = me(&pool, Board::Best, &Scope::Daily(d), None, c)
             .await
             .unwrap()
             .unwrap();
         assert_eq!((mine.rank, mine.wpm), (4, 131.0));
         assert_eq!(
-            me(&pool, Board::First, &Scope::Daily(d), 999)
+            me(&pool, Board::First, &Scope::Daily(d), None, 999)
                 .await
                 .unwrap(),
             None
@@ -285,16 +315,64 @@ mod tests {
             language: "english".into(),
             mode: Mode::Time(30),
         };
-        let (best, total) = page(&pool, Board::Best, &scope, 0, 50).await.unwrap();
+        let (best, total) = page(&pool, Board::Best, &scope, None, 0, 50).await.unwrap();
         assert_eq!(total, 2, "one row per player, other modes left out");
         let got: Vec<(&str, f64)> = best.iter().map(|r| (r.user.as_str(), r.wpm)).collect();
         assert_eq!(got, [("sprinter", 140.0), ("quietkeys", 130.0)]);
         assert_eq!(best[0].date.as_deref(), Some("2026-09-28"));
 
-        let (first, _) = page(&pool, Board::First, &scope, 0, 50).await.unwrap();
+        let (first, _) = page(&pool, Board::First, &scope, None, 0, 50)
+            .await
+            .unwrap();
         let got: Vec<(&str, f64)> = first.iter().map(|r| (r.user.as_str(), r.wpm)).collect();
         assert_eq!(got, [("quietkeys", 130.0), ("sprinter", 120.0)]);
-        let mine = me(&pool, Board::First, &scope, a).await.unwrap().unwrap();
+        let mine = me(&pool, Board::First, &scope, None, a)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!((mine.rank, mine.date.as_deref()), (2, Some("2026-09-27")));
+    }
+
+    #[tokio::test]
+    async fn a_circle_ranks_you_and_who_you_follow() {
+        let pool = crate::db::open_memory().await;
+        let d = daily(&pool).await;
+        let me_id = user(&pool, "andples").await;
+        let a = user(&pool, "sprinter").await;
+        let b = user(&pool, "quietkeys").await;
+        let c = user(&pool, "stranger").await;
+        for (u, wpm) in [(me_id, 100.0), (a, 140.0), (b, 90.0), (c, 200.0)] {
+            seed(&pool, u, d, 1, wpm, 98.0).await;
+        }
+        // One way: sprinter follows andples, which changes nothing here.
+        for (from, to) in [(me_id, a), (me_id, b), (a, me_id)] {
+            sqlx::query("INSERT INTO follows VALUES (?1, ?2, '2026-10-07')")
+                .bind(from)
+                .bind(to)
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+        let scope = Scope::Daily(d);
+        let (rows, total) = page(&pool, Board::Best, &scope, Some(me_id), 0, 50)
+            .await
+            .unwrap();
+        let got: Vec<(u32, &str)> = rows.iter().map(|r| (r.rank, r.user.as_str())).collect();
+        assert_eq!(got, [(1, "sprinter"), (2, "andples"), (3, "quietkeys")]);
+        assert_eq!(total, 3);
+        let mine = me(&pool, Board::First, &scope, Some(me_id), me_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(mine.rank, 2);
+        let (rows, _) = page(&pool, Board::Best, &scope, Some(a), 0, 50)
+            .await
+            .unwrap();
+        let got: Vec<&str> = rows.iter().map(|r| r.user.as_str()).collect();
+        assert_eq!(got, ["sprinter", "andples"]);
+        let (_, total) = page(&pool, Board::Best, &scope, Some(a), 5, 50)
+            .await
+            .unwrap();
+        assert_eq!(total, 2, "counted past the end too");
     }
 }

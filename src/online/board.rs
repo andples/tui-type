@@ -89,6 +89,8 @@ pub struct BoardView {
     /// Index into `panes`.
     pub focus: usize,
     pub error: Option<String>,
+    /// Rank only us and the players we follow.
+    pub following: bool,
 }
 
 /// Time modes first, then words, each ascending.
@@ -112,6 +114,7 @@ impl BoardView {
             panes: Self::panes_for(period),
             focus: 0,
             error: None,
+            following: false,
         }
     }
 

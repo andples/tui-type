@@ -227,6 +227,7 @@ fn map_leaderboard(key: KeyEvent, ctrl: bool) -> Action {
         KeyCode::Char(']') => b(B::NextDay),
         KeyCode::Enter => b(B::Open),
         KeyCode::Char('p') => b(B::Profile),
+        KeyCode::Char('f') => b(B::ToggleFollowing),
         KeyCode::Esc | KeyCode::Char('q') => Action::Back,
         KeyCode::Char(':') => Action::OpenCommandLine,
         KeyCode::Char('?') => Action::ShowHelp,
