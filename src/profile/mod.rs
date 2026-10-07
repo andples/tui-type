@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::config::{
-    Config, FONT_SIZE_RANGE, Keyboard, LINES_RANGE, Pace, PbEffect, WORDS_PER_LINE_RANGE,
+    Config, FONT_SIZE_RANGE, Keyboard, LINES_RANGE, MinWpm, Pace, PbEffect, WORDS_PER_LINE_RANGE,
 };
 use crate::test::mode::Mode;
 
@@ -77,6 +77,10 @@ pub struct ProfileSettings {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pace: Option<Pace>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub sudden_death: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_wpm: Option<MinWpm>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub keyboard: Option<Keyboard>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub trim_syntax: Option<bool>,
@@ -112,6 +116,12 @@ impl Show for u8 {
 }
 
 impl Show for Pace {
+    fn show(&self) -> String {
+        self.label()
+    }
+}
+
+impl Show for MinWpm {
     fn show(&self) -> String {
         self.label()
     }
@@ -235,6 +245,8 @@ settings! {
     Fullscreen, "fullscreen" => fullscreen;
     Font, "font" => font;
     Pace, "pace" => pace;
+    SuddenDeath, "sudden death" => sudden_death;
+    MinWpm, "min wpm" => min_wpm;
     PbEffect, "pb effect" => pb_effect;
     Keyboard, "keyboard" => keyboard;
     TrimSyntax, "trim syntax" => trim_syntax;

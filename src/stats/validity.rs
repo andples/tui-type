@@ -23,6 +23,10 @@ pub enum Invalid {
     Slow,
     /// Accuracy under `MIN_ACC`.
     Inaccurate,
+    /// Failed: a wrong key with `sudden_death` on.
+    SuddenDeath,
+    /// Failed: under the `min_wpm` speed.
+    BelowMinWpm,
     /// A reason from a newer ttyp.
     #[serde(other)]
     Other,
@@ -34,8 +38,17 @@ impl Invalid {
             Invalid::Afk => "afk",
             Invalid::Slow => "too slow",
             Invalid::Inaccurate => "too inaccurate",
+            Invalid::SuddenDeath => "sudden death: a wrong key",
+            Invalid::BelowMinWpm => "dropped under the minimum speed",
             Invalid::Other => "invalid",
         }
+    }
+}
+
+impl Invalid {
+    /// A difficulty setting ended the run, rather than how it went.
+    pub fn is_failure(self) -> bool {
+        matches!(self, Invalid::SuddenDeath | Invalid::BelowMinWpm)
     }
 }
 

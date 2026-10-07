@@ -24,16 +24,10 @@ pub enum OnlineError {
 impl fmt::Display for OnlineError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            OnlineError::Unreachable(e) => write!(f, "server unreachable: {e}"),
+            OnlineError::Unreachable(e) => write!(f, "{e}"),
             OnlineError::Unauthorized => write!(f, "not logged in (:login)"),
             OnlineError::Server { message, .. } => write!(f, "{message}"),
         }
-    }
-}
-
-impl From<ureq::Error> for OnlineError {
-    fn from(e: ureq::Error) -> Self {
-        OnlineError::Unreachable(e.to_string())
     }
 }
 
@@ -88,6 +82,9 @@ impl Client {
         body: Option<&impl serde::Serialize>,
     ) -> Result<T, OnlineError> {
         let url = format!("{}{path}", self.base);
+        let unreachable = |e: ureq::Error| {
+            OnlineError::Unreachable(super::net::explain(&e, super::net::host_of(&self.base)))
+        };
         let bearer = self.token.as_ref().map(|t| format!("Bearer {t}"));
         let mut res = match body {
             Some(b) => {
@@ -95,14 +92,14 @@ impl Client {
                 if let Some(b) = &bearer {
                     req = req.header("Authorization", b);
                 }
-                req.send_json(b)?
+                req.send_json(b).map_err(unreachable)?
             }
             None => {
                 let mut req = self.agent.get(&url);
                 if let Some(b) = &bearer {
                     req = req.header("Authorization", b);
                 }
-                req.call()?
+                req.call().map_err(unreachable)?
             }
         };
         let status = res.status().as_u16();
@@ -119,7 +116,7 @@ impl Client {
         }
         res.body_mut()
             .read_json()
-            .map_err(|e| OnlineError::Unreachable(format!("bad response: {e}")))
+            .map_err(|e| OnlineError::Unreachable(format!("the server sent a bad reply: {e}")))
     }
 
     fn get<T: DeserializeOwned>(&self, path: &str) -> Result<T, OnlineError> {

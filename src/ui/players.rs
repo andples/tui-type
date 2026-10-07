@@ -5,7 +5,7 @@
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
+use ratatui::widgets::{Paragraph, Wrap};
 use ttyp_core::api::PlayerSummary;
 
 use super::style::{Palette, content_column};
@@ -91,7 +91,12 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
     );
     match empty {
         Some((msg, style)) => {
-            frame.render_widget(Paragraph::new(format!("  {msg}")).style(style), list_area);
+            frame.render_widget(
+                Paragraph::new(format!("  {msg}"))
+                    .style(style)
+                    .wrap(Wrap { trim: false }),
+                list_area,
+            );
         }
         None => {
             let columns = [

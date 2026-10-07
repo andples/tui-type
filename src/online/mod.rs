@@ -6,6 +6,7 @@
 pub mod board;
 pub mod client;
 pub mod device;
+pub mod net;
 pub mod players;
 pub mod queue;
 pub mod token;

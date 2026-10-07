@@ -91,6 +91,17 @@ starts with your first key, and the mode line says what it's set to
 see it. Set it in the config as `pace = "pb"` / `"last"` / `87`, with
 `:set pace …`, or in a saved config.
 
+### Difficulty
+
+- `:suddendeath` (`:sd`) toggles sudden death: one wrong key ends the test.
+- `:minwpm 80` fails the test if your speed drops under 80 wpm, checked from
+  3 seconds in; `:minwpm off` turns it off.
+
+A failed test ends at once and goes into your history marked failed (`✗`),
+so it never sets a best. A fail in the first second just starts a new test.
+Neither applies to dailies. Both show on the mode line, and both can be
+saved in a config (`sudden_death`, `min_wpm` in the config file).
+
 ### Missed keys
 
 `:missed` (or `m` on the results or stats screen) adds up the keys you

@@ -7,8 +7,8 @@ pub use palette::{CommandLine, Completions, Suggestion};
 
 use crate::app::misses::MissedRange;
 use crate::config::{
-    FONT_SIZE_RANGE, Keyboard, LINES_RANGE, Pace, PbEffect, ResultsConfig, WORDS_PER_LINE_RANGE,
-    parse_range,
+    FONT_SIZE_RANGE, Keyboard, LINES_RANGE, MinWpm, Pace, PbEffect, ResultsConfig,
+    WORDS_PER_LINE_RANGE, parse_range,
 };
 use crate::test::mode::Mode;
 
@@ -34,6 +34,10 @@ pub enum Command {
     Zen(Option<bool>),
     /// The pace caret: off, pb, last or a wpm.
     Pace(Pace),
+    /// A wrong key fails the test; `None` toggles.
+    SuddenDeath(Option<bool>),
+    /// Fail the test under this speed.
+    MinWpm(MinWpm),
     /// The layout of the results screen's missed-keys keyboard.
     Keyboard(Keyboard),
     /// What a new personal best shows.
@@ -96,6 +100,8 @@ pub enum ArgKind {
     ResultSections,
     /// `off`, `pb`, `last` or any wpm.
     Pace,
+    /// `off` or any wpm.
+    MinWpm,
     /// Keyboard layouts for the missed-keys heatmap.
     Keyboards,
     /// last, day, week, month, all: how far back `:missed` looks.
@@ -132,6 +138,7 @@ impl ArgKind {
                 | ArgKind::Installable
                 | ArgKind::Free
                 | ArgKind::Pace
+                | ArgKind::MinWpm
                 | ArgKind::Slider { .. }
         )
     }
@@ -262,6 +269,22 @@ pub const COMMANDS: &[CommandSpec] = &[
         usage: "<off|pb|last|wpm>",
         help: "a ghost caret racing you at your best, your last run or a speed",
         arg: ArgKind::Pace,
+        requires_arg: true,
+    },
+    CommandSpec {
+        name: "suddendeath",
+        aliases: &["sd", "hardcore"],
+        usage: "[on|off]",
+        help: "one wrong key and the test is over (not in dailies)",
+        arg: ArgKind::OnOff,
+        requires_arg: false,
+    },
+    CommandSpec {
+        name: "minwpm",
+        aliases: &["minspeed", "floor"],
+        usage: "<wpm|off>",
+        help: "fail the test if you drop under this speed (not in dailies)",
+        arg: ArgKind::MinWpm,
         requires_arg: true,
     },
     CommandSpec {
@@ -500,6 +523,8 @@ pub fn parse(line: &str) -> Result<Command, String> {
         "font" => Command::Font(rest.to_string()),
         "zen" => Command::Zen(opt_on_off(rest)?),
         "pace" => Command::Pace(Pace::parse(need(spec.usage)?)?),
+        "suddendeath" => Command::SuddenDeath(opt_on_off(rest)?),
+        "minwpm" => Command::MinWpm(MinWpm::parse(need(spec.usage)?)?),
         "modules" => Command::Modules,
         "trimsyntax" => Command::TrimSyntax(opt_on_off(rest)?),
         "pbeffect" => Command::PbEffect(PbEffect::parse(need(spec.usage)?)?),
@@ -621,6 +646,7 @@ pub fn arg_candidates(kind: ArgKind, comps: &Completions) -> Vec<String> {
             .map(|s| s.to_string())
             .collect(),
         ArgKind::Pace => Pace::PRESETS.iter().map(|p| p.label()).collect(),
+        ArgKind::MinWpm => MinWpm::PRESETS.iter().map(|m| m.label()).collect(),
         ArgKind::PbEffects => PbEffect::ALL.iter().map(|e| e.label().into()).collect(),
         ArgKind::Keyboards => Keyboard::ALL.iter().map(|k| k.label().into()).collect(),
         ArgKind::MissedRanges => MissedRange::ALL.iter().map(|r| r.arg().into()).collect(),
@@ -655,6 +681,15 @@ mod tests {
         assert_eq!(parse("pace pb"), Ok(Command::Pace(Pace::Pb)));
         assert_eq!(parse("ghost 87"), Ok(Command::Pace(Pace::Wpm(87))));
         assert_eq!(parse("pace off"), Ok(Command::Pace(Pace::Off)));
+        assert_eq!(parse("sd"), Ok(Command::SuddenDeath(None)));
+        assert_eq!(
+            parse("suddendeath on"),
+            Ok(Command::SuddenDeath(Some(true)))
+        );
+        assert_eq!(parse("minwpm 80"), Ok(Command::MinWpm(MinWpm(80))));
+        assert_eq!(parse("floor off"), Ok(Command::MinWpm(MinWpm::OFF)));
+        assert!(parse("minwpm").is_err());
+        assert!(parse("minwpm fast").is_err());
         assert_eq!(
             parse("keyboard colemak-dh"),
             Ok(Command::Keyboard(Keyboard::ColemakDh))

@@ -272,7 +272,7 @@ impl Source {
         let url = format!("{}/{rel}", self.base);
         let mut resp = agent.get(&url).call().map_err(|e| match e {
             ureq::Error::StatusCode(404) => NOT_FOUND.to_string(),
-            _ => "couldn't reach the catalogue".to_string(),
+            e => crate::online::net::explain(&e, crate::online::net::host_of(&self.base)),
         })?;
         resp.body_mut()
             .with_config()

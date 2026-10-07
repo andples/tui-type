@@ -219,6 +219,7 @@ fn render_trophy(frame: &mut Frame, (area, rows): (Rect, &[&str]), p: &Palette) 
 fn render_headline(frame: &mut Frame, o: &Outcome, area: Rect, p: &Palette) {
     let m = &o.metrics;
     let (note, note_style) = match o.record.invalid {
+        Some(why) if why.is_failure() => (format!("  failed · {}", why.label()), p.error()),
         Some(why) => (format!("  invalid · {}", why.label()), p.error()),
         None if o.is_pb => ("  new best".to_string(), p.main()),
         None => (String::new(), p.main()),

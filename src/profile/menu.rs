@@ -4,7 +4,7 @@
 use super::{Profile, ProfileRegistry, ProfileSettings, SettingKey, is_name_char};
 use crate::command::Completions;
 use crate::config::{
-    Config, FONT_SIZE_RANGE, Keyboard, LINES_RANGE, Pace, PbEffect, WORDS_PER_LINE_RANGE,
+    Config, FONT_SIZE_RANGE, Keyboard, LINES_RANGE, MinWpm, Pace, PbEffect, WORDS_PER_LINE_RANGE,
 };
 use crate::test::mode::Mode;
 use crate::ui::widgets::Selection;
@@ -202,6 +202,8 @@ impl Editor {
             }
             SettingKey::Pace => s.pace = s.pace.map(|p| step(&Pace::PRESETS, &p, dir)),
             SettingKey::TrimSyntax => flip(&mut s.trim_syntax),
+            SettingKey::SuddenDeath => flip(&mut s.sudden_death),
+            SettingKey::MinWpm => s.min_wpm = s.min_wpm.map(|m| step(&MinWpm::PRESETS, &m, dir)),
             SettingKey::Keyboard => {
                 s.keyboard = s.keyboard.map(|k| step(&Keyboard::ALL, &k, dir));
             }

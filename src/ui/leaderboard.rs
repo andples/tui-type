@@ -5,7 +5,7 @@
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
+use ratatui::widgets::{Paragraph, Wrap};
 
 use super::style::{GUTTER, Palette, content_column};
 use super::widgets::{Cell, Column, Panes, Row, SelectTable, Width, hints, panes};
@@ -75,7 +75,12 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
 
     let body = Rect::new(col.x, col.y + 4, col.width, col.height.saturating_sub(7));
     if let Some(e) = &view.error {
-        frame.render_widget(Paragraph::new(e.as_str()).style(p.error()), body);
+        frame.render_widget(
+            Paragraph::new(e.as_str())
+                .style(p.error())
+                .wrap(Wrap { trim: false }),
+            body,
+        );
     } else if view.dailies_loading {
         frame.render_widget(Paragraph::new("loading…").style(p.sub()), body);
     } else if view.daily().is_none() {

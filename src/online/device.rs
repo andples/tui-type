@@ -19,7 +19,7 @@ impl Form for ureq::Agent {
         self.post(url)
             .header("Accept", "application/json")
             .send_form(fields.iter().copied())
-            .map_err(|e| e.to_string())?
+            .map_err(|e| super::net::explain(&e, super::net::host_of(url)))?
             .body_mut()
             .read_json()
             .map_err(|e| e.to_string())

@@ -4,6 +4,7 @@ pub mod action;
 mod board;
 mod catalog;
 pub mod celebrate;
+mod difficulty;
 pub mod idle;
 pub mod input;
 pub mod misses;
@@ -253,6 +254,8 @@ pub struct App {
     pub follows: Follows,
     /// The leaderboard was last switched to only the players we follow.
     board_following: bool,
+    /// Why the test being finished failed (sudden death, minimum speed).
+    failed: Option<crate::stats::validity::Invalid>,
     /// `enter` on a row: waiting for the run to arrive.
     graph_loading: bool,
     /// Screen to return to from stats/help.
@@ -386,6 +389,7 @@ impl App {
             players_from: Screen::Typing,
             follows,
             board_following: false,
+            failed: None,
             graph_loading: false,
             previous_screen: Screen::Typing,
             fresh_notice: false,
@@ -606,8 +610,9 @@ impl App {
     }
 
     fn poll_timeout_rest(&self) -> Option<Duration> {
+        // A minimum speed is checked between keys too.
         let timed_running = self.engine.status() == Status::Running
-            && matches!(self.engine.mode(), Mode::Time(_))
+            && (matches!(self.engine.mode(), Mode::Time(_)) || self.min_wpm_applies())
             && self.screen == Screen::Typing;
         if timed_running {
             return Some(TIMER_TICK);
@@ -736,7 +741,9 @@ impl App {
                     let lang = self.languages.get_or_default(&self.config.language);
                     self.idle.tick(now, || &lang.words);
                 }
-                if self.engine.tick(now) {
+                if self.check_difficulty(now) {
+                    // Failed and finished.
+                } else if self.engine.tick(now) {
                     self.finish_test();
                 }
                 if let Some((_, at)) = self.notice
@@ -799,6 +806,8 @@ impl App {
                 }
                 if self.engine.is_finished() && !was_finished {
                     self.finish_test();
+                } else {
+                    self.check_difficulty(Instant::now());
                 }
             }
             Action::Backspace => self.engine.backspace(),
@@ -1011,6 +1020,9 @@ impl App {
             numbers,
         );
         record.daily_id = daily.as_ref().map(|d| d.id);
+        if let Some(why) = self.failed.take() {
+            record.invalid = Some(why);
+        }
         let misses = Misses::from_words(self.engine.words());
         record.missed_chars = misses.chars.clone();
         record.typed_chars = misses.typed.clone();
@@ -1170,6 +1182,26 @@ impl App {
                         if pace == Pace::Pb { "best" } else { "run" },
                         self.engine.mode().label()
                     ),
+                });
+            }
+            Command::SuddenDeath(on) => {
+                self.config.sudden_death = on.unwrap_or(!self.config.sudden_death);
+                self.notify(if self.config.sudden_death {
+                    "sudden death on · one wrong key ends the test"
+                } else {
+                    "sudden death off"
+                });
+            }
+            Command::MinWpm(min) => {
+                self.config.min_wpm = min;
+                self.notify(if min.is_on() {
+                    format!(
+                        "min speed {} wpm · checked from {} s in",
+                        min.0,
+                        crate::config::MinWpm::GRACE_SECS
+                    )
+                } else {
+                    "min speed off".to_string()
                 });
             }
             Command::ConfigProfile(None) => {

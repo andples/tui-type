@@ -143,6 +143,10 @@ pub struct Config {
     pub pb_effect: PbEffect,
     /// The pace caret (see `Pace`).
     pub pace: Pace,
+    /// A wrong key ends the test, failed. Not in dailies.
+    pub sudden_death: bool,
+    /// Falling under this speed ends the test, failed (see `MinWpm`).
+    pub min_wpm: MinWpm,
     /// The layout the results screen's missed-keys keyboard is drawn in.
     pub keyboard: Keyboard,
     /// Strip each language's boilerplate (its `trim` list, e.g. Python's
@@ -328,6 +332,51 @@ impl Pace {
             Pace::Pb => "pb".into(),
             Pace::Last => "last".into(),
             Pace::Wpm(n) => n.to_string(),
+        }
+    }
+}
+
+/// The minimum speed: once a test is `MinWpm::GRACE_SECS` in, a wpm under
+/// this fails it. `0` (written `off`) turns it off. Not in dailies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct MinWpm(pub u16);
+
+impl MinWpm {
+    pub const OFF: MinWpm = MinWpm(0);
+    /// Seconds before the speed is checked: the first words are too few
+    /// to judge by.
+    pub const GRACE_SECS: u64 = 3;
+    /// Suggestions for the palette and the profile editor.
+    pub const PRESETS: [MinWpm; 7] = [
+        MinWpm(0),
+        MinWpm(40),
+        MinWpm(60),
+        MinWpm(80),
+        MinWpm(100),
+        MinWpm(120),
+        MinWpm(150),
+    ];
+
+    pub fn parse(s: &str) -> Result<Self, String> {
+        match s.trim() {
+            "off" | "none" | "0" => Ok(MinWpm::OFF),
+            n => match n.trim_end_matches("wpm").trim().parse::<u16>() {
+                Ok(n) if (1..=PACE_MAX).contains(&n) => Ok(MinWpm(n)),
+                _ => Err(format!("expected off or a wpm (1-{PACE_MAX}), got `{s}`")),
+            },
+        }
+    }
+
+    pub fn is_on(self) -> bool {
+        self.0 > 0
+    }
+
+    pub fn label(self) -> String {
+        if self.is_on() {
+            self.0.to_string()
+        } else {
+            "off".into()
         }
     }
 }
@@ -559,6 +608,8 @@ impl Default for Config {
             splash: true,
             pb_effect: PbEffect::Both,
             pace: Pace::Off,
+            sudden_death: false,
+            min_wpm: MinWpm::OFF,
             keyboard: Keyboard::Qwerty,
             trim_syntax: false,
             modules: BTreeMap::new(),
@@ -626,6 +677,8 @@ impl Config {
             "splash" => self.splash = parse_bool(value)?,
             "pb_effect" | "pbeffect" | "celebrate" => self.pb_effect = PbEffect::parse(value)?,
             "pace" => self.pace = Pace::parse(value)?,
+            "sudden_death" | "suddendeath" => self.sudden_death = parse_bool(value)?,
+            "min_wpm" | "minwpm" => self.min_wpm = MinWpm::parse(value)?,
             "keyboard" | "layout" => self.keyboard = Keyboard::parse(value)?,
             "trim_syntax" | "trimsyntax" | "trim" => self.trim_syntax = parse_bool(value)?,
             "fullscreen" | "full" => self.fullscreen = parse_bool(value)?,

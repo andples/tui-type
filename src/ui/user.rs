@@ -5,7 +5,7 @@
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
+use ratatui::widgets::{Paragraph, Wrap};
 use ttyp_core::api::{Badges, ProfileRun};
 
 use super::style::{GUTTER, Palette, content_column};
@@ -33,7 +33,10 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
             Some(e) => (e.as_str(), p.error()),
             None => ("loading…", p.sub()),
         };
-        frame.render_widget(Paragraph::new(msg).style(style), body);
+        frame.render_widget(
+            Paragraph::new(msg).style(style).wrap(Wrap { trim: false }),
+            body,
+        );
         hints::render(frame, area, col, p, "esc back");
         return;
     };

@@ -246,6 +246,15 @@ impl TestEngine {
         }
     }
 
+    /// End a running test now, short of its goal (a failed run). Does
+    /// nothing unless it's running.
+    pub fn end_at(&mut self, now: Instant) {
+        if self.status == Status::Running {
+            let now = self.quantize(now);
+            self.finish(now);
+        }
+    }
+
     fn advance(&mut self, now: Instant) {
         if self.current + 1 >= self.words.len() {
             // Space after the last word in Words mode ends the test (with the
@@ -448,5 +457,23 @@ mod tests {
         type_str(&mut e, "ab cx ", Instant::now());
         assert!(e.is_finished());
         assert!(!e.words()[1].is_correct());
+    }
+
+    #[test]
+    fn end_at_stops_a_running_test_early() {
+        let mut e = TestEngine::new(Mode::Words(10), Box::new(Fixed(vec!["ab"])));
+        let t0 = Instant::now();
+        e.end_at(t0);
+        assert_eq!(e.status(), Status::Idle, "nothing to end yet");
+        e.type_char_at('a', t0);
+        e.type_char_at('x', t0 + Duration::from_millis(500));
+        e.end_at(t0 + Duration::from_secs(2));
+        assert!(e.is_finished());
+        assert_eq!(
+            e.elapsed_at(t0 + Duration::from_secs(9)),
+            Duration::from_secs(2)
+        );
+        e.type_char_at('b', t0 + Duration::from_secs(3));
+        assert_eq!(e.keystrokes().len(), 2, "finished means no more keys");
     }
 }

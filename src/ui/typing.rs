@@ -280,6 +280,12 @@ pub fn mode_line(app: &App) -> String {
     if c.numbers {
         parts.push("numbers".into());
     }
+    if c.sudden_death {
+        parts.push("sudden death".into());
+    }
+    if c.min_wpm.is_on() {
+        parts.push(format!("min {} wpm", c.min_wpm.0));
+    }
     parts.extend(pace);
     parts.join("  ·  ")
 }
