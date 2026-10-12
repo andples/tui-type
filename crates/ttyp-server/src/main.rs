@@ -20,6 +20,7 @@ mod db;
 mod leaderboard;
 mod players;
 mod profile;
+mod sync;
 
 #[tokio::main]
 async fn main() -> Result<()> {

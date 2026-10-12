@@ -55,13 +55,23 @@ pub fn next_move_in(elapsed: Duration, wpm: f64) -> Option<Duration> {
 }
 
 /// The speed a `pace` setting means for `mode` in `language`: a fixed wpm,
-/// or the personal best or last result from the history (`None` when there
-/// isn't one yet, or the setting is off).
-pub fn target_wpm(pace: Pace, records: &[TestRecord], mode: Mode, language: &str) -> Option<f64> {
+/// or the personal best (the history's, or `synced_best` from the account
+/// if faster) or last result from the history (`None` when there isn't one
+/// yet, or the setting is off).
+pub fn target_wpm(
+    pace: Pace,
+    records: &[TestRecord],
+    synced_best: Option<f64>,
+    mode: Mode,
+    language: &str,
+) -> Option<f64> {
     match pace {
         Pace::Off => None,
         Pace::Wpm(n) => Some(n as f64),
-        Pace::Pb => personal_best(records, mode, language),
+        Pace::Pb => match (personal_best(records, mode, language), synced_best) {
+            (Some(a), Some(b)) => Some(a.max(b)),
+            (a, b) => a.or(b),
+        },
         Pace::Last => records
             .iter()
             .rev()
@@ -168,13 +178,34 @@ mod tests {
             rec(t30, "english", 80.0),
             rec(Mode::Words(25), "english", 99.0),
         ];
-        assert_eq!(target_wpm(Pace::Off, &rs, t30, "english"), None);
-        assert_eq!(target_wpm(Pace::Wpm(87), &rs, t30, "english"), Some(87.0));
-        assert_eq!(target_wpm(Pace::Pb, &rs, t30, "english"), Some(90.0));
-        assert_eq!(target_wpm(Pace::Last, &rs, t30, "english"), Some(80.0));
-        assert_eq!(target_wpm(Pace::Last, &rs, t30, "spanish"), Some(50.0));
+        assert_eq!(target_wpm(Pace::Off, &rs, None, t30, "english"), None);
+        assert_eq!(
+            target_wpm(Pace::Wpm(87), &rs, None, t30, "english"),
+            Some(87.0)
+        );
+        assert_eq!(target_wpm(Pace::Pb, &rs, None, t30, "english"), Some(90.0));
+        // The account's best from another machine counts when it's faster.
+        assert_eq!(
+            target_wpm(Pace::Pb, &rs, Some(95.0), t30, "english"),
+            Some(95.0)
+        );
+        assert_eq!(
+            target_wpm(Pace::Pb, &rs, Some(70.0), t30, "english"),
+            Some(90.0)
+        );
+        assert_eq!(
+            target_wpm(Pace::Last, &rs, None, t30, "english"),
+            Some(80.0)
+        );
+        assert_eq!(
+            target_wpm(Pace::Last, &rs, None, t30, "spanish"),
+            Some(50.0)
+        );
         // Nothing to race yet.
-        assert_eq!(target_wpm(Pace::Pb, &rs, Mode::Time(60), "english"), None);
-        assert_eq!(target_wpm(Pace::Last, &[], t30, "english"), None);
+        assert_eq!(
+            target_wpm(Pace::Pb, &rs, None, Mode::Time(60), "english"),
+            None
+        );
+        assert_eq!(target_wpm(Pace::Last, &[], None, t30, "english"), None);
     }
 }

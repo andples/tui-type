@@ -240,6 +240,20 @@ impl Summary {
     }
 }
 
+impl Summary {
+    /// Raise the per-mode bests to `bests` (the account's, from every
+    /// machine) where those are faster.
+    pub fn with_bests(mut self, bests: impl Iterator<Item = (Mode, f64)>) -> Self {
+        for (mode, wpm) in bests {
+            let e = self.best.entry(mode).or_insert(0.0);
+            if wpm > *e {
+                *e = wpm;
+            }
+        }
+        self
+    }
+}
+
 /// Personal best for a (mode, language) pair, excluding `exclude_last` most
 /// recent records (so the just-finished test can be compared against history).
 pub fn personal_best(records: &[TestRecord], mode: Mode, language: &str) -> Option<f64> {

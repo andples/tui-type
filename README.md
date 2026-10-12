@@ -329,6 +329,16 @@ They're stored as `profiles/<name>.toml` in the config dir.
 
 `:config <name>` switches one on straight from the command line.
 
+While you're logged in (`:login`), your configs and which ones are on
+follow your account: switch a config on, edit, add or delete one on one
+computer and your other computers pick it up — at start, when you open
+`:config`, and within a minute while you're using ttyp (never in the middle
+of a test; it waits until the test ends). If both computers changed things
+while apart, each config keeps whichever side changed it, the computer
+you're at winning a clash. The first time a computer syncs, nothing is
+lost: its configs are added to the account's. Logging out stops syncing and
+leaves your config files where they are.
+
 
 
 A terminal can't change its own font from inside a program, so sizes 2–5
@@ -433,7 +443,11 @@ ttyp. `:set server …` changes it live.
   underneath.
 
 Daily runs also land in your local history, marked with the daily's id.
-Only daily results ever leave your machine.
+Only daily results ever leave your machine, plus, while you're logged in,
+your configs and personal bests, which are kept private to your account so
+every computer you log in on has them (see [Configs](#configs)). A best set
+on another computer counts for "new best", the `pb` pace caret and the
+stats screen's bests; your history itself stays local.
 
 A build for a different server can override both defaults: set
 `TTYP_DEFAULT_SERVER` and `TTYP_DEFAULT_GITHUB_CLIENT_ID` in the
@@ -451,6 +465,7 @@ environment when building (`TTYP_DEFAULT_SERVER=https://… cargo install
 | history | `~/.local/share/ttyp/history.jsonl` |
 | server token | `~/.local/share/ttyp/token` |
 | unsent daily results | `~/.local/share/ttyp/queue/` |
+| synced configs, bests | `~/.local/share/ttyp/sync.json`, `bests.json` |
 
 Those are the Linux paths. On macOS both the config and data dirs are
 `~/Library/Application Support/ttyp/` (so `config.toml`, `profiles/`,

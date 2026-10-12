@@ -6,4 +6,5 @@ pub mod api;
 pub mod boards;
 pub mod custom;
 pub mod language;
+pub mod sync;
 pub mod test;

@@ -12,6 +12,7 @@ impl App {
         let latest = self.config.profiles.last().cloned();
         self.profile_menu = ProfileMenu::list_at(&self.profiles, latest.as_deref());
         self.push_screen(Screen::Profiles);
+        self.pull_configs();
     }
 
     pub(super) fn profile_input(&self) -> ProfileInput {
@@ -134,7 +135,7 @@ impl App {
     }
 
     /// Side effects of settings that changed since `before`.
-    fn apply_changes(&mut self, before: &Config) {
+    pub(super) fn apply_changes(&mut self, before: &Config) {
         let changed: Vec<SettingKey> = SettingKey::ALL
             .iter()
             .copied()
@@ -177,6 +178,7 @@ impl App {
             self.activate_profile(&name);
         } else {
             self.notify(format!("config {name} saved"));
+            self.configs_changed();
         }
     }
 
@@ -202,7 +204,7 @@ impl App {
         self.save_config();
     }
 
-    fn refresh_profile_completions(&mut self) {
+    pub(super) fn refresh_profile_completions(&mut self) {
         self.completions.profiles = self.profiles.names().map(str::to_string).collect();
     }
 }

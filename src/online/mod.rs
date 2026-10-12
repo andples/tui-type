@@ -9,6 +9,7 @@ pub mod device;
 pub mod net;
 pub mod players;
 pub mod queue;
+pub mod sync;
 pub mod token;
 pub mod user;
 pub mod worker;

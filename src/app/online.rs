@@ -72,6 +72,7 @@ impl App {
         online.client.set_token(None);
         self.follows.clear();
         self.follows_changed();
+        self.forget_sync();
         if let Err(e) = token::delete(&self.paths.token_file) {
             self.notify(format!("could not remove token: {e}"));
         } else {
@@ -96,6 +97,7 @@ impl App {
                     )),
                 }
                 self.fetch_follows();
+                self.start_sync();
                 self.leave_login();
             }
             RemoteEvent::LoginFailed(e) => {
@@ -147,6 +149,8 @@ impl App {
             RemoteEvent::CustomUnpublished { name, result } => {
                 self.custom_unpublished(&name, result)
             }
+            RemoteEvent::Configs { pushed, result } => self.configs_reply(pushed, result),
+            RemoteEvent::Bests(result) => self.bests_reply(result),
             RemoteEvent::Followed {
                 login,
                 follow,

@@ -43,8 +43,20 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
     lines.push(Line::from(Span::styled("stats", p.main_bold())));
     lines.push(Line::default());
 
+    // Bests per preset mode, from this machine and the account's others.
+    let mut bests: Vec<(String, String)> = Mode::TIME_PRESETS
+        .iter()
+        .map(|t| Mode::Time(*t))
+        .chain(Mode::WORD_PRESETS.iter().map(|w| Mode::Words(*w)))
+        .filter_map(|m| s.best.get(&m).map(|b| (m.label(), format!("{b:.0}"))))
+        .collect();
     if records.is_empty() {
         lines.push(Line::from(Span::styled("no tests yet", p.sub())));
+        if !bests.is_empty() {
+            let refs: Vec<(&str, String)> =
+                bests.iter().map(|(k, v)| (k.as_str(), v.clone())).collect();
+            lines.push(kv_row(p, &refs));
+        }
     } else {
         lines.push(kv_row(
             p,
@@ -57,12 +69,6 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
                 ),
             ],
         ));
-        let mut bests: Vec<(String, String)> = Mode::TIME_PRESETS
-            .iter()
-            .map(|t| Mode::Time(*t))
-            .chain(Mode::WORD_PRESETS.iter().map(|w| Mode::Words(*w)))
-            .filter_map(|m| s.best.get(&m).map(|b| (m.label(), format!("{b:.0}"))))
-            .collect();
         if bests.is_empty() {
             bests.push(("best".into(), "—".into()));
         }

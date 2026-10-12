@@ -772,6 +772,10 @@ pub struct Paths {
     pub custom_dir: PathBuf,
     /// Words missed per language, for `:pm`.
     pub missed_words_file: PathBuf,
+    /// The configs last agreed with the server, and their revision.
+    pub sync_file: PathBuf,
+    /// The account's personal bests from every machine, as last fetched.
+    pub bests_file: PathBuf,
 }
 
 impl Paths {
@@ -797,6 +801,8 @@ impl Paths {
             views_file: data_dir.join("profile_views.json"),
             custom_dir: config_dir.join("custom"),
             missed_words_file: data_dir.join("missed_words.json"),
+            sync_file: data_dir.join("sync.json"),
+            bests_file: data_dir.join("bests.json"),
         }
     }
 }

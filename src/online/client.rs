@@ -10,6 +10,7 @@ use ttyp_core::api::{
     PlayerSummary, Profile, ResultDetail, StartResponse, SubmitRequest, SubmitResponse,
 };
 use ttyp_core::boards::Target;
+use ttyp_core::sync::{Best, ConfigPush, ConfigSync};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OnlineError {
@@ -230,6 +231,23 @@ impl Client {
     pub fn custom_unpublish(&self, name: &str) -> Result<(), OnlineError> {
         self.call::<serde_json::Value>(&format!("/custom/{}/unpublish", encode(name)), Some(&()))
             .map(|_| ())
+    }
+
+    /// The account's configs and their revision.
+    pub fn configs(&self) -> Result<ConfigSync, OnlineError> {
+        self.get("/sync/configs")
+    }
+
+    /// Replace the account's configs if they're still at `push.base_rev`;
+    /// answers with what the server has afterwards.
+    pub fn push_configs(&self, push: &ConfigPush) -> Result<ConfigSync, OnlineError> {
+        self.call("/sync/configs", Some(push))
+    }
+
+    /// Send bests (the server keeps the faster of each); answers with all
+    /// of the account's bests.
+    pub fn push_bests(&self, bests: &[Best]) -> Result<Vec<Best>, OnlineError> {
+        self.call("/sync/bests", Some(&bests))
     }
 
     /// Trade a GitHub access token for a ttyp token.

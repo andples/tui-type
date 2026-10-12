@@ -15,6 +15,7 @@ use ttyp_core::api::{
 };
 
 use ttyp_core::boards::Target;
+use ttyp_core::sync::{Best, ConfigPush, ConfigSync};
 
 use super::client::{Client, OnlineError};
 use super::device;
@@ -71,6 +72,12 @@ pub enum Request {
     CustomInstall(String),
     CustomPublish(CustomPublish),
     CustomUnpublish(String),
+    /// The account's synced configs.
+    Configs,
+    /// Replace the account's configs.
+    PushConfigs(ConfigPush),
+    /// Send bests; the reply is all of them.
+    PushBests(Vec<Best>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -143,6 +150,13 @@ pub enum RemoteEvent {
         name: String,
         result: Result<(), OnlineError>,
     },
+    /// The account's configs, fetched (`pushed` is `None`) or as they are
+    /// after a push.
+    Configs {
+        pushed: Option<ConfigPush>,
+        result: Result<ConfigSync, OnlineError>,
+    },
+    Bests(Result<Vec<Best>, OnlineError>),
 }
 
 impl RemoteEvent {
@@ -343,6 +357,29 @@ impl Online {
                 thread::spawn(move || {
                     let result = client.custom_unpublish(&name);
                     let _ = tx.send(RemoteEvent::CustomUnpublished { name, result });
+                });
+            }
+            Request::Configs => {
+                thread::spawn(move || {
+                    let result = client.configs();
+                    let _ = tx.send(RemoteEvent::Configs {
+                        pushed: None,
+                        result,
+                    });
+                });
+            }
+            Request::PushConfigs(push) => {
+                thread::spawn(move || {
+                    let result = client.push_configs(&push);
+                    let _ = tx.send(RemoteEvent::Configs {
+                        pushed: Some(push),
+                        result,
+                    });
+                });
+            }
+            Request::PushBests(bests) => {
+                thread::spawn(move || {
+                    let _ = tx.send(RemoteEvent::Bests(client.push_bests(&bests)));
                 });
             }
             Request::SetFollow { login, follow } => {

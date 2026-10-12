@@ -16,6 +16,7 @@ mod players;
 pub mod practice;
 mod profiles;
 pub mod splash;
+mod sync;
 mod user;
 
 use std::io::Write;
@@ -37,7 +38,7 @@ use crate::gfx::{self, Gfx};
 use crate::language::LanguageRegistry;
 use crate::online::{BoardView, Follows, Online, PlayersTab, PlayersView, UserView};
 use crate::profile::{ProfileMenu, ProfileRegistry};
-use crate::stats::{Activity, LocalJsonlStore, StatsStore, Summary, TestRecord, personal_best};
+use crate::stats::{Activity, LocalJsonlStore, StatsStore, Summary, TestRecord};
 use crate::test::{Metrics, Mode, Modifiers, RandomGenerator, Status, TestEngine};
 use crate::theme::{Theme, ThemeRegistry};
 use crate::ui;
@@ -263,6 +264,16 @@ pub struct App {
     pub follows: Follows,
     /// The leaderboard was last switched to only the players we follow.
     board_following: bool,
+    /// The configs last agreed with the account (`None` before the first
+    /// sync, or logged out).
+    synced: Option<crate::online::sync::Synced>,
+    /// Fetched configs waiting for the test to end before they apply.
+    pending_configs: Option<ttyp_core::sync::ConfigSync>,
+    /// A config fetch or push is out.
+    config_sync_busy: bool,
+    last_config_pull: Option<Instant>,
+    /// The account's bests from every machine.
+    pub bests: crate::online::sync::Bests,
     /// Custom word sets on this machine.
     pub customs: CustomStore,
     pub custom_menu: CustomMenu,
@@ -355,6 +366,9 @@ impl App {
         let summary = Summary::from_records(store.all());
         let online = Self::connect(&config, &paths);
         let follows = Follows::load(&paths.views_file);
+        let synced = crate::online::sync::Synced::load(&paths.sync_file);
+        let bests = crate::online::sync::Bests::load(&paths.bests_file);
+        let summary = summary.with_bests(bests.by_mode());
         let fetcher = Self::catalog_fetcher(&config);
         let splash = config.splash.then(|| Splash::new(Instant::now()));
         let mut app = Self {
@@ -411,6 +425,11 @@ impl App {
             players_from: Screen::Typing,
             follows,
             board_following: false,
+            synced,
+            pending_configs: None,
+            config_sync_busy: false,
+            last_config_pull: None,
+            bests,
             failed: None,
             customs,
             missed_words,
@@ -432,6 +451,7 @@ impl App {
         app.check_catalog_updates();
         app.retry_queued_submissions();
         app.fetch_follows();
+        app.start_sync();
         Ok(app)
     }
 
@@ -573,6 +593,7 @@ impl App {
         while !self.should_quit {
             self.drain_remote();
             self.drain_catalog();
+            self.sync_tick();
             if self.dirty {
                 self.draw(terminal)?;
                 self.dirty = false;
@@ -692,6 +713,7 @@ impl App {
         pace::target_wpm(
             self.config.pace,
             self.stats.all(),
+            self.bests.get(self.engine.mode(), language),
             self.engine.mode(),
             language,
         )
@@ -889,7 +911,9 @@ impl App {
                 self.scroll = 0;
             }
             Action::ShowStats => {
-                self.summary = Summary::from_records(self.stats.all());
+                self.refresh_bests();
+                self.summary =
+                    Summary::from_records(self.stats.all()).with_bests(self.bests.by_mode());
                 self.activity = Activity::from_records(
                     self.stats.all(),
                     &chrono::Local,
@@ -1078,10 +1102,13 @@ impl App {
         let misses = Misses::from_words(self.engine.words());
         record.missed_chars = misses.chars.clone();
         record.typed_chars = misses.typed.clone();
-        let prev_best = personal_best(self.stats.all(), record.mode, &record.language);
+        let prev_best = self.best(record.mode, &record.language);
         let is_pb = record.counts() && prev_best.is_none_or(|b| record.wpm > b) && record.wpm > 0.0;
         if let Err(e) = self.stats.append(&record) {
             self.notify(format!("could not save result: {e}"));
+        }
+        if is_pb {
+            self.push_best(record.mode, &record.language, record.wpm);
         }
         let daily = daily.map(|d| self.submit_daily(&d));
         let celebration = (is_pb && self.config.pb_effect.confetti()).then(|| {
@@ -1435,6 +1462,7 @@ impl App {
         if let Err(e) = self.config.save(&self.paths.config_file) {
             self.notify(format!("could not save config: {e}"));
         }
+        self.configs_changed();
     }
 }
 

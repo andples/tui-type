@@ -18,13 +18,14 @@ use ttyp_core::api::{
 };
 use ttyp_core::boards::Period;
 use ttyp_core::language::LanguageRegistry;
+use ttyp_core::sync::{Best, ConfigPush, ConfigSync, MAX_BESTS};
 use ttyp_core::test::{Rejected, replay};
 
 use crate::auth::{self, User};
 use crate::custom::CustomError;
 use crate::leaderboard::Scope;
 use crate::players::FollowError;
-use crate::{custom, daily, leaderboard, players, profile};
+use crate::{custom, daily, leaderboard, players, profile, sync};
 
 /// Attempts (starts and submissions) per user per daily.
 const MAX_ATTEMPTS: i64 = 30;
@@ -69,6 +70,8 @@ pub fn router(state: AppState) -> Router {
         .route("/custom/{name}", get(custom_get))
         .route("/custom/{name}/install", post(custom_install))
         .route("/custom/{name}/unpublish", post(custom_unpublish))
+        .route("/sync/configs", get(sync_configs).post(push_configs))
+        .route("/sync/bests", get(sync_bests).post(push_bests))
         .route("/auth/github", post(auth_github))
         .route("/auth/logout", post(auth_logout))
         .with_state(state)
@@ -531,6 +534,51 @@ async fn custom_unpublish(
         .await?
         .map_err(custom_error)?;
     Ok(Json(serde_json::json!({})))
+}
+
+/// The caller's configs and their revision.
+async fn sync_configs(State(state): State<AppState>, headers: HeaderMap) -> ApiResult<ConfigSync> {
+    let user = require_user(&state, &headers).await?;
+    Ok(Json(sync::configs(&state.pool, user.id).await?))
+}
+
+/// Replace the caller's configs if `base_rev` is still current; answers
+/// with what the server has, so a stale push can merge and retry.
+async fn push_configs(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(req): Json<ConfigPush>,
+) -> ApiResult<ConfigSync> {
+    let user = require_user(&state, &headers).await?;
+    if let Some(why) = req.configs.problem() {
+        return Err(ApiError::BadRequest(why));
+    }
+    Ok(Json(
+        sync::push_configs(&state.pool, user.id, req.base_rev, &req.configs).await?,
+    ))
+}
+
+/// The caller's personal bests.
+async fn sync_bests(State(state): State<AppState>, headers: HeaderMap) -> ApiResult<Vec<Best>> {
+    let user = require_user(&state, &headers).await?;
+    Ok(Json(sync::bests(&state.pool, user.id).await?))
+}
+
+/// Keep the faster of each sent best and the stored one; answers with all.
+async fn push_bests(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(req): Json<Vec<Best>>,
+) -> ApiResult<Vec<Best>> {
+    let user = require_user(&state, &headers).await?;
+    if req.len() > MAX_BESTS {
+        return Err(ApiError::BadRequest(format!("at most {MAX_BESTS} bests")));
+    }
+    if let Some(why) = req.iter().find_map(Best::problem) {
+        return Err(ApiError::BadRequest(why.into()));
+    }
+    sync::push_bests(&state.pool, user.id, &req, MAX_BESTS).await?;
+    Ok(Json(sync::bests(&state.pool, user.id).await?))
 }
 
 /// Revoke the presented token.
@@ -1423,5 +1471,87 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
         let (status, _) = call(&app, get("/custom/rust", None)).await;
         assert_eq!(status, StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn configs_and_bests_sync_per_account() {
+        use ttyp_core::sync::Configs;
+        let (app, state) = app().await;
+        let (_, ann) = auth::issue(&state.pool, 1, "ann").await.unwrap();
+        let (_, bo) = auth::issue(&state.pool, 2, "bo").await.unwrap();
+        let (status, _) = call(&app, get("/sync/configs", None)).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        let (_, body) = call(&app, get("/sync/configs", Some(&ann))).await;
+        let empty: ConfigSync = serde_json::from_value(body).unwrap();
+        assert_eq!(empty, ConfigSync::default());
+
+        let configs = Configs {
+            files: [("sprint".to_string(), "mode = { time = 15 }\n".to_string())].into(),
+            active: vec!["sprint".into()],
+        };
+        let push = |base_rev, configs: &Configs| ConfigPush {
+            base_rev,
+            configs: configs.clone(),
+        };
+        let (status, body) =
+            call(&app, post("/sync/configs", Some(&ann), &push(0, &configs))).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        let got: ConfigSync = serde_json::from_value(body).unwrap();
+        assert_eq!((got.rev, &got.configs), (1, &configs));
+        // A push from an older revision is refused with the newer state.
+        let (_, body) = call(
+            &app,
+            post("/sync/configs", Some(&ann), &push(0, &Configs::default())),
+        )
+        .await;
+        let got: ConfigSync = serde_json::from_value(body).unwrap();
+        assert_eq!((got.rev, &got.configs), (1, &configs));
+        let bad = Configs {
+            active: vec!["nope".into()],
+            ..Configs::default()
+        };
+        let (status, _) = call(&app, post("/sync/configs", Some(&ann), &push(1, &bad))).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        // Private to the player.
+        let (_, body) = call(&app, get("/sync/configs", Some(&bo))).await;
+        assert_eq!(body["rev"], 0);
+
+        let best = |mode, language: &str, wpm| Best {
+            mode,
+            language: language.into(),
+            wpm,
+        };
+        let sent = vec![
+            best(Mode::Time(30), "english", 90.0),
+            best(Mode::Words(25), "english", 80.0),
+        ];
+        let (status, body) = call(&app, post("/sync/bests", Some(&ann), &sent)).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        // Slower runs don't replace a best; faster ones do.
+        let sent = vec![
+            best(Mode::Time(30), "english", 70.0),
+            best(Mode::Words(25), "english", 85.5),
+        ];
+        let (_, body) = call(&app, post("/sync/bests", Some(&ann), &sent)).await;
+        let got: Vec<Best> = serde_json::from_value(body).unwrap();
+        assert_eq!(
+            got,
+            vec![
+                best(Mode::Time(30), "english", 90.0),
+                best(Mode::Words(25), "english", 85.5),
+            ]
+        );
+        let (status, _) = call(
+            &app,
+            post(
+                "/sync/bests",
+                Some(&ann),
+                &vec![best(Mode::Time(30), "english", 9000.0)],
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        let (_, body) = call(&app, get("/sync/bests", Some(&bo))).await;
+        assert_eq!(body, serde_json::json!([]));
     }
 }
