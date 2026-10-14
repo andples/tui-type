@@ -7,7 +7,7 @@ pub use palette::{CommandLine, Completions, Suggestion};
 
 use crate::app::misses::MissedRange;
 use crate::config::{
-    FONT_SIZE_RANGE, Keyboard, LINES_RANGE, MinWpm, Pace, PbEffect, ResultsConfig,
+    FONT_SIZE_RANGE, HudItem, Keyboard, LINES_RANGE, MinWpm, Pace, PbEffect, ResultsConfig,
     WORDS_PER_LINE_RANGE, parse_range,
 };
 use crate::test::mode::Mode;
@@ -44,6 +44,8 @@ pub enum Command {
     PbEffect(PbEffect),
     /// The current language's modules checklist.
     Modules,
+    /// `None` opens the HUD menu; an item shows or hides it (`None` toggles).
+    Hud(Option<(HudItem, Option<bool>)>),
     /// Strip each language's boilerplate; `None` toggles.
     TrimSyntax(Option<bool>),
     /// `None` opens the config menu; a name switches that config on.
@@ -121,6 +123,8 @@ pub enum ArgKind {
     MissedRanges,
     /// both, confetti, trophy, off.
     PbEffects,
+    /// The HUD's items: timer, wpm, …
+    HudItems,
     /// `time 30`, `words 25`, …: the modes dailies exist for.
     DailyModes,
     /// `public on` / `public off`.
@@ -312,6 +316,14 @@ pub const COMMANDS: &[CommandSpec] = &[
         usage: "",
         help: "pick the current language's modules (numpy, pandas, …)",
         arg: ArgKind::None,
+        requires_arg: false,
+    },
+    CommandSpec {
+        name: "hud",
+        aliases: &["overlay", "readouts"],
+        usage: "[item] [on|off]",
+        help: "live readouts above the words (timer, wpm): show, hide, reorder",
+        arg: ArgKind::HudItems,
         requires_arg: false,
     },
     CommandSpec {
@@ -561,6 +573,14 @@ pub fn parse(line: &str) -> Result<Command, String> {
         "suddendeath" => Command::SuddenDeath(opt_on_off(rest)?),
         "minwpm" => Command::MinWpm(MinWpm::parse(need(spec.usage)?)?),
         "modules" => Command::Modules,
+        "hud" => Command::Hud(
+            match rest.split_whitespace().collect::<Vec<_>>().as_slice() {
+                [] => None,
+                [item] => Some((HudItem::parse(item)?, None)),
+                [item, v] => Some((HudItem::parse(item)?, Some(parse_on_off(v)?))),
+                _ => return Err(format!("usage: hud {}", spec.usage)),
+            },
+        ),
         "trimsyntax" => Command::TrimSyntax(opt_on_off(rest)?),
         "pbeffect" => Command::PbEffect(PbEffect::parse(need(spec.usage)?)?),
         "keyboard" => Command::Keyboard(Keyboard::parse(need(spec.usage)?)?),
@@ -693,6 +713,7 @@ pub fn arg_candidates(kind: ArgKind, comps: &Completions) -> Vec<String> {
             .collect(),
         ArgKind::Pace => Pace::PRESETS.iter().map(|p| p.label()).collect(),
         ArgKind::MinWpm => MinWpm::PRESETS.iter().map(|m| m.label()).collect(),
+        ArgKind::HudItems => HudItem::ALL.iter().map(|i| i.name().into()).collect(),
         ArgKind::PbEffects => PbEffect::ALL.iter().map(|e| e.label().into()).collect(),
         ArgKind::Keyboards => Keyboard::ALL.iter().map(|k| k.label().into()).collect(),
         ArgKind::MissedRanges => MissedRange::ALL.iter().map(|r| r.arg().into()).collect(),
@@ -727,6 +748,16 @@ mod tests {
             Ok(Command::Language("english_1k".into()))
         );
         assert_eq!(parse("th nord"), Ok(Command::Theme("nord".into())));
+        assert_eq!(parse("hud"), Ok(Command::Hud(None)));
+        assert_eq!(
+            parse("hud wpm"),
+            Ok(Command::Hud(Some((HudItem::Wpm, None))))
+        );
+        assert_eq!(
+            parse("overlay timer off"),
+            Ok(Command::Hud(Some((HudItem::Timer, Some(false)))))
+        );
+        assert!(parse("hud nope").is_err());
         assert_eq!(parse("punc"), Ok(Command::Punctuation(None)));
         assert_eq!(parse("numbers off"), Ok(Command::Numbers(Some(false))));
         assert_eq!(parse("q"), Ok(Command::Quit));

@@ -1,11 +1,13 @@
 //! A themed table with a cursor: thin layer over ratatui's `Table` that adds
 //! column specs, cell style roles, `…` truncation, the shared selected-row
 //! look (`cursor`) and a row pinned to the bottom when it scrolls out of view.
+//! Columns grow to fit their content when there's room; whatever still
+//! doesn't fit is cut with `…`, and the selected row wraps to show it whole.
 
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Rect};
 use ratatui::style::{Color, Style};
-use ratatui::text::{Span, Text};
+use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{HighlightSpacing, Row as TableRow, Table, TableState};
 
 use super::{Selection, cursor};
@@ -165,8 +167,19 @@ impl<'a> SelectTable<'a> {
 
     pub fn render(self, frame: &mut Frame, area: Rect, p: &Palette) {
         let header = has_header(self.columns);
-        let widths = resolve_widths(self.columns, area.width);
+        let widths = resolve_widths(
+            self.columns,
+            &natural_widths(self.columns, &self.rows),
+            area.width,
+        );
         let mut body = area.height.saturating_sub(u16::from(header)) as usize;
+        let selected = self.focused.then_some(self.selection.selected);
+        // The selected row wraps what was cut, so it may take several lines;
+        // the window holds that many fewer rows.
+        let tall = selected
+            .and_then(|i| self.rows.get(i))
+            .map_or(1, |r| row_height(r, self.columns, &widths).min(body.max(1)));
+        body = body.saturating_sub(tall - 1).max(1);
         self.selection.ensure_visible(body);
 
         // The pinned row takes the last line only when it isn't in view.
@@ -182,7 +195,6 @@ impl<'a> SelectTable<'a> {
             area.height - u16::from(pinned.is_some()),
         );
 
-        let selected = self.focused.then_some(self.selection.selected);
         let rows = self
             .rows
             .into_iter()
@@ -235,32 +247,69 @@ fn constraints(widths: &[u16]) -> Vec<Constraint> {
 /// Spare column every column keeps for the selected row's nudge.
 const NUDGE: u16 = 1;
 
-/// Column widths for `total` columns: fixed ones as asked, the rest shared
-/// equally by the `Min` columns (each at least its minimum). Each gets one
-/// more for the nudge, so a selected row moves whole and isn't cut short.
-fn resolve_widths(columns: &[Column], total: u16) -> Vec<u16> {
+/// Widest header or single-column cell in each column.
+fn natural_widths(columns: &[Column], rows: &[Row]) -> Vec<u16> {
+    let mut widths: Vec<u16> = columns.iter().map(|c| text_width(&c.header)).collect();
+    for row in rows {
+        let mut col = 0usize;
+        for cell in &row.cells {
+            if cell.span <= 1
+                && let Some(w) = widths.get_mut(col)
+            {
+                *w = (*w).max(text_width(&cell.text));
+            }
+            col += cell.span.max(1) as usize;
+        }
+    }
+    widths
+}
+
+fn text_width(s: &str) -> u16 {
+    s.chars().count().min(u16::MAX as usize) as u16
+}
+
+/// Column widths for `total` columns. Each starts at its spec (fixed ones as
+/// asked, `Min` ones at their minimum); the room left first grows columns
+/// whose `natural` content is wider, one column at a time round the table so
+/// none is starved, and the rest is shared equally by the `Min` columns.
+/// Each gets one more for the nudge, so a selected row moves whole and isn't
+/// cut short.
+fn resolve_widths(columns: &[Column], natural: &[u16], total: u16) -> Vec<u16> {
     let spacing = SPACING * columns.len().saturating_sub(1) as u16;
     let nudges = NUDGE * columns.len() as u16;
     let mut free = total.saturating_sub(MARKER_WIDTH + spacing + nudges);
-    let mut flexible = 0u16;
-    for c in columns {
-        match c.width {
-            Width::Fixed(w) => free = free.saturating_sub(w),
-            Width::Min(w) => {
-                free = free.saturating_sub(w);
-                flexible += 1;
+    let mut widths: Vec<u16> = columns
+        .iter()
+        .map(|c| match c.width {
+            Width::Fixed(w) | Width::Min(w) => w,
+        })
+        .collect();
+    free = free.saturating_sub(widths.iter().sum());
+
+    let want = |widths: &[u16], i: usize| natural.get(i).copied().unwrap_or(0) > widths[i];
+    while free > 0 && (0..widths.len()).any(|i| want(&widths, i)) {
+        for i in 0..widths.len() {
+            if free > 0 && want(&widths, i) {
+                widths[i] += 1;
+                free -= 1;
             }
         }
     }
+
+    let flexible = columns
+        .iter()
+        .filter(|c| matches!(c.width, Width::Min(_)))
+        .count() as u16;
     let share = free.checked_div(flexible).unwrap_or(0);
     let mut extra = free.checked_rem(flexible).unwrap_or(0);
     columns
         .iter()
-        .map(|c| {
+        .zip(widths)
+        .map(|(c, w)| {
             NUDGE
                 + match c.width {
-                    Width::Fixed(w) => w,
-                    Width::Min(w) => {
+                    Width::Fixed(_) => w,
+                    Width::Min(_) => {
                         let bonus = u16::from(extra > 0);
                         extra = extra.saturating_sub(1);
                         w + share + bonus
@@ -270,6 +319,37 @@ fn resolve_widths(columns: &[Column], total: u16) -> Vec<u16> {
         .collect()
 }
 
+/// Each cell's width (without the nudge) and column, spans included.
+fn cell_widths<'r>(
+    row: &'r Row,
+    columns: &[Column],
+    widths: &[u16],
+) -> Vec<(&'r Cell, usize, usize)> {
+    let mut out = Vec::new();
+    let mut col = 0usize;
+    for cell in &row.cells {
+        if col >= columns.len() {
+            break;
+        }
+        let span = (cell.span as usize).min(columns.len() - col).max(1);
+        // A spanning cell also gets the spacing between the columns it covers.
+        let width: u16 = widths[col..col + span].iter().sum::<u16>() + SPACING * (span as u16 - 1);
+        out.push((cell, col, width.saturating_sub(NUDGE) as usize));
+        col += span;
+    }
+    out
+}
+
+/// Lines the row needs when selected: its tallest wrapped cell.
+fn row_height(row: &Row, columns: &[Column], widths: &[u16]) -> usize {
+    cell_widths(row, columns, widths)
+        .into_iter()
+        .map(|(cell, _, width)| wrap(&cell.text, width).len())
+        .max()
+        .unwrap_or(1)
+        .max(1)
+}
+
 fn table_row<'b>(
     row: Row,
     columns: &[Column],
@@ -277,29 +357,37 @@ fn table_row<'b>(
     p: &Palette,
     selected: bool,
 ) -> TableRow<'b> {
-    let mut col = 0usize;
-    let cells = row.cells.into_iter().map(|cell| {
-        let span = (cell.span as usize)
-            .min(columns.len().saturating_sub(col))
-            .max(1);
-        // A spanning cell also gets the spacing between the columns it covers.
-        let width: u16 = widths[col..col + span].iter().sum::<u16>() + SPACING * (span as u16 - 1);
-        let column = &columns[col.min(columns.len().saturating_sub(1))];
-        let style = cell_style(cell.role, row.accent, selected, p);
-        col += span;
-        // The spare column sits before the text on the selected row and
-        // after it otherwise, so the whole row moves right by one.
-        let text = truncate(&cell.text, width.saturating_sub(NUDGE) as usize);
-        let text = match (selected, column.align) {
-            (true, Align::Left) => format!(" {text}"),
-            (false, Align::Right) => format!("{text} "),
-            _ => text,
-        };
-        ratatui::widgets::Cell::new(aligned(text, column.align))
-            .style(style)
-            .column_span(span as u16)
-    });
-    TableRow::new(cells.collect::<Vec<_>>())
+    let mut height = 1;
+    let cells: Vec<_> = cell_widths(&row, columns, widths)
+        .into_iter()
+        .map(|(cell, col, width)| {
+            let column = &columns[col];
+            let style = cell_style(cell.role, row.accent, selected, p);
+            // The selected row shows the whole text, wrapped; others cut it.
+            let lines = if selected {
+                wrap(&cell.text, width)
+            } else {
+                vec![truncate(&cell.text, width)]
+            };
+            height = height.max(lines.len());
+            // The spare column sits before the text on the selected row and
+            // after it otherwise, so the whole row moves right by one.
+            let lines: Vec<Line> = lines
+                .into_iter()
+                .map(|text| match (selected, column.align) {
+                    (true, Align::Left) => format!(" {text}"),
+                    (false, Align::Right) => format!("{text} "),
+                    _ => text,
+                })
+                .map(Line::from)
+                .collect();
+            let span = cell.span.max(1).min((columns.len() - col) as u16);
+            ratatui::widgets::Cell::new(aligned(Text::from(lines), column.align))
+                .style(style)
+                .column_span(span)
+        })
+        .collect();
+    TableRow::new(cells).height(height as u16)
 }
 
 fn cell_style(role: Role, accent_row: bool, highlight: bool, p: &Palette) -> Style {
@@ -314,12 +402,45 @@ fn cell_style(role: Role, accent_row: bool, highlight: bool, p: &Palette) -> Sty
     }
 }
 
-fn aligned(text: String, align: Align) -> Text<'static> {
-    let t = Text::from(text);
+fn aligned(text: impl Into<Text<'static>>, align: Align) -> Text<'static> {
+    let t = text.into();
     match align {
         Align::Left => t,
         Align::Right => t.alignment(Alignment::Right),
     }
+}
+
+/// `s` in lines of at most `width` columns, broken at spaces where it can
+/// be and mid-word where it can't. Always at least one line.
+pub fn wrap(s: &str, width: usize) -> Vec<String> {
+    let width = width.max(1);
+    let mut lines = Vec::new();
+    let mut line = String::new();
+    for word in s.split(' ') {
+        let len = line.chars().count();
+        let wlen = word.chars().count();
+        if len > 0 && len + 1 + wlen <= width {
+            line.push(' ');
+            line.push_str(word);
+            continue;
+        }
+        if len > 0 {
+            lines.push(std::mem::take(&mut line));
+        }
+        let mut chars = word.chars().peekable();
+        while chars.peek().is_some() {
+            let chunk: String = chars.by_ref().take(width).collect();
+            if chars.peek().is_some() {
+                lines.push(chunk);
+            } else {
+                line = chunk;
+            }
+        }
+    }
+    if !line.is_empty() || lines.is_empty() {
+        lines.push(line);
+    }
+    lines
 }
 
 /// `s` cut to `width` columns with a trailing `…` when it didn't fit.
@@ -345,8 +466,44 @@ mod tests {
         ];
         // 40 − marker 2 − spacing 2 − nudges 3 − fixed 1 − mins 4 = 28 to
         // share; each column keeps its spare nudge column.
-        assert_eq!(resolve_widths(&cols, 40), vec![2, 19, 15]);
-        assert_eq!(resolve_widths(&cols, 3), vec![2, 5, 1]);
+        assert_eq!(resolve_widths(&cols, &[0; 3], 40), vec![2, 19, 15]);
+        assert_eq!(resolve_widths(&cols, &[0; 3], 3), vec![2, 5, 1]);
+    }
+
+    #[test]
+    fn wide_content_grows_its_column_first() {
+        // The profile's bests: "words 100" doesn't fit a mode column of 8.
+        let cols = [
+            Column::new("language", Width::Min(8)),
+            Column::new("mode", Width::Fixed(8)),
+            Column::new("wpm", Width::Fixed(4)),
+        ];
+        // 40 − 2 − 2 − 3 − 20 = 13 free: mode takes 1, language the rest.
+        assert_eq!(resolve_widths(&cols, &[7, 9, 3], 40), vec![21, 10, 5],);
+        // 29 leaves 2 free, not enough for both: the growth goes round the table.
+        assert_eq!(resolve_widths(&cols, &[12, 12, 3], 29), vec![10, 10, 5],);
+    }
+
+    #[test]
+    fn natural_widths_skip_spanning_cells() {
+        let cols = [
+            Column::new("a", Width::Min(0)),
+            Column::new("bb", Width::Min(0)),
+        ];
+        let rows = [
+            Row::new(vec![Cell::normal("xyz"), Cell::normal("q")]),
+            Row::new(vec![Cell::normal("a much longer message").span(2)]),
+        ];
+        assert_eq!(natural_widths(&cols, &rows), vec![3, 2]);
+    }
+
+    #[test]
+    fn wraps_at_spaces_then_mid_word() {
+        assert_eq!(wrap("words 100", 8), ["words", "100"]);
+        assert_eq!(wrap("time 15", 8), ["time 15"]);
+        assert_eq!(wrap("code_python+numpy", 8), ["code_pyt", "hon+nump", "y"]);
+        assert_eq!(wrap("ab cdefghij", 4), ["ab", "cdef", "ghij"]);
+        assert_eq!(wrap("", 4), [""]);
     }
 
     #[test]
@@ -355,5 +512,80 @@ mod tests {
         assert_eq!(truncate("hello world", 5), "hell…");
         assert_eq!(truncate("héllo", 3), "hé…");
         assert_eq!(truncate("héllo", 0), "…");
+    }
+}
+
+#[cfg(test)]
+mod render_tests {
+    use super::*;
+    use ratatui::{Terminal, backend::TestBackend};
+
+    fn draw(focused: bool, selected: usize, width: u16) -> String {
+        let p =
+            Palette::from_theme(crate::theme::ThemeRegistry::builtin().get_or_default("default"));
+        let columns = [
+            Column::new("language", Width::Min(8)),
+            Column::new("mode", Width::Fixed(8)),
+            Column::new("wpm", Width::Fixed(4)).right(),
+            Column::new("acc", Width::Fixed(4)).right(),
+            Column::new("date", Width::Fixed(10)),
+        ];
+        let data = [
+            ("english", "words 10", "145"),
+            ("code_python+numpy", "words 100", "110"),
+            ("english", "time 15", "135"),
+        ];
+        let rows = data
+            .iter()
+            .map(|(l, m, w)| {
+                Row::new(vec![
+                    Cell::normal(*l),
+                    Cell::dim(*m),
+                    Cell::normal(*w),
+                    Cell::dim("97%"),
+                    Cell::dim("2026-10-05"),
+                ])
+            })
+            .collect();
+        let mut sel = Selection::clamped(data.len());
+        sel.select(selected);
+        let mut term = Terminal::new(TestBackend::new(width, 6)).unwrap();
+        term.draw(|f| {
+            SelectTable::new(&columns, rows, &sel)
+                .focused(focused)
+                .render(f, f.area(), &p)
+        })
+        .unwrap();
+        let buf = term.backend().buffer().clone();
+        (0..buf.area.height)
+            .map(|y| {
+                let line: String = (0..buf.area.width)
+                    .map(|x| buf[(x, y)].symbol().to_string())
+                    .collect();
+                line.trim_end().to_string()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[test]
+    fn wide_content_fits_when_there_is_room() {
+        let out = draw(false, 0, 60);
+        assert!(
+            out.contains("code_python+numpy       words 100   110"),
+            "{out}"
+        );
+    }
+
+    #[test]
+    fn selected_row_wraps_what_was_cut() {
+        let out = draw(true, 1, 42);
+        let lines: Vec<&str> = out.lines().collect();
+        assert!(lines[2].starts_with(" › code_pyt  words"), "{out}");
+        assert!(lines[3].contains("hon+nump  100"), "{out}");
+        assert!(lines[4].trim() == "y", "{out}");
+        assert!(lines[5].starts_with("  english   time 15"), "{out}");
+        // Unselected rows are still cut.
+        assert!(draw(true, 0, 42).contains("code_py…  words 1…"));
     }
 }

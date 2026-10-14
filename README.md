@@ -91,6 +91,15 @@ starts with your first key, and the mode line says what it's set to
 see it. Set it in the config as `pace = "pb"` / `"last"` / `87`, with
 `:set pace …`, or in a saved config.
 
+### HUD
+
+The readouts above the words are the HUD: the timer (seconds left, or words
+typed out of the total) and live wpm, your speed so far. `:hud` opens a
+checklist with a preview of the line: `space` shows or hides the highlighted
+item and `←`/`→` move it along the line. `:hud wpm` toggles one straight
+from the command line (`:hud wpm on`/`off` to be explicit). It's saved as
+`hud = ["timer", "wpm"]` in the config, and a saved config can hold its own.
+
 ### Practice missed words
 
 Every word you get wrong is remembered per language (or custom set), even
@@ -198,6 +207,13 @@ after 30 seconds without a key anywhere else, ttyp comes back here on its
 own — not during a test, a login, the install menu, the config menu or a
 slider (an open command line is closed). With `splash = false` it stays
 where it is.
+
+When a newer ttyp is out, the landing screen says so in the accent colour,
+with how to upgrade (`brew upgrade ttyp`, `cargo install ttyp`, …, guessed
+from where ttyp is installed). A new major version gets a bigger, framed
+notice. ttyp asks GitHub for the latest release at most once a day, in the
+background, and never while offline (`server = ""`); `:set update_check off`
+(`update_check = false`) turns it off.
 
 ## Commands
 

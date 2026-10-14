@@ -1,9 +1,10 @@
-//! The test screen: timer/counter, a scrolling word box (`lines` tall) with
+//! The test screen: the HUD (timer, live wpm, … as `config::Hud` lists
+//! them; `hud_line`), a scrolling word box (`lines` tall) with
 //! a block caret (and the faint pace caret, when `pace` is on), and a dim
 //! mode line. Fullscreen drops the counter and mode
 //! line and gives their rows to the words.
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -14,9 +15,9 @@ use ratatui::widgets::Paragraph;
 use super::bigtext;
 use super::style::{Palette, mix, vcenter};
 use crate::app::App;
-use crate::config::Pace;
+use crate::config::{HudItem, Pace};
 use crate::gfx::{Glyph, ImageLine, Rgb};
-use crate::test::{Mode, Status, Word};
+use crate::test::{Metrics, Mode, Status, Word};
 
 /// Which words go on which line when a line holds `max` units, a space is
 /// `space` units and `width_of` measures a word. Words never wrap mid-word.
@@ -188,33 +189,8 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) -> Vec<Imag
     let zen = app.config.zen || fullscreen;
 
     let status = app.engine.status();
-    let counter = match app.engine.mode() {
-        // Practice has no end: count up.
-        _ if app.practice.is_some() && app.daily.is_none() => {
-            let s = app.engine.elapsed_at(Instant::now()).as_secs();
-            format!("{}:{:02}", s / 60, s % 60)
-        }
-        Mode::Time(secs) => {
-            let remaining = app
-                .engine
-                .remaining_at(Instant::now())
-                .map(|d| d.as_secs_f64().ceil() as u64)
-                .unwrap_or(secs as u64);
-            if status == Status::Idle {
-                secs.to_string()
-            } else {
-                remaining.to_string()
-            }
-        }
-        Mode::Words(n) => format!("{}/{n}", app.engine.words_completed()),
-    };
-    let header_style = if status == Status::Running {
-        p.main_bold()
-    } else {
-        p.sub()
-    };
     if !zen {
-        frame.render_widget(Paragraph::new(counter).style(header_style), header);
+        frame.render_widget(Paragraph::new(hud_line(app, Instant::now(), p)), header);
     }
 
     let mut images = Vec::new();
@@ -258,6 +234,59 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) -> Vec<Imag
         frame.render_widget(Paragraph::new(mode_line(app)).style(p.sub()), footer);
     }
     images
+}
+
+/// Gap between HUD items.
+const HUD_GAP: &str = "   ";
+
+/// The HUD as it reads at `now`: each shown item's text, left to right,
+/// bright while the test runs and dim otherwise.
+pub fn hud_line(app: &App, now: Instant, p: &Palette) -> Line<'static> {
+    let style = if app.engine.status() == Status::Running {
+        p.main_bold()
+    } else {
+        p.sub()
+    };
+    let mut spans = Vec::new();
+    for item in app.config.hud.items() {
+        if !spans.is_empty() {
+            spans.push(Span::raw(HUD_GAP));
+        }
+        spans.push(Span::styled(hud_text(app, *item, now), style));
+    }
+    Line::from(spans)
+}
+
+/// One HUD item's text at `now`.
+pub fn hud_text(app: &App, item: HudItem, now: Instant) -> String {
+    let e = &app.engine;
+    match item {
+        HudItem::Timer => match e.mode() {
+            // Practice has no end: count up.
+            _ if app.practice.is_some() && app.daily.is_none() => {
+                let s = e.elapsed_at(now).as_secs();
+                format!("{}:{:02}", s / 60, s % 60)
+            }
+            Mode::Time(secs) if e.status() == Status::Idle => secs.to_string(),
+            Mode::Time(secs) => e
+                .remaining_at(now)
+                .map_or(secs as u64, |d| d.as_secs_f64().ceil() as u64)
+                .to_string(),
+            Mode::Words(n) => format!("{}/{n}", e.words_completed()),
+        },
+        HudItem::Wpm => format!("{:.0} wpm", live_wpm(app, now)),
+    }
+}
+
+/// Net wpm so far; 0 until a second in, when a few keys would read as
+/// wild speeds.
+fn live_wpm(app: &App, now: Instant) -> f64 {
+    let e = &app.engine;
+    let elapsed = e.elapsed_at(now);
+    if e.status() == Status::Idle || elapsed < Duration::from_secs(1) {
+        return 0.0;
+    }
+    Metrics::compute(e.words(), e.current_index(), e.keystrokes(), elapsed).wpm
 }
 
 pub fn mode_line(app: &App) -> String {

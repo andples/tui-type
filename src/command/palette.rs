@@ -246,7 +246,7 @@ impl CommandLine {
         match rest {
             None => {
                 self.stage = Stage::Command;
-                self.suggestions = self.rank(head, super::COMMANDS.iter().map(command_item), false);
+                self.suggestions = self.rank_commands(head);
             }
             Some(arg) => {
                 let Some(spec) = find_spec(head) else {
@@ -268,6 +268,37 @@ impl CommandLine {
                 self.suggestions = self.rank(arg, items, ordered);
             }
         }
+    }
+
+    /// Commands for a typed name, best first. A command typed exactly, by
+    /// name or alias, comes first (`me` is `user`, not `missed`); an alias
+    /// the input starts (`prof`) counts like the name.
+    fn rank_commands(&mut self, needle: &str) -> Vec<Suggestion> {
+        let pattern = Pattern::parse(needle, CaseMatching::Ignore, Normalization::Smart);
+        let lower = needle.to_lowercase();
+        let mut buf = Vec::new();
+        let mut scored: Vec<(u32, Suggestion)> = Vec::new();
+        for spec in super::COMMANDS {
+            let exact =
+                !lower.is_empty() && (spec.name == lower || spec.aliases.contains(&lower.as_str()));
+            let mut score = pattern.score(Utf32Str::new(spec.name, &mut buf), &mut self.matcher);
+            if lower.chars().count() >= 2 {
+                for alias in spec.aliases.iter().filter(|a| a.starts_with(&lower)) {
+                    let s = pattern.score(Utf32Str::new(alias, &mut buf), &mut self.matcher);
+                    score = score.max(s);
+                }
+            }
+            let score = if exact { Some(u32::MAX) } else { score };
+            if let Some(score) = score {
+                scored.push((score, command_item(spec)));
+            }
+        }
+        scored.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.label.cmp(&b.1.label)));
+        scored
+            .into_iter()
+            .map(|(_, s)| s)
+            .take(MAX_SUGGESTIONS)
+            .collect()
     }
 
     /// Fuzzy-match `items`, best first; ties go alphabetically, or keep
@@ -441,6 +472,30 @@ mod tests {
             cl.insert(c, &comps);
         }
         assert_eq!(cl.submit(&comps), Some("follow octocat".into()));
+    }
+
+    #[test]
+    fn exact_alias_comes_first() {
+        let first = |typed: &str| {
+            let mut cl = CommandLine::new();
+            cl.open(&comps());
+            type_in(&mut cl, typed);
+            cl.selected().map(|s| s.label.clone())
+        };
+        // `me` fuzzily matches `missed`, but it's `user`'s alias.
+        assert_eq!(first("me").as_deref(), Some("user"));
+        assert_eq!(first("ME").as_deref(), Some("user"));
+        // Aliases that aren't fuzzy matches of the name still show.
+        assert_eq!(first("whois").as_deref(), Some("user"));
+        assert_eq!(first("?").as_deref(), Some("help"));
+        // A started alias counts too.
+        assert_eq!(first("prof").as_deref(), Some("user"));
+        // Names still win normally.
+        assert_eq!(first("thm").as_deref(), Some("theme"));
+        let mut cl = CommandLine::new();
+        cl.open(&comps());
+        type_in(&mut cl, "me");
+        assert_eq!(cl.submit(&comps()), Some("user".into()));
     }
 
     #[test]

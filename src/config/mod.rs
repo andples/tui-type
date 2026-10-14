@@ -11,7 +11,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::test::mode::Mode;
 
+mod hud;
 mod keyboard;
+pub use hud::{Hud, HudItem};
 pub use keyboard::Keyboard;
 
 #[derive(Debug, thiserror::Error)]
@@ -136,6 +138,9 @@ pub struct Config {
     /// Play the short landing screen (logo, login/daily hints) on start.
     /// Not a profile setting.
     pub splash: bool,
+    /// Look for a newer ttyp once a day and say so on the landing screen.
+    /// Never while offline (`server = ""`). Not a profile setting.
+    pub update_check: bool,
     /// What the results screen does when a test sets a new personal best:
     /// confetti, a trophy by the score, both or neither. Older files'
     /// `celebrate = true/false` read as both/off.
@@ -149,6 +154,8 @@ pub struct Config {
     pub min_wpm: MinWpm,
     /// The layout the results screen's missed-keys keyboard is drawn in.
     pub keyboard: Keyboard,
+    /// The live readouts above the words, left to right (see `Hud`).
+    pub hud: Hud,
     /// Strip each language's boilerplate (its `trim` list, e.g. Python's
     /// `()`) from the words.
     pub trim_syntax: bool,
@@ -610,11 +617,13 @@ impl Default for Config {
             catalog: None,
             daily_lock: true,
             splash: true,
+            update_check: true,
             pb_effect: PbEffect::Both,
             pace: Pace::Off,
             sudden_death: false,
             min_wpm: MinWpm::OFF,
             keyboard: Keyboard::Qwerty,
+            hud: Hud::default(),
             trim_syntax: false,
             custom: String::new(),
             modules: BTreeMap::new(),
@@ -680,6 +689,7 @@ impl Config {
             "zen" => self.zen = parse_bool(value)?,
             "daily_lock" => self.daily_lock = parse_bool(value)?,
             "splash" => self.splash = parse_bool(value)?,
+            "update_check" | "updatecheck" => self.update_check = parse_bool(value)?,
             "pb_effect" | "pbeffect" | "celebrate" => self.pb_effect = PbEffect::parse(value)?,
             "pace" => self.pace = Pace::parse(value)?,
             "custom" => {
@@ -691,6 +701,7 @@ impl Config {
             "sudden_death" | "suddendeath" => self.sudden_death = parse_bool(value)?,
             "min_wpm" | "minwpm" => self.min_wpm = MinWpm::parse(value)?,
             "keyboard" | "layout" => self.keyboard = Keyboard::parse(value)?,
+            "hud" => self.hud = Hud::parse(value)?,
             "trim_syntax" | "trimsyntax" | "trim" => self.trim_syntax = parse_bool(value)?,
             "fullscreen" | "full" => self.fullscreen = parse_bool(value)?,
             "lines" => self.set_lines(parse_range(value, LINES_RANGE)?),
@@ -776,6 +787,8 @@ pub struct Paths {
     pub sync_file: PathBuf,
     /// The account's personal bests from every machine, as last fetched.
     pub bests_file: PathBuf,
+    /// The latest release as last checked (`crate::update`).
+    pub update_file: PathBuf,
 }
 
 impl Paths {
@@ -803,6 +816,7 @@ impl Paths {
             missed_words_file: data_dir.join("missed_words.json"),
             sync_file: data_dir.join("sync.json"),
             bests_file: data_dir.join("bests.json"),
+            update_file: data_dir.join("update.json"),
         }
     }
 }

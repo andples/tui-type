@@ -17,7 +17,8 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::config::{
-    Config, FONT_SIZE_RANGE, Keyboard, LINES_RANGE, MinWpm, Pace, PbEffect, WORDS_PER_LINE_RANGE,
+    Config, FONT_SIZE_RANGE, Hud, Keyboard, LINES_RANGE, MinWpm, Pace, PbEffect,
+    WORDS_PER_LINE_RANGE,
 };
 use crate::test::mode::Mode;
 
@@ -83,6 +84,8 @@ pub struct ProfileSettings {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub keyboard: Option<Keyboard>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub hud: Option<Hud>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub trim_syntax: Option<bool>,
     #[serde(skip_serializing_if = "ResultsSettings::is_empty")]
     pub results: ResultsSettings,
@@ -130,6 +133,12 @@ impl Show for MinWpm {
 impl Show for Keyboard {
     fn show(&self) -> String {
         self.label().into()
+    }
+}
+
+impl Show for Hud {
+    fn show(&self) -> String {
+        self.label()
     }
 }
 
@@ -249,6 +258,7 @@ settings! {
     MinWpm, "min wpm" => min_wpm;
     PbEffect, "pb effect" => pb_effect;
     Keyboard, "keyboard" => keyboard;
+    Hud, "hud" => hud;
     TrimSyntax, "trim syntax" => trim_syntax;
     ResultsChart, "results chart" => results.chart;
     ResultsBreakdown, "results breakdown" => results.char_breakdown;
@@ -578,6 +588,7 @@ mod tests {
             mode: Mode::Words(25),
             zen: true,
             font: "Fira Code".into(),
+            hud: Hud::parse("wpm timer").unwrap(),
             ..Config::default()
         };
         let mut s = ProfileSettings::default();

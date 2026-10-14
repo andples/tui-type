@@ -84,6 +84,8 @@ pub enum Action {
     Catalog(CatalogAction),
     /// Keys on the modules checklist.
     Modules(ModuleAction),
+    /// Keys on the `:hud` screen.
+    Hud(HudAction),
     /// Open the custom page (the install screen's custom tab).
     ShowCustom,
     /// Keys on the custom page.
@@ -240,6 +242,18 @@ pub enum EditAction {
     Remove,
     /// Clear the typing, or leave when it's empty.
     Escape,
+}
+
+/// Keys on the `:hud` screen (`Screen::Hud`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HudAction {
+    Move(isize),
+    Top,
+    Bottom,
+    /// Show or hide the highlighted item.
+    Toggle,
+    /// Move the highlighted item left (−) or right (+) in the line.
+    Shift(isize),
 }
 
 /// Keys on the modules checklist (`Screen::Modules`).

@@ -6,6 +6,7 @@ mod catalog;
 pub mod celebrate;
 mod custom;
 mod difficulty;
+mod hud;
 pub mod idle;
 pub mod input;
 pub mod misses;
@@ -17,6 +18,7 @@ pub mod practice;
 mod profiles;
 pub mod splash;
 mod sync;
+mod update;
 mod user;
 
 use std::io::Write;
@@ -82,6 +84,8 @@ pub enum Screen {
     Splash,
     /// A language's modules as a checklist (download or mix in).
     Modules,
+    /// `:hud`: the live readouts above the words.
+    Hud,
     /// Custom word sets: yours and shared ones (the install screen's
     /// custom tab).
     Custom,
@@ -191,6 +195,13 @@ pub struct App {
     pub catalog_menu: CatalogMenu,
     /// Installed language modules (`catalog::modules`).
     pub modules: ModuleRegistry,
+    /// A newer release, for the landing screen's notice.
+    pub update: Option<crate::update::Update>,
+    /// How this install upgrades (`update::how_to_upgrade`).
+    pub upgrade_hint: &'static str,
+    update_checker: Option<crate::update::Checker>,
+    /// The cursor on the `:hud` screen.
+    pub hud_selection: Selection,
     /// The modules checklist (`Screen::Modules`).
     pub module_menu: ModuleMenu,
     /// Module downloads in flight: (language, module).
@@ -381,6 +392,12 @@ impl App {
             catalog_menu: CatalogMenu::default(),
             modules,
             module_menu: ModuleMenu::default(),
+            hud_selection: Selection::wrapping(crate::config::HudItem::ALL.len()),
+            update: None,
+            upgrade_hint: std::env::current_exe()
+                .and_then(|p| p.canonicalize())
+                .map_or("", |p| crate::update::how_to_upgrade(&p)),
+            update_checker: None,
             module_downloads: Vec::new(),
             modules_chosen_for: None,
             catalog_updates: Vec::new(),
@@ -452,6 +469,7 @@ impl App {
         app.retry_queued_submissions();
         app.fetch_follows();
         app.start_sync();
+        app.start_update_check();
         Ok(app)
     }
 
@@ -593,6 +611,7 @@ impl App {
         while !self.should_quit {
             self.drain_remote();
             self.drain_catalog();
+            self.drain_update();
             self.sync_tick();
             if self.dirty {
                 self.draw(terminal)?;
@@ -668,9 +687,12 @@ impl App {
     }
 
     fn poll_timeout_rest(&self) -> Option<Duration> {
-        // A minimum speed is checked between keys too.
+        // A minimum speed is checked between keys too, and live wpm
+        // falls while you pause.
         let timed_running = self.engine.status() == Status::Running
-            && (matches!(self.engine.mode(), Mode::Time(_)) || self.min_wpm_applies())
+            && (matches!(self.engine.mode(), Mode::Time(_))
+                || self.min_wpm_applies()
+                || self.config.hud.shows(crate::config::HudItem::Wpm))
             && self.screen == Screen::Typing;
         if timed_running {
             return Some(TIMER_TICK);
@@ -693,6 +715,7 @@ impl App {
         }
         if self.online.as_ref().is_some_and(Online::busy)
             || self.fetcher.as_ref().is_some_and(Fetcher::busy)
+            || self.update_checker.is_some()
         {
             return Some(REMOTE_POLL);
         }
@@ -942,6 +965,7 @@ impl App {
             Action::ShowCatalog => self.open_catalog(),
             Action::Catalog(a) => self.catalog_action(a),
             Action::Modules(a) => self.module_action(a),
+            Action::Hud(a) => self.hud_action(a),
             Action::ShowCustom => self.open_custom(),
             Action::Custom(a) => self.custom_action(a),
             Action::CustomEdit(a) => self.custom_edit_action(a),
@@ -1162,6 +1186,11 @@ impl App {
                 self.show_modules();
                 return;
             }
+            Command::Hud(None) => {
+                self.open_hud();
+                return;
+            }
+            Command::Hud(Some((item, on))) => self.set_hud_item(item, on),
             Command::TrimSyntax(v) => {
                 self.config.trim_syntax = v.unwrap_or(!self.config.trim_syntax);
                 self.notify(format!("trim syntax {}", on_off(self.config.trim_syntax)));

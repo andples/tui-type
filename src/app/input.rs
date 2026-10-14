@@ -4,8 +4,8 @@ use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use super::Screen;
 use super::action::{
-    Action, BoardAction, CatalogAction, CustomAction, EditAction, ListMove, ModuleAction,
-    PlayersAction, ProfileAction, UserAction,
+    Action, BoardAction, CatalogAction, CustomAction, EditAction, HudAction, ListMove,
+    ModuleAction, PlayersAction, ProfileAction, UserAction,
 };
 use super::misses::MissedRange;
 use super::splash::SplashMenu;
@@ -115,6 +115,7 @@ pub fn map_key(key: KeyEvent, ctx: InputContext) -> Action {
         Screen::Profiles => map_profiles(key, ctx.profile_menu),
         Screen::Catalog => map_catalog(key, ctrl || alt, ctx.catalog_confirm),
         Screen::Modules => map_modules(key),
+        Screen::Hud => map_hud(key),
         Screen::Login => match key.code {
             KeyCode::Esc | KeyCode::Char('q') => Action::CancelLogin,
             KeyCode::Char(':') => Action::OpenCommandLine,
@@ -380,6 +381,29 @@ fn map_custom_edit(key: KeyEvent, modified: bool, mode: CustomInput) -> Action {
             KeyCode::Char(ch) if !modified => e(E::Char(ch)),
             _ => Action::Nop,
         },
+    }
+}
+
+/// The HUD is one line, so ←/→ move the highlighted item along it
+/// (shift+↑/↓ and K/J too, for a list-minded hand).
+fn map_hud(key: KeyEvent) -> Action {
+    use HudAction as H;
+    let h = Action::Hud;
+    let shift = key.modifiers.contains(KeyModifiers::SHIFT);
+    match key.code {
+        KeyCode::Up if shift => h(H::Shift(-1)),
+        KeyCode::Down if shift => h(H::Shift(1)),
+        KeyCode::Left | KeyCode::Char('h') | KeyCode::Char('K') => h(H::Shift(-1)),
+        KeyCode::Right | KeyCode::Char('l') | KeyCode::Char('J') => h(H::Shift(1)),
+        KeyCode::Up | KeyCode::Char('k') => h(H::Move(-1)),
+        KeyCode::Down | KeyCode::Char('j') => h(H::Move(1)),
+        KeyCode::Home | KeyCode::Char('g') => h(H::Top),
+        KeyCode::End | KeyCode::Char('G') => h(H::Bottom),
+        KeyCode::Char(' ') | KeyCode::Char('x') | KeyCode::Enter => h(H::Toggle),
+        KeyCode::Esc | KeyCode::Char('q') => Action::Back,
+        KeyCode::Char(':') => Action::OpenCommandLine,
+        KeyCode::Char('?') => Action::ShowHelp,
+        _ => Action::Nop,
     }
 }
 

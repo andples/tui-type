@@ -16,5 +16,6 @@ pub mod profile;
 pub mod stats;
 pub mod theme;
 pub mod ui;
+pub mod update;
 
 pub use ttyp_core::{language, test};

@@ -4,7 +4,8 @@
 use super::{Profile, ProfileRegistry, ProfileSettings, SettingKey, is_name_char};
 use crate::command::Completions;
 use crate::config::{
-    Config, FONT_SIZE_RANGE, Keyboard, LINES_RANGE, MinWpm, Pace, PbEffect, WORDS_PER_LINE_RANGE,
+    Config, FONT_SIZE_RANGE, Hud, Keyboard, LINES_RANGE, MinWpm, Pace, PbEffect,
+    WORDS_PER_LINE_RANGE,
 };
 use crate::test::mode::Mode;
 use crate::ui::widgets::Selection;
@@ -206,6 +207,14 @@ impl Editor {
             SettingKey::MinWpm => s.min_wpm = s.min_wpm.map(|m| step(&MinWpm::PRESETS, &m, dir)),
             SettingKey::Keyboard => {
                 s.keyboard = s.keyboard.map(|k| step(&Keyboard::ALL, &k, dir));
+            }
+            // A few common layouts here; `:hud` arranges any.
+            SettingKey::Hud => {
+                let presets: Vec<Hud> = ["timer", "timer wpm", "wpm", "off"]
+                    .iter()
+                    .map(|p| Hud::parse(p).expect("valid preset"))
+                    .collect();
+                s.hud = s.hud.take().map(|h| step(&presets, &h, dir));
             }
         }
     }

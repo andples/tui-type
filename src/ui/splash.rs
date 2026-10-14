@@ -10,7 +10,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
+use ratatui::widgets::{Block, BorderType, Paragraph};
 
 use super::style::{Palette, content_column, vcenter};
 use super::widgets::cursor;
@@ -20,6 +20,7 @@ use crate::app::idle::{CRUMBLE, GhostFrame, IdleView};
 use crate::app::splash::LOGO;
 use crate::config::{BlockSet, FONT_SIZE_RANGE, FontSize};
 use crate::gfx::ImageLine;
+use crate::update::Update;
 
 const TAGLINE: &str = "a minimal typing test for the terminal";
 /// Tallest logo, in rows, fullscreen or not: calm, not a billboard.
@@ -113,44 +114,120 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) -> Vec<Imag
         frame.render_widget(w, row);
         y += 2;
     }
-    if !show_menu {
-        return Vec::new();
-    }
-    y += 1;
-    // `› label   key`: the selection look follows the cursor (enter runs
-    // it); the key is the shortcut.
-    let selected = app.splash.map_or(0, |s| s.selected);
-    let label_w = items.iter().map(|it| it.label.len()).max().unwrap_or(0);
-    let key_w = items.iter().map(|it| it.key.len()).max().unwrap_or(0);
-    let menu_w = cursor::SELECTED_GUTTER + (label_w + 3 + key_w) as u16;
-    let x = col.x + col.width.saturating_sub(menu_w) / 2;
-    for (i, it) in items.iter().enumerate() {
-        let on = i == selected;
-        let row = Rect::new(x, y, menu_w.min(col.width), 1).intersection(area);
-        frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                cursor::lead(p, on),
-                Span::styled(
-                    format!("{:<label_w$}   ", it.label),
-                    cursor::style(p, on, p.fg()),
-                ),
-                Span::styled(it.key, cursor::style(p, on, p.sub())),
-            ])),
-            row,
-        );
+    if show_menu {
         y += 1;
+        // `› label   key`: the selection look follows the cursor (enter runs
+        // it); the key is the shortcut.
+        let selected = app.splash.map_or(0, |s| s.selected);
+        let label_w = items.iter().map(|it| it.label.len()).max().unwrap_or(0);
+        let key_w = items.iter().map(|it| it.key.len()).max().unwrap_or(0);
+        let menu_w = cursor::SELECTED_GUTTER + (label_w + 3 + key_w) as u16;
+        let x = col.x + col.width.saturating_sub(menu_w) / 2;
+        for (i, it) in items.iter().enumerate() {
+            let on = i == selected;
+            let row = Rect::new(x, y, menu_w.min(col.width), 1).intersection(area);
+            frame.render_widget(
+                Paragraph::new(Line::from(vec![
+                    cursor::lead(p, on),
+                    Span::styled(
+                        format!("{:<label_w$}   ", it.label),
+                        cursor::style(p, on, p.fg()),
+                    ),
+                    Span::styled(it.key, cursor::style(p, on, p.sub())),
+                ])),
+                row,
+            );
+            y += 1;
+        }
+        // The key line, centred like the rest of the screen.
+        let hint = fitting(
+            &[
+                "↑↓ enter choose · any other key to start · : commands",
+                "any key to start",
+            ],
+            col.width,
+        );
+        let (w, row) = centred(hint, area.bottom().saturating_sub(2));
+        frame.render_widget(w, row);
     }
-    // The key line, centred like the rest of the screen.
-    let hint = fitting(
-        &[
-            "↑↓ enter choose · any other key to start · : commands",
-            "any key to start",
-        ],
-        col.width,
-    );
-    let (w, row) = centred(hint, area.bottom().saturating_sub(2));
-    frame.render_widget(w, row);
+    if let Some(update) = app.update {
+        draw_update(
+            frame,
+            app,
+            update,
+            col,
+            y,
+            area.bottom().saturating_sub(2),
+            p,
+        );
+    }
     Vec::new()
+}
+
+/// A newer ttyp, between the content (ending at row `top`) and the key
+/// line at `hint_y`, in the accent colour: one line for a minor or patch
+/// release, a framed notice for a major one (one bold line when the frame
+/// doesn't fit).
+fn draw_update(
+    frame: &mut Frame,
+    app: &App,
+    update: Update,
+    col: Rect,
+    top: u16,
+    hint_y: u16,
+    p: &Palette,
+) {
+    let how = app.upgrade_hint;
+    let v = update.latest;
+    // Rows between the content and the key line, keeping a blank row
+    // under each.
+    let free = hint_y.saturating_sub(top + 2);
+    if update.major {
+        let title = format!("ttyp {v} is out · a major release");
+        let w = title.chars().count().max(how.chars().count()) as u16 + 6;
+        if free >= 4 && w <= col.width {
+            let area = Rect::new(col.x + (col.width - w) / 2, hint_y - 5, w, 4);
+            frame.render_widget(
+                Block::bordered()
+                    .border_type(BorderType::Rounded)
+                    .border_style(p.main()),
+                area,
+            );
+            let lines = vec![
+                Line::from(Span::styled(title, p.main_bold())),
+                Line::from(Span::styled(how, p.main())),
+            ];
+            frame.render_widget(
+                Paragraph::new(lines).alignment(Alignment::Center),
+                Rect::new(area.x + 1, area.y + 1, w - 2, 2),
+            );
+            return;
+        }
+    }
+    if free < 1 {
+        return;
+    }
+    let text = [
+        format!("ttyp {v} is out · {how}"),
+        format!("ttyp {v} is out"),
+        format!("{v} is out"),
+    ]
+    .into_iter()
+    .find(|t| t.chars().count() <= col.width as usize);
+    let Some(text) = text else {
+        return;
+    };
+    let style = if update.major {
+        p.main_bold()
+    } else {
+        p.main()
+    };
+    frame.render_widget(
+        Paragraph::new(text)
+            .style(style)
+            .alignment(Alignment::Center),
+        Rect::new(col.x, hint_y - 2, col.width, 1),
+    );
 }
 
 /// The first of `options` that fits in `width` columns, else nothing.
