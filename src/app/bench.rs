@@ -86,6 +86,18 @@ fn run(name: &str, config: &str, images: bool) -> Timing {
         sink.clear();
     }
     let all = t.elapsed() / n as u32;
+    // A resize: the terminal cleared, everything is placed (and uploaded) again.
+    let t = Instant::now();
+    let mut bytes = 0;
+    for _ in 0..20 {
+        app.gfx.invalidate();
+        let mut lines = Vec::new();
+        term.draw(|f| lines = ui::render(f, &app)).unwrap();
+        app.gfx.present(&lines, &mut sink).unwrap();
+        bytes = sink.len();
+        sink.clear();
+    }
+    println!("   resize frame {:?}, {bytes} bytes", t.elapsed() / 20);
 
     println!(
         "   dispatch {:?}  render {:?}  present {:?}  whole frame {:?}",

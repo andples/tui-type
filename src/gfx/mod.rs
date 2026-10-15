@@ -25,6 +25,8 @@ const ID_BASE: u32 = 0x7474_7000;
 /// Uploaded glyph images kept before starting afresh (theme previews can
 /// otherwise pile up colour variants).
 const MAX_IMAGES: usize = 1500;
+/// Bytes of encoded glyph images kept for re-uploading.
+const MAX_ENCODED_BYTES: usize = 8 << 20;
 
 /// A request to draw one line of text over `area`.
 #[derive(Debug, Clone)]
@@ -48,6 +50,13 @@ struct RenderKey {
     height: u32,
     cell: (u16, u16),
     generation: u64,
+}
+
+/// A glyph image ready to upload (`kitty::encode`).
+struct Encoded {
+    w: u32,
+    h: u32,
+    data: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -128,6 +137,12 @@ pub struct Gfx {
     /// What the uploaded images were rendered for.
     render_key: Option<RenderKey>,
     images: HashMap<Glyph, u32>,
+    /// Every glyph rendered for `encoded_for` (px bits, height,
+    /// generation), kept across purges: a resize clears the terminal's
+    /// images, but they look the same and only need sending again.
+    encoded: HashMap<Glyph, Encoded>,
+    encoded_for: Option<(u32, u32, u64)>,
+    encoded_bytes: usize,
     /// Live placements by absolute pixel position.
     placed: HashMap<(i64, u32), Placed>,
     /// Pixel width of each uploaded image, for cropping at the left edge.
@@ -146,6 +161,9 @@ impl Gfx {
             cell: None,
             render_key: None,
             images: HashMap::new(),
+            encoded: HashMap::new(),
+            encoded_for: None,
+            encoded_bytes: 0,
             placed: HashMap::new(),
             widths: HashMap::new(),
             next_image: ID_BASE,
@@ -278,16 +296,32 @@ impl Gfx {
             && let (Some(key), Some(face)) = (self.render_key, self.face.get_mut())
         {
             let geom = face.geom(key.height);
+            let made_for = (key.px, key.height, key.generation);
+            if self.encoded_for != Some(made_for) || self.encoded_bytes > MAX_ENCODED_BYTES {
+                self.encoded.clear();
+                self.encoded_bytes = 0;
+                self.encoded_for = Some(made_for);
+            }
             let fresh: HashSet<Glyph> = want
                 .values()
                 .filter(|g| !self.images.contains_key(g))
                 .copied()
                 .collect();
             for g in fresh {
-                let img = face.render_glyph(&g, geom);
+                let bytes = &mut self.encoded_bytes;
+                let img = self.encoded.entry(g).or_insert_with(|| {
+                    let img = face.render_glyph(&g, geom);
+                    let data = kitty::encode(&img.rgba);
+                    *bytes += data.len();
+                    Encoded {
+                        w: img.w,
+                        h: img.h,
+                        data,
+                    }
+                });
                 let id = self.next_image;
                 self.next_image = self.next_image.wrapping_add(1).max(ID_BASE);
-                kitty::transmit(&mut buf, id, img.w, img.h, &img.rgba);
+                kitty::transmit_encoded(&mut buf, id, img.w, img.h, &img.data);
                 self.images.insert(g, id);
                 self.widths.insert(id, img.w);
             }
@@ -533,6 +567,38 @@ mod tests {
         assert!(g.metrics(FontSize::from_level(5)).is_none());
         assert_eq!(g.font_spec, None, "the same font is tried again");
         assert_eq!(g.take_load_error(true), None, "reported once");
+    }
+
+    #[test]
+    fn a_resize_sends_the_same_images_again_without_redrawing_them() {
+        let mut g = gfx();
+        let mut first = Vec::new();
+        g.present(&[line("ab", 0)], &mut first).unwrap();
+        assert_eq!(g.encoded.len(), 2);
+        // The terminal cleared (a resize): everything goes again.
+        g.invalidate();
+        let mut again = Vec::new();
+        g.present(&[line("ab", 0)], &mut again).unwrap();
+        assert_eq!(count(&again, "a=t,"), 2);
+        let payloads = |out: &[u8]| {
+            let mut p: Vec<String> = String::from_utf8_lossy(out)
+                .split("\x1b_G")
+                .filter(|seg| seg.starts_with("a=t,"))
+                .map(|seg| {
+                    let data = seg.split_once(';').unwrap().1;
+                    data.split_once("\x1b\\").unwrap().0.to_string()
+                })
+                .collect();
+            p.sort();
+            p
+        };
+        assert_eq!(payloads(&first), payloads(&again));
+        // A different size is drawn afresh.
+        let mut taller = line("ab", 0);
+        taller.area.height = 3;
+        g.present(&[taller], &mut Vec::new()).unwrap();
+        assert_eq!(g.encoded_for.map(|k| k.1), Some(60));
+        assert_eq!(g.encoded.len(), 2);
     }
 
     #[test]

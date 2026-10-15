@@ -16,11 +16,20 @@ const CHUNK: usize = 4096;
 /// Upload image `id` (`w`×`h` RGBA) without displaying it.
 pub fn transmit(out: &mut Vec<u8>, id: u32, w: u32, h: u32, rgba: &[u8]) {
     debug_assert_eq!(rgba.len(), (w * h * 4) as usize);
+    transmit_encoded(out, id, w, h, &encode(rgba));
+}
+
+/// RGBA pixels as `transmit` sends them (zlib, then base64), to send
+/// again with `transmit_encoded`.
+pub fn encode(rgba: &[u8]) -> String {
     let mut z = ZlibEncoder::new(Vec::with_capacity(rgba.len() / 8), Compression::fast());
     z.write_all(rgba).expect("writing to a Vec cannot fail");
     let packed = z.finish().expect("writing to a Vec cannot fail");
-    let data = STANDARD.encode(packed);
+    STANDARD.encode(packed)
+}
 
+/// Upload image `id` from pixels already `encode`d.
+pub fn transmit_encoded(out: &mut Vec<u8>, id: u32, w: u32, h: u32, data: &str) {
     let chunks: Vec<&[u8]> = data.as_bytes().chunks(CHUNK).collect();
     let last = chunks.len().saturating_sub(1);
     for (i, chunk) in chunks.iter().enumerate() {
