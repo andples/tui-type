@@ -96,6 +96,22 @@ pub struct LanguageEntry {
     /// date (absent in indexes from before 2.0.1).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub checksum: Option<String>,
+    /// A few of its words (`sample`), for the install screen's demo before
+    /// it's installed (absent in indexes from before 2.6.1).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sample: Vec<String>,
+}
+
+/// How many words the index samples from each language.
+pub const SAMPLE_WORDS: usize = 16;
+
+/// `n` words spread evenly through `words`, in order: the install
+/// screen's demo, the same before and after a language is installed.
+pub fn sample(words: &[String], n: usize) -> Vec<String> {
+    if words.len() <= n {
+        return words.to_vec();
+    }
+    (0..n).map(|i| words[i * words.len() / n].clone()).collect()
 }
 
 /// A language module as the index describes it.
@@ -440,6 +456,7 @@ mod tests {
                             words: l.words.len(),
                             modules,
                             checksum: Some(checksum(&text)),
+                            sample: sample(&l.words, SAMPLE_WORDS),
                         });
                     }
                     Kind::Theme => expected.themes.push(Theme::parse(&text).unwrap()),

@@ -278,7 +278,10 @@ the highlighted item and installs it first if needed, `ctrl+s` only installs
 it, `ctrl+d` removes it (after a `y`) and `ctrl+r` fetches the catalogue
 again. On the
 themes tab the highlighted theme previews live, whether or not it's
-installed. `:install nord` and `:uninstall nord` do the same from the command
+installed. Under the list a demo line shows words as the typing screen
+would, part-way through a test: the highlighted language's words (a sample
+from the catalogue before it's installed), or on the themes tab your current
+language's words in the highlighted theme. `:install nord` and `:uninstall nord` do the same from the command
 line.
 
 Installed files go in `~/.config/ttyp/languages/` and `~/.config/ttyp/themes/`,

@@ -325,6 +325,7 @@ mod tests {
                     words: 200,
                     modules: Vec::new(),
                     checksum: None,
+                    sample: Vec::new(),
                 }],
                 themes: vec![nord],
             }),

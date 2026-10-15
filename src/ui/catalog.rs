@@ -1,6 +1,8 @@
 //! Install screen: installed and available languages and themes, one tab
 //! per kind, narrowed by what's typed. Browsing the themes tab previews
-//! each theme.
+//! each theme. Under the list, a demo line typed like the typing screen:
+//! the highlighted language's words, or the current language's words in
+//! the highlighted theme.
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -11,7 +13,7 @@ use super::style::{Palette, content_column};
 use super::widgets::{Cell, Column, Row, SelectTable, Width, hints};
 use crate::app::App;
 use crate::catalog::menu::IndexState;
-use crate::catalog::{Item, ItemStatus, Kind};
+use crate::catalog::{Item, ItemStatus, Kind, SAMPLE_WORDS, sample};
 
 const STATUS_W: u16 = 11;
 
@@ -91,7 +93,16 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
 
     let selection = menu.selection(tab);
     let want = SelectTable::height_for(&columns, rows.len());
-    let table_h = want.min(body.height.saturating_sub(top_h + 2)).max(1);
+    // The demo (a blank row and up to `DEMO_LINES`) only when the list
+    // keeps a few rows.
+    let demo = selected_demo(app, &items, menu.selection(tab).selected);
+    let room = body.height.saturating_sub(top_h + 2);
+    let demo_h = if demo.is_some() && room >= DEMO_LINES + 1 + 4 {
+        DEMO_LINES + 1
+    } else {
+        0
+    };
+    let table_h = want.min(room.saturating_sub(demo_h)).max(1);
     let table_area = Rect::new(body.x, body.y + top_h, body.width, table_h);
     if items.is_empty() && !menu.query.is_empty() {
         let text = format!("  no {} match · esc clears", tab.dir());
@@ -129,6 +140,16 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
         let note_area = Rect::new(body.x, note_y, body.width, 1);
         frame.render_widget(Paragraph::new(Line::from(note)), note_area);
     }
+    if let (Some(words), true) = (demo, demo_h > 0) {
+        let demo_area = Rect::new(
+            body.x + 2,
+            note_y + 2,
+            body.width.saturating_sub(4),
+            DEMO_LINES,
+        );
+        let lines = demo_lines(&words, demo_area.width as usize, p);
+        frame.render_widget(Paragraph::new(lines), demo_area);
+    }
 
     let hint = if menu.confirm_remove {
         "y remove · any other key cancels"
@@ -142,6 +163,73 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) {
         }
     };
     hints::render(frame, area, col, p, hint);
+}
+
+/// Rows the demo may take.
+const DEMO_LINES: u16 = 2;
+
+/// The demo's words for the highlighted row: a language's own (installed,
+/// or the index's sample), or the current language's under a theme.
+fn selected_demo(app: &App, items: &[Item], selected: usize) -> Option<Vec<String>> {
+    let item = items.get(selected)?;
+    let words = match app.catalog_menu.tab {
+        Kind::Language => match app.languages.get(&item.name) {
+            Some(l) => sample(&l.words, SAMPLE_WORDS),
+            None => app
+                .catalog_menu
+                .index()?
+                .language(&item.name)?
+                .sample
+                .clone(),
+        },
+        Kind::Theme => {
+            let l = app.languages.get_or_default(&app.config.language);
+            sample(&l.words, SAMPLE_WORDS)
+        }
+    };
+    (!words.is_empty()).then_some(words)
+}
+
+/// `words` as the typing screen shows them part-way through, wrapped to
+/// `width` and cut to `DEMO_LINES`: two words typed, a typo in the third,
+/// the caret, the rest still to type.
+fn demo_lines(words: &[String], width: usize, p: &Palette) -> Vec<Line<'static>> {
+    let mut lines: Vec<Vec<Span<'static>>> = vec![Vec::new()];
+    let mut used = 0usize;
+    for (i, word) in words.iter().enumerate() {
+        let len = word.chars().count();
+        if used > 0 && used + 1 + len > width {
+            if lines.len() == DEMO_LINES as usize {
+                break;
+            }
+            lines.push(Vec::new());
+            used = 0;
+        }
+        let line = lines.last_mut().expect("one line at least");
+        if used > 0 {
+            // The caret sits on the space when the third word is too
+            // short to hold it.
+            let space = match i {
+                0..=2 => p.correct(),
+                3 if words[2].chars().count() <= 2 => p.caret(),
+                _ => p.sub(),
+            };
+            line.push(Span::styled(" ", space));
+            used += 1;
+        }
+        for (j, c) in word.chars().enumerate() {
+            let style = match (i, j) {
+                (0 | 1, _) => p.correct(),
+                (2, 0) => p.correct(),
+                (2, 1) => p.error(),
+                (2, 2) => p.caret(),
+                _ => p.sub(),
+            };
+            line.push(Span::styled(c.to_string(), style));
+        }
+        used += len;
+    }
+    lines.into_iter().map(Line::from).collect()
 }
 
 /// Colours shown for each theme: accent, text, dimmed text, error.

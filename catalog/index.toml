@@ -5,72 +5,288 @@ name = "code_bash"
 display = "Bash (code)"
 words = 206
 checksum = "8b00d208bc178950"
+sample = [
+    "#!/bin/bash",
+    "then",
+    "return",
+    "source",
+    "let",
+    '"$@"',
+    "((i++))",
+    "$i",
+    "grep",
+    "tee",
+    "wget",
+    "top",
+    ">",
+    "-eq",
+    "==",
+    "-a",
+]
 
 [[languages]]
 name = "code_c"
 display = "C (code)"
 words = 209
 checksum = "3d2b953173310f79"
+sample = [
+    "#include",
+    "<stdint.h>",
+    "main(void)",
+    "putchar()",
+    "memcmp()",
+    "qsort()",
+    "char",
+    "struct",
+    "case",
+    "int32_t",
+    "fopen()",
+    "close()",
+    "__FILE__",
+    "!=",
+    "%d",
+    "i++",
+]
 
 [[languages]]
 name = "code_cpp"
 display = "C++ (code)"
 words = 241
 checksum = "f8b31a42b07eb1eb"
+sample = [
+    "#include",
+    "<unordered_set>",
+    "main()",
+    "final",
+    "float",
+    "noexcept",
+    "else",
+    "std::cerr",
+    "std::swap",
+    "std::find_if",
+    "std::stoi",
+    "int32_t",
+    "at()",
+    "first",
+    "<=",
+    "char*",
+]
 
 [[languages]]
 name = "code_csharp"
 display = "C# (code)"
 words = 246
 checksum = "42b9461826d57f80"
+sample = [
+    "using",
+    "int",
+    "return",
+    "throw",
+    "get;",
+    "lock",
+    "List<string>",
+    "ILogger<T>",
+    "Program",
+    "Guid.NewGuid()",
+    "Enum.Parse()",
+    "Length",
+    "FirstOrDefault()",
+    "Split()",
+    "==",
+    "[HttpGet]",
+]
 
 [[languages]]
 name = "code_dart"
 display = "Dart (code)"
 words = 219
 checksum = "49234c8e23a576aa"
+sample = [
+    "void",
+    "continue;",
+    "extension",
+    "factory",
+    "sealed",
+    "int",
+    "Duration",
+    "Future<void>",
+    "reversed",
+    "any()",
+    "startsWith()",
+    "debugPrint()",
+    "!",
+    "@override",
+    "dispose()",
+    "ListView.builder()",
+]
 
 [[languages]]
 name = "code_elixir"
 display = "Elixir (code)"
 words = 220
 checksum = "4a6618173c056cf0"
+sample = [
+    "defmodule",
+    "->",
+    "reraise",
+    "or",
+    "@typedoc",
+    "&",
+    "~s()",
+    "Enum.count",
+    "Enum.uniq",
+    "Map.fetch!",
+    "String.upcase",
+    "Kernel",
+    "init",
+    "Logger.info",
+    "tl",
+    "conn",
+]
 
 [[languages]]
 name = "code_go"
 display = "Go (code)"
 words = 204
 checksum = "154a3ded25138a88"
+sample = [
+    "package",
+    "go",
+    "goto",
+    "float64",
+    "make()",
+    "min()",
+    "errors.Is()",
+    "strings.Contains()",
+    "time.Now()",
+    "ctx",
+    "r.URL",
+    "mu.Lock()",
+    "log.Fatal()",
+    "...",
+    "&T{}",
+    "string(b)",
+]
 
 [[languages]]
 name = "code_haskell"
 display = "Haskell (code)"
 words = 243
 checksum = "6e741927f058c284"
+sample = [
+    "module",
+    "of",
+    '\',
+    "String",
+    "Word",
+    "[Char]",
+    "zipWith",
+    "minimum",
+    "lines",
+    "forM_",
+    "=<<",
+    "truncate",
+    "undefined",
+    "Applicative",
+    "mempty",
+    "Data.IORef",
+]
 
 [[languages]]
 name = "code_java"
 display = "Java (code)"
 words = 244
 checksum = "fd71b323cd979ad8"
+sample = [
+    "public",
+    "int",
+    "case",
+    "false",
+    "Boolean",
+    "Optional",
+    "LocalDateTime",
+    "ArrayList<>",
+    "String.format()",
+    "List.of()",
+    '@SuppressWarnings("unchecked")',
+    "remove()",
+    "values()",
+    "findFirst()",
+    "getClass()",
+    "::",
+]
 
 [[languages]]
 name = "code_javascript"
 display = "JavaScript (code)"
 words = 233
 checksum = "e751f4a2841bd095"
+sample = [
+    "function",
+    "continue",
+    "await",
+    "undefined",
+    "Object.assign()",
+    "clearTimeout()",
+    "Date",
+    "WeakSet",
+    "findIndex()",
+    "trim()",
+    "sort()",
+    "text()",
+    "addEventListener()",
+    "module.exports",
+    "req.body",
+    "&&",
+]
 
 [[languages]]
 name = "code_kotlin"
 display = "Kotlin (code)"
 words = 242
 checksum = "a11e9fa22b62f81c"
+sample = [
+    "fun",
+    "interface",
+    "super",
+    "lateinit",
+    "throw",
+    "Nothing",
+    "Exception",
+    "Dispatchers.IO",
+    "check()",
+    "filter",
+    "toSet()",
+    "firstOrNull()",
+    "split()",
+    "async",
+    "..",
+    "@JvmOverloads",
+]
 
 [[languages]]
 name = "code_lean"
 display = "Lean 4 (code)"
 words = 214
 checksum = "ff73a77be604270c"
+sample = [
+    "def",
+    "where",
+    "then",
+    "for",
+    "simp",
+    "trivial",
+    "case",
+    "Type",
+    "ToString",
+    '\forall',
+    '\<>',
+    ">>=",
+    "some",
+    "h.1",
+    "zero_add",
+    "IO.println",
+]
 
 [[languages.modules]]
 name = "batteries"
@@ -95,30 +311,120 @@ name = "code_lua"
 display = "Lua (code)"
 words = 173
 checksum = "815b3b5394b85684"
+sample = [
+    "local",
+    "do",
+    "false",
+    "error()",
+    "load()",
+    "string.find()",
+    "string.reverse()",
+    "table.concat()",
+    "math.randomseed()",
+    "os.rename()",
+    "utf8.len()",
+    "<=",
+    "#t",
+    "obj:method()",
+    "__len",
+    "vim.api",
+]
 
 [[languages]]
 name = "code_ocaml"
 display = "OCaml (code)"
 words = 225
 checksum = "9515ba801296fa6a"
+sample = [
+    "let",
+    "of",
+    "exception",
+    "downto",
+    "()",
+    "'b",
+    "List.fold_right",
+    "List.sort",
+    "Array.iter",
+    "Printf.eprintf",
+    "Hashtbl.add",
+    "Set.Make",
+    "exit",
+    "=",
+    "-.",
+    "xs",
+]
 
 [[languages]]
 name = "code_perl"
 display = "Perl (code)"
 words = 201
 checksum = "d24fcf313244a402"
+sample = [
+    "#!/usr/bin/perl",
+    "elsif",
+    "no",
+    "eq",
+    "join",
+    "undef",
+    "rindex",
+    "sqrt",
+    "mkdir",
+    "$@",
+    "scalar(@list)",
+    "<$fh>",
+    "=>",
+    "**",
+    "-e",
+    "croak",
+]
 
 [[languages]]
 name = "code_php"
 display = "PHP (code)"
 words = 200
 checksum = "e88e3f7896973b84"
+sample = [
+    "<?php",
+    "for",
+    "private",
+    "global",
+    "string",
+    "self",
+    "$_SESSION",
+    "__toString()",
+    "strlen()",
+    "printf()",
+    "array_values()",
+    "ksort()",
+    "password_hash()",
+    "Exception",
+    "=>",
+    "<=>",
+]
 
 [[languages]]
 name = "code_python"
 display = "Python (code)"
 words = 216
 checksum = "295d373e29188d40"
+sample = [
+    "def",
+    "True",
+    "pass",
+    "range()",
+    "str()",
+    "input()",
+    "divmod()",
+    "__getitem__",
+    "extend()",
+    "copy()",
+    "find()",
+    "Union",
+    "IndexError",
+    "*=",
+    "[]",
+    "x",
+]
 
 [[languages.modules]]
 name = "numpy"
@@ -155,84 +461,336 @@ name = "code_r"
 display = "R (code)"
 words = 237
 checksum = "1bdebe1b781bc42d"
+sample = [
+    "function",
+    "NA_integer_",
+    ">=",
+    "x[i]",
+    "library(dplyr)",
+    "seq()",
+    "var()",
+    "sprintf()",
+    "is.numeric()",
+    "strsplit()",
+    "sort()",
+    "identical()",
+    "readRDS()",
+    "predict()",
+    "aes()",
+    "left_join()",
+]
 
 [[languages]]
 name = "code_ruby"
 display = "Ruby (code)"
 words = 244
 checksum = "9504a19a5ec605d1"
+sample = [
+    "def",
+    "begin",
+    "break",
+    "attr_accessor",
+    "catch",
+    "downto",
+    "zip",
+    "filter_map",
+    "reverse",
+    "to_sym",
+    "each_pair",
+    "&:to_s",
+    "%i[]",
+    "File.read",
+    "Object",
+    "be_truthy",
+]
 
 [[languages]]
 name = "code_rust"
 display = "Rust (code)"
 words = 238
 checksum = "faa8b30db131c93b"
+sample = [
+    "fn",
+    "self",
+    "as",
+    "f32",
+    "Arc<T>",
+    "Copy",
+    "impl<T>",
+    "String::new()",
+    "and_then()",
+    "filter_map()",
+    "sort()",
+    "as_str()",
+    "default()",
+    "unreachable!()",
+    "::",
+    "std::fmt",
+]
 
 [[languages]]
 name = "code_scala"
 display = "Scala (code)"
 words = 221
 checksum = "29313da5f0bbee88"
+sample = [
+    "def",
+    "protected",
+    "for",
+    "inline",
+    "Any",
+    "ListBuffer",
+    "Range",
+    "List[String]",
+    "fold",
+    "size",
+    "count",
+    "zipWithIndex",
+    "get",
+    "Map()",
+    "::",
+    "@deprecated",
+]
 
 [[languages]]
 name = "code_sql"
 display = "SQL (code)"
 words = 196
 checksum = "c13ad4fdd175aea3"
+sample = [
+    "SELECT",
+    "EXISTS",
+    "TABLE",
+    "CONSTRAINT",
+    "GROUP",
+    "INTERSECT",
+    "COUNT()",
+    "DATE_TRUNC()",
+    "ARRAY_AGG()",
+    "SMALLINT",
+    "REAL",
+    "AUTOINCREMENT",
+    "EXPLAIN",
+    "ANY",
+    ";",
+    "email",
+]
 
 [[languages]]
 name = "code_swift"
 display = "Swift (code)"
 words = 224
 checksum = "faf697025936232b"
+sample = [
+    "func",
+    "break",
+    "public",
+    "rethrows",
+    "associatedtype",
+    "set",
+    "Character",
+    "UUID",
+    "[String]",
+    "contains()",
+    "zip()",
+    "stride(from:to:by:)",
+    "??",
+    "$0",
+    "@main",
+    "HStack",
+]
 
 [[languages]]
 name = "code_typescript"
 display = "TypeScript (code)"
 words = 168
 checksum = "5163d64f33f3d3c3"
+sample = [
+    "interface",
+    "protected",
+    "object",
+    "for",
+    "class",
+    "export",
+    "is",
+    "Awaited<T>",
+    "Promise<string>",
+    "<T>",
+    "...",
+    "Object.values()",
+    "filter()",
+    "join()",
+    "useState()",
+    "@NgModule()",
+]
 
 [[languages]]
 name = "code_zig"
 display = "Zig (code)"
 words = 200
 checksum = "3556922f44c69770"
+sample = [
+    "const",
+    "defer",
+    "noinline",
+    "allowzero",
+    "u32",
+    "f128",
+    "[]T",
+    '@import("std");',
+    "@truncate()",
+    "@divTrunc()",
+    "std.mem.Allocator",
+    "std.heap.page_allocator",
+    "std.Thread",
+    "list.items",
+    "x.*",
+    "-%",
+]
 
 [[languages]]
 name = "dutch"
 display = "Dutch"
 words = 196
 checksum = "b8308fc38a3dc445"
+sample = [
+    "de",
+    "zijn",
+    "hem",
+    "zich",
+    "heeft",
+    "omdat",
+    "zonder",
+    "doch",
+    "iemand",
+    "werk",
+    "deel",
+    "auto",
+    "samen",
+    "gaan",
+    "spreken",
+    "eten",
+]
 
 [[languages]]
 name = "french"
 display = "French"
 words = 216
 checksum = "fcad820f45745cea"
+sample = [
+    "de",
+    "qui",
+    "avec",
+    "sa",
+    "ces",
+    "après",
+    "chez",
+    "mois",
+    "homme",
+    "nom",
+    "point",
+    "état",
+    "venir",
+    "vouloir",
+    "façon",
+    "action",
+]
 
 [[languages]]
 name = "german"
 display = "German"
 words = 225
 checksum = "df569f2429706672"
+sample = [
+    "der",
+    "im",
+    "sie",
+    "zum",
+    "sei",
+    "soll",
+    "immer",
+    "neue",
+    "weil",
+    "einmal",
+    "seite",
+    "menschen",
+    "erste",
+    "selbst",
+    "liegen",
+    "fragen",
+]
 
 [[languages]]
 name = "italian"
 display = "Italian"
 words = 202
 checksum = "c216a8df06aaff2c"
+sample = [
+    "di",
+    "del",
+    "ti",
+    "questo",
+    "qui",
+    "ne",
+    "parte",
+    "grande",
+    "oggi",
+    "stare",
+    "portare",
+    "vincere",
+    "fine",
+    "testa",
+    "persona",
+    "forse",
+]
 
 [[languages]]
 name = "portuguese"
 display = "Portuguese"
 words = 215
 checksum = "b6194c75966a70b4"
+sample = [
+    "de",
+    "uma",
+    "ele",
+    "eu",
+    "aos",
+    "nem",
+    "nós",
+    "lhes",
+    "esta",
+    "dia",
+    "cidade",
+    "primeiro",
+    "ontem",
+    "ficar",
+    "conseguir",
+    "dormir",
+]
 
 [[languages]]
 name = "spanish"
 display = "Spanish"
 words = 258
 checksum = "326676afe18d91eb"
+sample = [
+    "de",
+    "su",
+    "este",
+    "desde",
+    "tiene",
+    "aunque",
+    "gran",
+    "poco",
+    "quien",
+    "decir",
+    "estas",
+    "nueva",
+    "historia",
+    "situación",
+    "ley",
+    "número",
+]
 
 [[themes]]
 name = "8008"
