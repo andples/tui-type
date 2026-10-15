@@ -182,7 +182,7 @@ impl Editor {
             SettingKey::Theme => s.theme = s.theme.take().map(|t| step(&comps.themes, &t, dir)),
             SettingKey::Font => {
                 let fonts: Vec<String> = std::iter::once(String::new())
-                    .chain(comps.fonts.iter().cloned())
+                    .chain(comps.fonts().iter().cloned())
                     .collect();
                 s.font = s.font.take().map(|f| step(&fonts, &f, dir));
             }
@@ -292,6 +292,8 @@ mod tests {
     fn cycling_values_in_place() {
         let comps = Completions {
             themes: vec!["default".into(), "nord".into()],
+            // No fonts to cycle through (and no `fc-list`).
+            fonts: Vec::new().into(),
             ..Default::default()
         };
         let config = Config::default();

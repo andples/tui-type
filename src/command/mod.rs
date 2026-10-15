@@ -700,7 +700,7 @@ pub fn arg_candidates(kind: ArgKind, comps: &Completions) -> Vec<String> {
         ArgKind::None | ArgKind::Free => vec![],
         ArgKind::Themes => comps.themes.clone(),
         ArgKind::Languages => comps.languages.clone(),
-        ArgKind::Fonts => comps.fonts.clone(),
+        ArgKind::Fonts => comps.fonts().to_vec(),
         ArgKind::Profiles => comps.profiles.clone(),
         ArgKind::Installable => comps.installable.clone(),
         ArgKind::Removable => comps.removable.clone(),

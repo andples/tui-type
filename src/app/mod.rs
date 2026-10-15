@@ -367,7 +367,7 @@ impl App {
         let completions = Completions {
             themes: themes.names().map(str::to_string).collect(),
             languages: languages.names().map(str::to_string).collect(),
-            fonts: gfx::fonts::list(&paths.fonts_dir),
+            fonts_dir: paths.fonts_dir.clone(),
             profiles: profiles.names().map(str::to_string).collect(),
             ..Default::default()
         };

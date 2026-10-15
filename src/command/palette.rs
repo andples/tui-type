@@ -5,6 +5,9 @@
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
 
+use std::cell::OnceCell;
+use std::path::PathBuf;
+
 use super::{ArgKind, CommandSpec, arg_candidates, find_spec};
 
 const MAX_SUGGESTIONS: usize = 8;
@@ -14,7 +17,12 @@ const MAX_SUGGESTIONS: usize = 8;
 pub struct Completions {
     pub themes: Vec<String>,
     pub languages: Vec<String>,
-    pub fonts: Vec<String>,
+    /// Font names, listed the first time something asks (`fonts`): that
+    /// runs `fc-list`, which startup shouldn't wait on.
+    pub fonts: OnceCell<Vec<String>>,
+    /// Where `fonts` looks for font files besides the bundled and
+    /// installed ones.
+    pub fonts_dir: PathBuf,
     pub profiles: Vec<String>,
     /// Catalogue entries not installed yet (empty until the index loads).
     pub installable: Vec<String>,
@@ -25,6 +33,14 @@ pub struct Completions {
     pub follows: Vec<String>,
     /// Custom sets on this machine, plus `off`.
     pub customs: Vec<String>,
+}
+
+impl Completions {
+    /// Bundled fonts, files in `fonts_dir` and installed monospace families.
+    pub fn fonts(&self) -> &[String] {
+        self.fonts
+            .get_or_init(|| crate::gfx::fonts::list(&self.fonts_dir))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
