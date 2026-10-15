@@ -692,7 +692,7 @@ impl App {
         let timed_running = self.engine.status() == Status::Running
             && (matches!(self.engine.mode(), Mode::Time(_))
                 || self.min_wpm_applies()
-                || self.config.hud.shows(crate::config::HudItem::Wpm))
+                || self.config.hud.ticks())
             && self.screen == Screen::Typing;
         if timed_running {
             return Some(TIMER_TICK);

@@ -2,8 +2,10 @@
 //! order the player put them. Written to TOML as a list of names
 //! (`hud = ["timer", "wpm"]`); an item not in the list is hidden.
 //!
-//! Adding an item: a `HudItem` variant with its `name`/`label`/`about`, an
-//! entry in `HudItem::ALL`, and its text in `ui::typing::hud_text`.
+//! Adding an item: a `HudItem` variant with its `name`/`label`/`about`/
+//! `parse` aliases, an entry in `HudItem::ALL`, its text in
+//! `ui::typing::hud_text`, and whether it changes between keys in
+//! `HudItem::ticks`.
 
 use serde::{Deserialize, Serialize};
 
@@ -13,17 +15,32 @@ pub enum HudItem {
     Timer,
     /// Net wpm so far.
     Wpm,
+    /// Raw wpm so far: every key, right or wrong.
+    Raw,
+    /// Correct keys out of all keys so far.
+    Acc,
+    /// Wrong keys so far.
+    Errors,
 }
 
 impl HudItem {
     /// Every item, in the order the menu lists hidden ones.
-    pub const ALL: [HudItem; 2] = [HudItem::Timer, HudItem::Wpm];
+    pub const ALL: [HudItem; 5] = [
+        HudItem::Timer,
+        HudItem::Wpm,
+        HudItem::Raw,
+        HudItem::Acc,
+        HudItem::Errors,
+    ];
 
     /// The name in the config file and on the command line.
     pub fn name(self) -> &'static str {
         match self {
             HudItem::Timer => "timer",
             HudItem::Wpm => "wpm",
+            HudItem::Raw => "raw",
+            HudItem::Acc => "acc",
+            HudItem::Errors => "errors",
         }
     }
 
@@ -32,6 +49,9 @@ impl HudItem {
         match self {
             HudItem::Timer => "timer",
             HudItem::Wpm => "live wpm",
+            HudItem::Raw => "raw wpm",
+            HudItem::Acc => "accuracy",
+            HudItem::Errors => "errors",
         }
     }
 
@@ -39,7 +59,16 @@ impl HudItem {
         match self {
             HudItem::Timer => "seconds left, or words typed out of the total",
             HudItem::Wpm => "your speed so far, updated as you type",
+            HudItem::Raw => "every key counted, mistakes too",
+            HudItem::Acc => "correct keys out of every key so far",
+            HudItem::Errors => "wrong keys so far",
         }
+    }
+
+    /// Its value changes while no key is pressed (time passing), so the
+    /// screen must redraw on a timer while it's shown.
+    pub fn ticks(self) -> bool {
+        matches!(self, HudItem::Timer | HudItem::Wpm | HudItem::Raw)
     }
 
     pub fn parse(s: &str) -> Result<Self, String> {
@@ -47,6 +76,9 @@ impl HudItem {
         let found = match s.as_str() {
             "time" | "timeleft" | "counter" => Some(HudItem::Timer),
             "speed" | "livewpm" | "live_wpm" => Some(HudItem::Wpm),
+            "rawwpm" | "raw_wpm" => Some(HudItem::Raw),
+            "accuracy" => Some(HudItem::Acc),
+            "error" | "mistakes" | "typos" => Some(HudItem::Errors),
             _ => HudItem::ALL.into_iter().find(|i| i.name() == s),
         };
         found.ok_or_else(|| {
@@ -87,6 +119,11 @@ impl From<Hud> for Vec<String> {
 }
 
 impl Hud {
+    /// Some shown item changes between keys (see `HudItem::ticks`).
+    pub fn ticks(&self) -> bool {
+        self.0.iter().any(|i| i.ticks())
+    }
+
     /// The shown items, left to right.
     pub fn items(&self) -> &[HudItem] {
         &self.0
@@ -190,9 +227,26 @@ mod tests {
         h.toggle(HudItem::Timer);
         assert_eq!(h.items(), [HudItem::Wpm]);
         assert_eq!(
-            h.menu_order(),
+            h.menu_order()[..2],
             [(HudItem::Wpm, true), (HudItem::Timer, false)]
         );
+    }
+
+    #[test]
+    fn every_item_has_a_unique_name_that_parses_back() {
+        for item in HudItem::ALL {
+            assert_eq!(HudItem::parse(item.name()), Ok(item));
+            assert_eq!(
+                HudItem::ALL
+                    .iter()
+                    .filter(|i| i.name() == item.name())
+                    .count(),
+                1
+            );
+        }
+        assert!(Hud::parse("acc errors").unwrap().shows(HudItem::Errors));
+        assert!(!Hud::parse("acc errors").unwrap().ticks());
+        assert!(Hud::parse("acc raw").unwrap().ticks());
     }
 
     #[test]

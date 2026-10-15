@@ -275,7 +275,38 @@ pub fn hud_text(app: &App, item: HudItem, now: Instant) -> String {
             Mode::Words(n) => format!("{}/{n}", e.words_completed()),
         },
         HudItem::Wpm => format!("{:.0} wpm", live_wpm(app, now)),
+        HudItem::Raw => {
+            let keys = e.keystrokes().len();
+            format!("{:.0} raw", per_minute(app, now, keys))
+        }
+        HudItem::Acc => {
+            let keys = e.keystrokes();
+            let correct = keys.iter().filter(|k| k.correct).count();
+            match keys.len() {
+                0 => "100%".to_string(),
+                n => format!("{:.0}%", correct as f64 / n as f64 * 100.0),
+            }
+        }
+        HudItem::Errors => {
+            let n = e.keystrokes().iter().filter(|k| !k.correct).count();
+            if n == 1 {
+                "1 error".to_string()
+            } else {
+                format!("{n} errors")
+            }
+        }
     }
+}
+
+/// `chars` as words per minute of the test so far; 0 for the first
+/// second, like `live_wpm`.
+fn per_minute(app: &App, now: Instant, chars: usize) -> f64 {
+    let e = &app.engine;
+    let elapsed = e.elapsed_at(now);
+    if e.status() == Status::Idle || elapsed < Duration::from_secs(1) {
+        return 0.0;
+    }
+    chars as f64 / 5.0 / (elapsed.as_secs_f64() / 60.0)
 }
 
 /// Net wpm so far; 0 until a second in, when a few keys would read as
