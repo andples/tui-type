@@ -361,7 +361,7 @@ impl App {
         }
 
         let mut gfx = Gfx::disabled();
-        if let Err(e) = gfx.configure(&config, &paths.fonts_dir) {
+        if let Err(e) = gfx.configure_in_background(&config, &paths.fonts_dir) {
             warnings.push(e);
         }
         let completions = Completions {
@@ -613,6 +613,9 @@ impl App {
             self.drain_catalog();
             self.drain_update();
             self.sync_tick();
+            if let Some(e) = self.gfx.take_load_error(false) {
+                self.notify(e);
+            }
             if self.dirty {
                 self.draw(terminal)?;
                 self.dirty = false;
@@ -716,6 +719,7 @@ impl App {
         if self.online.as_ref().is_some_and(Online::busy)
             || self.fetcher.as_ref().is_some_and(Fetcher::busy)
             || self.update_checker.is_some()
+            || self.gfx.loading()
         {
             return Some(REMOTE_POLL);
         }

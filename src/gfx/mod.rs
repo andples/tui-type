@@ -8,9 +8,11 @@ pub mod fonts;
 pub mod kitty;
 pub mod raster;
 
+use std::cell::{OnceCell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::io::{self, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::thread::JoinHandle;
 
 use ratatui::layout::Rect;
 
@@ -54,9 +56,69 @@ struct Placed {
     pid: u32,
 }
 
+/// The loaded font. At startup it loads on a thread (resolving a system
+/// font runs `fc-match`, and a big font takes a while to parse), so the
+/// first frame doesn't wait for it unless that frame draws with it.
+#[derive(Default)]
+struct FaceSlot {
+    face: OnceCell<Option<Face>>,
+    loading: RefCell<Option<JoinHandle<Result<Face, String>>>>,
+    /// Why the background load failed, until `Gfx::take_load_error`.
+    error: RefCell<Option<String>>,
+}
+
+impl FaceSlot {
+    fn ready(face: Face) -> Self {
+        Self {
+            face: OnceCell::from(Some(face)),
+            ..Default::default()
+        }
+    }
+
+    fn background(spec: String, fonts_dir: PathBuf) -> Self {
+        let handle = std::thread::spawn(move || load(&spec, &fonts_dir));
+        Self {
+            loading: RefCell::new(Some(handle)),
+            ..Default::default()
+        }
+    }
+
+    /// The face, waiting for a background load to finish if one is running.
+    fn get(&self) -> Option<&Face> {
+        self.face
+            .get_or_init(|| {
+                let handle = self.loading.borrow_mut().take()?;
+                let result = handle
+                    .join()
+                    .unwrap_or_else(|_| Err("loading the font failed".into()));
+                result.map_err(|e| *self.error.borrow_mut() = Some(e)).ok()
+            })
+            .as_ref()
+    }
+
+    fn get_mut(&mut self) -> Option<&mut Face> {
+        self.get();
+        self.face.get_mut()?.as_mut()
+    }
+
+    /// No face, and none on the way.
+    fn is_none(&self) -> bool {
+        self.face.get().is_some_and(Option::is_none)
+            || (self.face.get().is_none() && self.loading.borrow().is_none())
+    }
+
+    /// A background load is still running.
+    fn is_loading(&self) -> bool {
+        self.loading
+            .borrow()
+            .as_ref()
+            .is_some_and(|h| !h.is_finished())
+    }
+}
+
 pub struct Gfx {
     supported: bool,
-    face: Option<Face>,
+    face: FaceSlot,
     /// The `font` setting `face` was loaded from.
     font_spec: Option<String>,
     /// Bumped on every font load so old glyph images are dropped.
@@ -78,7 +140,7 @@ impl Gfx {
     pub fn disabled() -> Self {
         Self {
             supported: false,
-            face: None,
+            face: FaceSlot::default(),
             font_spec: None,
             generation: 0,
             cell: None,
@@ -94,15 +156,38 @@ impl Gfx {
     /// Apply the `graphics` and `font` settings. On error images stay off
     /// and the caller should tell the user why.
     pub fn configure(&mut self, config: &Config, fonts_dir: &Path) -> Result<(), String> {
+        self.configure_with(config, fonts_dir, false)
+    }
+
+    /// `configure` for startup: the font loads on a thread, and a failure
+    /// is reported later by `take_load_error`.
+    pub fn configure_in_background(
+        &mut self,
+        config: &Config,
+        fonts_dir: &Path,
+    ) -> Result<(), String> {
+        self.configure_with(config, fonts_dir, true)
+    }
+
+    fn configure_with(
+        &mut self,
+        config: &Config,
+        fonts_dir: &Path,
+        background: bool,
+    ) -> Result<(), String> {
         self.supported = detect(config.graphics);
         if !self.supported {
             return Ok(());
         }
         self.refresh_cell_size();
         if self.face.is_none() || self.font_spec.as_deref() != Some(config.font.as_str()) {
-            self.face = None;
+            self.face = FaceSlot::default();
             self.font_spec = None;
-            self.face = Some(load(&config.font, fonts_dir)?);
+            self.face = if background {
+                FaceSlot::background(config.font.clone(), fonts_dir.to_path_buf())
+            } else {
+                FaceSlot::ready(load(&config.font, fonts_dir)?)
+            };
             self.font_spec = Some(config.font.clone());
             self.generation += 1;
         }
@@ -123,6 +208,23 @@ impl Gfx {
         });
     }
 
+    /// The startup font is still loading.
+    pub fn loading(&self) -> bool {
+        self.face.is_loading()
+    }
+
+    /// Why the startup font didn't load, once it has finished trying
+    /// (waits for it when `wait`); reported once.
+    pub fn take_load_error(&mut self, wait: bool) -> Option<String> {
+        if !wait && self.face.is_loading() {
+            return None;
+        }
+        self.face.get();
+        let e = self.face.error.get_mut().take()?;
+        self.font_spec = None;
+        Some(e)
+    }
+
     /// Whether the terminal speaks the protocol, even if no font loaded.
     pub fn supported(&self) -> bool {
         self.supported
@@ -133,7 +235,7 @@ impl Gfx {
         if size.is_native() || !self.supported {
             return None;
         }
-        let (face, (cell_w, cell_h)) = (self.face.as_ref()?, self.cell?);
+        let (face, (cell_w, cell_h)) = (self.face.get()?, self.cell?);
         let (_, rows) = size.cell_dims();
         Some(TextMetrics {
             geom: face.geom(rows as u32 * cell_h as u32),
@@ -143,11 +245,11 @@ impl Gfx {
     }
 
     pub fn advance(&self, ch: char, px: f32) -> f32 {
-        self.face.as_ref().map_or(0.0, |f| f.advance(ch, px))
+        self.face.get().map_or(0.0, |f| f.advance(ch, px))
     }
 
     pub fn mean_advance(&self, px: f32) -> f32 {
-        self.face.as_ref().map_or(0.0, |f| f.mean_advance(px))
+        self.face.get().map_or(0.0, |f| f.mean_advance(px))
     }
 
     /// Make the screen show exactly `lines`, sending only the difference.
@@ -155,8 +257,11 @@ impl Gfx {
         let mut buf = Vec::new();
         let want = self.layout(lines, &mut buf);
 
-        // Upload glyphs not seen before.
-        if let (Some(face), Some(key)) = (self.face.as_mut(), self.render_key) {
+        // Upload glyphs not seen before (with nothing to show, the font,
+        // which may still be loading, isn't needed).
+        if !want.is_empty()
+            && let (Some(key), Some(face)) = (self.render_key, self.face.get_mut())
+        {
             let geom = face.geom(key.height);
             let fresh: HashSet<Glyph> = want
                 .values()
@@ -231,8 +336,11 @@ impl Gfx {
     /// images if they were rendered for a different size or font.
     fn layout(&mut self, lines: &[ImageLine], buf: &mut Vec<u8>) -> HashMap<(i64, u32), Glyph> {
         let mut want = HashMap::new();
-        let (Some(face), Some((cw, ch)), Some(first)) = (&self.face, self.cell, lines.first())
-        else {
+        // No lines, no need for the font (which may still be loading).
+        let Some(first) = lines.first() else {
+            return want;
+        };
+        let (Some(face), Some((cw, ch))) = (self.face.get(), self.cell) else {
             return want;
         };
         let height = first.area.height as u32 * ch as u32;
@@ -325,7 +433,7 @@ mod tests {
         let mut g = Gfx::disabled();
         g.supported = true;
         g.cell = Some((10, 20));
-        g.face = Some(Face::from_files(fonts::BUNDLED[0].files).unwrap());
+        g.face = FaceSlot::ready(Face::from_files(fonts::BUNDLED[0].files).unwrap());
         g
     }
 
@@ -396,12 +504,32 @@ mod tests {
     }
 
     #[test]
+    fn background_font_loads_on_first_use_and_reports_failure() {
+        let dir = Path::new("/nonexistent");
+        let mut g = gfx();
+        g.face = FaceSlot::background("Fira Code".into(), dir.into());
+        assert!(g.metrics(FontSize::from_level(5)).is_some());
+        assert_eq!(g.take_load_error(true), None);
+
+        g.face = FaceSlot::background("no such font, surely".into(), dir.into());
+        g.font_spec = Some("no such font, surely".into());
+        // Nothing to draw: the font isn't waited for.
+        let mut out = Vec::new();
+        g.present(&[], &mut out).unwrap();
+        let e = g.take_load_error(true).expect("an error");
+        assert!(e.contains("not found"), "{e}");
+        assert!(g.metrics(FontSize::from_level(5)).is_none());
+        assert_eq!(g.font_spec, None, "the same font is tried again");
+        assert_eq!(g.take_load_error(true), None, "reported once");
+    }
+
+    #[test]
     fn placements_use_cell_plus_pixel_offset() {
         let mut g = gfx();
         let mut out = Vec::new();
         g.present(&[line("x", usize::MAX)], &mut out).unwrap();
         let (&(x, y), _) = g.placed.iter().next().unwrap();
-        let pad = g.face.as_ref().unwrap().geom(40).pad();
+        let pad = g.face.get().unwrap().geom(40).pad();
         assert_eq!((x, y), (40 - pad as i64, 40));
         let s = String::from_utf8_lossy(&out);
         assert!(
@@ -418,7 +546,7 @@ mod tests {
         let mut l = line("x", usize::MAX);
         l.area.x = 0;
         g.present(&[l], &mut out).unwrap();
-        let pad = g.face.as_ref().unwrap().geom(40).pad();
+        let pad = g.face.get().unwrap().geom(40).pad();
         assert_eq!(g.placed.keys().next().unwrap().0, -(pad as i64));
         let s = String::from_utf8_lossy(&out);
         assert!(s.contains(&format!("x={pad},w=")), "{s:?}");
