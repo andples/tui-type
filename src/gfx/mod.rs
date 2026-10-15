@@ -258,6 +258,11 @@ impl Gfx {
         self.face.get().map_or(0.0, |f| f.advance(ch, px))
     }
 
+    /// Measures many characters at `px` (`None` without a font).
+    pub fn advancer(&self, px: f32) -> Option<raster::Advancer<'_>> {
+        self.face.get().map(|f| f.advancer(px))
+    }
+
     pub fn mean_advance(&self, px: f32) -> f32 {
         self.face.get().map_or(0.0, |f| f.mean_advance(px))
     }
@@ -362,6 +367,7 @@ impl Gfx {
             generation: self.generation,
         };
         let pad = geom.pad();
+        let advancer = face.advancer(geom.px);
         for line in lines {
             let (x0, y0) = (
                 line.area.x as u32 * cw as u32,
@@ -370,7 +376,7 @@ impl Gfx {
             let mut pen = 0.0f32;
             for g in &line.glyphs {
                 let x = x0 as i64 + pen.round() as i64 - pad as i64;
-                pen += face.advance(g.ch, geom.px);
+                pen += advancer.advance(g.ch);
                 if !g.is_blank() {
                     want.insert((x, y0), *g);
                 }

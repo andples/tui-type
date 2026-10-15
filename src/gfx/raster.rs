@@ -1,5 +1,6 @@
 //! Anti-aliased glyph rasterization from real font files.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 use fontdue::{Font, FontSettings, Metrics};
@@ -60,6 +61,9 @@ pub struct GlyphImage {
 pub struct Face {
     fonts: Vec<Font>,
     bitmaps: HashMap<(char, u32), (Metrics, Vec<u8>)>,
+    /// ASCII advances per pixel size (`f32` bits): the typing screen
+    /// measures every character of every word each frame.
+    ascii: RefCell<HashMap<u32, [f32; 128]>>,
 }
 
 impl Face {
@@ -74,6 +78,7 @@ impl Face {
         Ok(Self {
             fonts,
             bitmaps: HashMap::new(),
+            ascii: RefCell::new(HashMap::new()),
         })
     }
 
@@ -104,12 +109,31 @@ impl Face {
     }
 
     pub fn advance(&self, ch: char, px: f32) -> f32 {
+        self.advancer(px).advance(ch)
+    }
+
+    /// Measures characters at `px`, ASCII from a table.
+    pub fn advancer(&self, px: f32) -> Advancer<'_> {
+        let ascii = *self
+            .ascii
+            .borrow_mut()
+            .entry(px.to_bits())
+            .or_insert_with(|| std::array::from_fn(|i| self.measure(i as u8 as char, px)));
+        Advancer {
+            face: self,
+            px,
+            ascii,
+        }
+    }
+
+    fn measure(&self, ch: char, px: f32) -> f32 {
         self.font_for(ch).metrics(ch, px).advance_width
     }
 
     /// Average lowercase advance: how wide a "typical" character is.
     pub fn mean_advance(&self, px: f32) -> f32 {
-        ('a'..='z').map(|c| self.advance(c, px)).sum::<f32>() / 26.0
+        let adv = self.advancer(px);
+        ('a'..='z').map(|c| adv.advance(c)).sum::<f32>() / 26.0
     }
 
     /// Draw one glyph with its caret box and underline, on transparency.
@@ -158,6 +182,22 @@ impl Face {
         self.bitmaps
             .entry((ch, px.to_bits()))
             .or_insert_with(|| font.rasterize(ch, px))
+    }
+}
+
+/// Character advances at one size (`Face::advancer`).
+pub struct Advancer<'a> {
+    face: &'a Face,
+    px: f32,
+    ascii: [f32; 128],
+}
+
+impl Advancer<'_> {
+    pub fn advance(&self, ch: char) -> f32 {
+        match self.ascii.get(ch as usize) {
+            Some(a) => *a,
+            None => self.face.measure(ch, self.px),
+        }
     }
 }
 
@@ -215,6 +255,17 @@ impl Canvas {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cached_advances_match_measured_ones() {
+        let face = Face::from_files(crate::gfx::fonts::BUNDLED[0].files).unwrap();
+        for px in [17.3, 40.0, 17.3] {
+            for ch in ['a', 'W', ' ', '~', 'ł', '\u{7f}'] {
+                assert_eq!(face.advance(ch, px), face.measure(ch, px), "{ch:?} at {px}");
+                assert_eq!(face.advance(ch, px), face.measure(ch, px), "{ch:?} cached");
+            }
+        }
+    }
 
     fn canvas(w: usize, h: usize) -> Canvas {
         Canvas {

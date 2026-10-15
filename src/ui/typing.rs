@@ -130,16 +130,13 @@ pub fn render(frame: &mut Frame, app: &App, area: Rect, p: &Palette) -> Vec<Imag
     let current = app.engine.current_index();
     let pace = app.pace_position_at(Instant::now());
 
-    let lines = match metrics {
-        Some(m) => {
-            let px = m.geom.px;
-            layout_lines(
-                words,
-                col.width as f32 * m.cell_w as f32,
-                app.gfx.advance(' ', px),
-                |w| shown_chars(w).map(|c| app.gfx.advance(c, px)).sum(),
-            )
-        }
+    let lines = match metrics.zip(metrics.and_then(|m| app.gfx.advancer(m.geom.px))) {
+        Some((m, adv)) => layout_lines(
+            words,
+            col.width as f32 * m.cell_w as f32,
+            adv.advance(' '),
+            |w| shown_chars(w).map(|c| adv.advance(c)).sum(),
+        ),
         None => layout_lines(words, (col.width / gw).max(1) as f32, 1.0, |w| {
             w.target.len().max(w.typed.len()) as f32
         }),
