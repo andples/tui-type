@@ -52,11 +52,26 @@ fn main() -> Result<()> {
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         ratatui::restore();
+        hide_pointer_while_typing(false);
         default_hook(info);
     }));
 
     let mut terminal = ratatui::init();
+    hide_pointer_while_typing(true);
     let result = app.run(&mut terminal);
     ratatui::restore();
+    hide_pointer_while_typing(false);
     result
+}
+
+/// Ask the terminal to hide the mouse pointer from the first key until the
+/// mouse moves (xterm's XTSMPOINTER, `CSI > 2 p`), and back to its default
+/// (`CSI > 1 p`) on exit. Terminals without it ignore the sequence; ghostty,
+/// kitty and alacritty have their own setting instead.
+fn hide_pointer_while_typing(on: bool) {
+    use std::io::Write;
+    let mode = if on { 2 } else { 1 };
+    let mut out = std::io::stdout();
+    let _ = write!(out, "\x1b[>{mode}p");
+    let _ = out.flush();
 }
