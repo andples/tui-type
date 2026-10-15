@@ -313,7 +313,18 @@ pub struct App {
     fresh_notice: bool,
     /// What the clock had put on screen when the last frame was drawn.
     drawn_clock: Option<ClockView>,
+    /// `pace_target`'s last answer and what it was worked out from.
+    pace_memo: std::cell::RefCell<Option<(PaceInputs, Option<f64>)>>,
     dirty: bool,
+}
+
+#[derive(Debug, PartialEq)]
+struct PaceInputs {
+    pace: Pace,
+    mode: Mode,
+    language: String,
+    records: usize,
+    synced: Option<u64>,
 }
 
 /// The parts of the typing screen that change with time alone: a tick
@@ -476,6 +487,7 @@ impl App {
             previous_screen: Screen::Typing,
             fresh_notice: false,
             drawn_clock: None,
+            pace_memo: Default::default(),
             dirty: true,
         };
         app.refresh_catalog_lists();
@@ -815,19 +827,39 @@ impl App {
     }
 
     /// The pace caret's speed for the test on screen, if it has one.
+    /// Asked for on every frame and wake-up while a test runs, so the
+    /// answer is kept until its inputs change (the history only grows).
     pub fn pace_target(&self) -> Option<f64> {
+        if self.config.pace == Pace::Off {
+            return None;
+        }
         let key = self.language_key();
         let language = match &self.daily {
             Some(d) => d.language.as_str(),
             None => key.as_str(),
         };
-        pace::target_wpm(
+        let synced = self.bests.get(self.engine.mode(), language);
+        let inputs = PaceInputs {
+            pace: self.config.pace,
+            mode: self.engine.mode(),
+            language: language.to_string(),
+            records: self.stats.all().len(),
+            synced: synced.map(f64::to_bits),
+        };
+        if let Some((cached, wpm)) = &*self.pace_memo.borrow()
+            && *cached == inputs
+        {
+            return *wpm;
+        }
+        let wpm = pace::target_wpm(
             self.config.pace,
             self.stats.all(),
-            self.bests.get(self.engine.mode(), language),
+            synced,
             self.engine.mode(),
             language,
-        )
+        );
+        *self.pace_memo.borrow_mut() = Some((inputs, wpm));
+        wpm
     }
 
     /// Where the pace caret is at `now`: (word index, character offset).

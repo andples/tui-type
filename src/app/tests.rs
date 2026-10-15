@@ -22,8 +22,12 @@ pub(super) fn scratch(name: &str, config: &str, history: usize) -> Paths {
 
 /// An offline app on the typing screen, with `extra` config lines.
 fn app(name: &str, extra: &str) -> App {
+    app_with_history(name, extra, 0)
+}
+
+fn app_with_history(name: &str, extra: &str, history: usize) -> App {
     let config = format!("server = \"\"\nsplash = false\nupdate_check = false\n{extra}\n");
-    let app = App::new(scratch(name, &config, 0), None).unwrap();
+    let app = App::new(scratch(name, &config, history), None).unwrap();
     assert_eq!(app.screen, Screen::Typing);
     app
 }
@@ -78,4 +82,17 @@ fn ticks_that_change_nothing_on_screen_draw_nothing() {
     drawn(&mut a);
     a.dispatch(Action::TypeChar('y'));
     assert!(a.dirty);
+}
+
+#[test]
+fn the_pace_target_follows_new_runs() {
+    let mut a = app_with_history("pace", "pace = \"pb\"\n[mode]\ntime = 60", 3);
+    assert_eq!(a.pace_target(), Some(78.3));
+    assert_eq!(a.pace_target(), Some(78.3), "from the memo");
+    let mut faster = a.stats.all()[0].clone();
+    faster.wpm = 101.0;
+    a.stats.append(&faster).unwrap();
+    assert_eq!(a.pace_target(), Some(101.0));
+    a.config.pace = crate::config::Pace::Wpm(50);
+    assert_eq!(a.pace_target(), Some(50.0));
 }
