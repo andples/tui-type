@@ -224,6 +224,7 @@ pub struct App {
     pub engine: TestEngine,
     pub outcome: Option<Outcome>,
     pub stats: Box<dyn StatsStore>,
+    /// Totals for the stats screen (built when it opens).
     pub summary: Summary,
     /// Calendar, streaks and trend for the stats screen (built when it opens).
     pub activity: Activity,
@@ -403,12 +404,10 @@ impl App {
         let missed_words = crate::stats::missed_words::MissedWords::load(&paths.missed_words_file);
         let customs = CustomStore::load(&paths.custom_dir, |w| warnings.push(w));
         let engine = Self::build_engine(&config, &languages, &modules, &customs);
-        let summary = Summary::from_records(store.all());
         let online = Self::connect(&config, &paths);
         let follows = Follows::load(&paths.views_file);
         let synced = crate::online::sync::Synced::load(&paths.sync_file);
         let bests = crate::online::sync::Bests::load(&paths.bests_file);
-        let summary = summary.with_bests(bests.by_mode());
         let fetcher = Self::catalog_fetcher(&config);
         let splash = config.splash.then(|| Splash::new(Instant::now()));
         let mut app = Self {
@@ -434,7 +433,7 @@ impl App {
             engine,
             outcome: None,
             stats: Box::new(store),
-            summary,
+            summary: Summary::default(),
             activity: Activity::default(),
             missed_range: MissedRange::default(),
             missed: Misses::default(),
