@@ -1,6 +1,8 @@
 //! Application state and event loop.
 
 pub mod action;
+#[cfg(test)]
+mod bench;
 mod board;
 mod catalog;
 pub mod celebrate;
@@ -18,6 +20,8 @@ pub mod practice;
 mod profiles;
 pub mod splash;
 mod sync;
+#[cfg(test)]
+mod tests;
 mod update;
 mod user;
 
@@ -32,7 +36,7 @@ use ratatui::layout::Rect;
 use crate::catalog::module_menu::ModuleMenu;
 use crate::catalog::{CatalogMenu, Fetcher, ModuleRegistry};
 use crate::command::{self, Command, CommandLine, Completions, PracticeArg};
-use crate::config::{Config, Pace, Paths};
+use crate::config::{Config, HudItem, Pace, Paths};
 use crate::config::{FONT_SIZE_RANGE, FontSize, LINES_RANGE, WORDS_PER_LINE_RANGE};
 use crate::custom::CustomStore;
 use crate::custom::menu::{CustomEditor, CustomMenu};
@@ -307,7 +311,18 @@ pub struct App {
     previous_screen: Screen,
     /// A notice was raised while handling the current action.
     fresh_notice: bool,
+    /// What the clock had put on screen when the last frame was drawn.
+    drawn_clock: Option<ClockView>,
     dirty: bool,
+}
+
+/// The parts of the typing screen that change with time alone: a tick
+/// that leaves them as they were drawn needs no new frame.
+#[derive(Debug, PartialEq)]
+struct ClockView {
+    status: Status,
+    hud: Vec<String>,
+    pace: Option<(usize, usize)>,
 }
 
 impl App {
@@ -460,6 +475,7 @@ impl App {
             graph_loading: false,
             previous_screen: Screen::Typing,
             fresh_notice: false,
+            drawn_clock: None,
             dirty: true,
         };
         app.refresh_catalog_lists();
@@ -668,6 +684,9 @@ impl App {
         if sync {
             terminal.backend_mut().write_all(gfx::kitty::SYNC_BEGIN)?;
         }
+        // Taken before rendering, so a second turning over meanwhile
+        // costs at most one extra frame, never a missed one.
+        self.drawn_clock = self.clock_view(Instant::now());
         let mut images = Vec::new();
         terminal.draw(|f| images = ui::render(f, self))?;
         self.gfx.present(&images, terminal.backend_mut())?;
@@ -701,6 +720,28 @@ impl App {
         Some(rest.map_or(idle, |r| r.min(idle)))
     }
 
+    /// What time alone changes on screen at `now`; `None` where a tick
+    /// always redraws (animations, other screens).
+    fn clock_view(&self, now: Instant) -> Option<ClockView> {
+        if self.screen != Screen::Typing || self.cmd_open || self.slider.is_some() {
+            return None;
+        }
+        let hud = if self.config.zen || self.config.fullscreen {
+            Vec::new()
+        } else {
+            let items = self.config.hud.items();
+            items
+                .iter()
+                .map(|i| ui::typing::hud_text(self, *i, now))
+                .collect()
+        };
+        Some(ClockView {
+            status: self.engine.status(),
+            hud,
+            pace: self.pace_position_at(now),
+        })
+    }
+
     /// The landing screen is up, done with its intro and not covered by
     /// the command line: the screensaver may run.
     fn idle_allowed(&self) -> bool {
@@ -708,16 +749,41 @@ impl App {
     }
 
     fn poll_timeout_rest(&self) -> Option<Duration> {
-        // A minimum speed is checked between keys too, and live wpm
-        // falls while you pause.
-        let timed_running = self.engine.status() == Status::Running
-            && (matches!(self.engine.mode(), Mode::Time(_))
-                || self.min_wpm_applies()
-                || self.config.hud.ticks())
-            && self.screen == Screen::Typing;
-        if timed_running {
+        match (self.clock_wake(Instant::now()), self.poll_timeout_screen()) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        }
+    }
+
+    /// When a test running on the typing screen next needs the clock. A
+    /// minimum speed is checked between keys too, and live wpm falls
+    /// while you pause, so those tick every `TIMER_TICK`; otherwise only
+    /// a timed test's clock matters, and it turns over (and the test
+    /// ends) on a whole second.
+    fn clock_wake(&self, now: Instant) -> Option<Duration> {
+        if self.engine.status() != Status::Running || self.screen != Screen::Typing {
+            return None;
+        }
+        // The timer turns over once a second (below); other items that
+        // move between keys (live and raw wpm) need the finer tick.
+        let fine = self
+            .config
+            .hud
+            .items()
+            .iter()
+            .any(|i| i.ticks() && *i != HudItem::Timer);
+        if self.min_wpm_applies() || fine {
             return Some(TIMER_TICK);
         }
+        if !matches!(self.engine.mode(), Mode::Time(_)) {
+            return None;
+        }
+        let into = self.engine.elapsed_at(now).subsec_nanos();
+        // Just past the second, so the clock has turned when we look.
+        Some(Duration::from_nanos(u64::from(1_000_000_000 - into)) + Duration::from_millis(1))
+    }
+
+    fn poll_timeout_screen(&self) -> Option<Duration> {
         // The intro wakes for its next frame and stops once it's done.
         if self.screen == Screen::Splash
             && let Some(next) = self.splash.and_then(|s| s.next_change_at(Instant::now()))
@@ -838,6 +904,7 @@ impl App {
             Action::Nop => return,
             Action::Tick => {
                 let now = Instant::now();
+                let (screen, had_notice) = (self.screen, self.notice.is_some());
                 if self.home_allowed()
                     && now.saturating_duration_since(self.last_input) >= idle::HOME_AFTER
                 {
@@ -856,6 +923,16 @@ impl App {
                     && at.elapsed() >= NOTICE_TTL
                 {
                     self.notice = None;
+                }
+                // Most ticks while typing change nothing on screen (the
+                // timer turns once a second, a network poll shows nothing).
+                if self.screen == screen
+                    && self.notice.is_some() == had_notice
+                    && !self.fresh_notice
+                    && self.drawn_clock.is_some()
+                    && self.clock_view(Instant::now()) == self.drawn_clock
+                {
+                    return;
                 }
             }
             Action::Redraw => {}

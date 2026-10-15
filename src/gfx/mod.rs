@@ -153,6 +153,16 @@ impl Gfx {
         }
     }
 
+    /// Images on, with the first bundled font and `cell`-pixel cells.
+    #[cfg(test)]
+    pub(crate) fn for_tests(cell: (u16, u16)) -> Self {
+        let mut g = Self::disabled();
+        g.supported = true;
+        g.cell = Some(cell);
+        g.face = FaceSlot::ready(Face::from_files(fonts::BUNDLED[0].files).unwrap());
+        g
+    }
+
     /// Apply the `graphics` and `font` settings. On error images stay off
     /// and the caller should tell the user why.
     pub fn configure(&mut self, config: &Config, fonts_dir: &Path) -> Result<(), String> {
@@ -430,11 +440,7 @@ mod tests {
     use super::*;
 
     fn gfx() -> Gfx {
-        let mut g = Gfx::disabled();
-        g.supported = true;
-        g.cell = Some((10, 20));
-        g.face = FaceSlot::ready(Face::from_files(fonts::BUNDLED[0].files).unwrap());
-        g
+        Gfx::for_tests((10, 20))
     }
 
     fn line(text: &str, caret: usize) -> ImageLine {
