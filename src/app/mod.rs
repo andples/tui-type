@@ -334,6 +334,8 @@ struct PaceInputs {
 enum ClockView {
     /// Nothing on screen moves by itself.
     Still,
+    /// The screensaver's ghost, between its keystrokes.
+    Ghost(idle::GhostFrame),
     /// The typing screen's live parts.
     Typing {
         status: Status,
@@ -741,7 +743,15 @@ impl App {
     fn clock_view(&self, now: Instant) -> Option<ClockView> {
         match self.screen {
             Screen::Typing => {}
-            Screen::Splash if !self.splash_frame().done || !self.idle.waiting() => return None,
+            Screen::Splash if !self.splash_frame().done => return None,
+            Screen::Splash => {
+                return match self.idle.view_at(now) {
+                    None => Some(ClockView::Still),
+                    Some(idle::IdleView::Typing(frame)) => Some(ClockView::Ghost(frame)),
+                    // Falling letters move every frame.
+                    Some(idle::IdleView::Crumbling { .. }) => None,
+                };
+            }
             Screen::Results if self.outcome.as_ref().is_some_and(|o| o.celebrating_at(now)) => {
                 return None;
             }

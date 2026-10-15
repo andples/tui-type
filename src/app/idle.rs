@@ -95,6 +95,17 @@ impl Ghost {
         }
     }
 
+    /// How long from `now` until the frame changes or the phrase is done.
+    fn next_change_in(&self, now: Instant) -> Duration {
+        let t = now.saturating_duration_since(self.started);
+        let next = self
+            .steps
+            .iter()
+            .find(|s| s.at > t)
+            .map_or(self.done_at(), |s| self.started + s.at);
+        next.saturating_duration_since(now)
+    }
+
     fn done_at(&self) -> Instant {
         self.started + self.steps.last().map_or(Duration::ZERO, |s| s.at) + HOLD
     }
@@ -147,11 +158,6 @@ impl Screensaver {
         matches!(self.scene, Scene::Typing(_))
     }
 
-    /// Nothing is typing or crumbling.
-    pub fn waiting(&self) -> bool {
-        matches!(self.scene, Scene::Waiting)
-    }
-
     /// A key while the ghost types: freeze its frame and crumble it.
     pub fn wake(&mut self, now: Instant) {
         if let Scene::Typing(g) = &self.scene {
@@ -195,11 +201,13 @@ impl Screensaver {
 
     /// How long the event loop may sleep.
     pub fn next_change_at(&self, now: Instant) -> Duration {
-        match self.scene {
+        match &self.scene {
             Scene::Waiting => IDLE_AFTER
                 .saturating_sub(now.saturating_duration_since(self.last_input))
                 .max(Duration::from_millis(1)),
-            _ => FRAME,
+            // The ghost's frame only changes on its keystrokes.
+            Scene::Typing(g) => g.next_change_in(now).max(Duration::from_millis(1)),
+            Scene::Crumbling { .. } => FRAME,
         }
     }
 }
@@ -268,6 +276,31 @@ mod tests {
         // And the quiet time starts over from there.
         s.tick(key + CRUMBLE + IDLE_AFTER - Duration::from_millis(1), || &w);
         assert!(!s.typing());
+    }
+
+    #[test]
+    fn the_ghost_wakes_the_loop_for_its_keystrokes_only() {
+        let t0 = Instant::now();
+        let mut rng = StdRng::seed_from_u64(9);
+        let g = Ghost::new(t0, "the quick brown".into(), &mut rng);
+        let s = Screensaver {
+            last_input: t0,
+            scene: Scene::Typing(g.clone()),
+        };
+        let mut now = t0;
+        let mut changes = 0;
+        while now < g.done_at() {
+            let next = now + s.next_change_at(now);
+            let before = g.frame_at(next - Duration::from_millis(1));
+            assert!(
+                before == g.frame_at(now) || next - now == Duration::from_millis(1),
+                "nothing changes before the wake"
+            );
+            now = next;
+            changes += 1;
+        }
+        // One wake per keystroke, plus the end of the hold.
+        assert_eq!(changes, g.steps.len() + 1);
     }
 
     #[test]
