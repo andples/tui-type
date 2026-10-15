@@ -60,6 +60,9 @@ const NOTICE_TTL: Duration = Duration::from_millis(2500);
 const TIMER_TICK: Duration = Duration::from_millis(100);
 /// How often the event loop checks for network replies while one is due.
 const REMOTE_POLL: Duration = Duration::from_millis(50);
+/// Input events handled before drawing, at most, when they arrive faster
+/// than frames: a flood still shows progress.
+const MAX_EVENTS_PER_FRAME: usize = 256;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Screen {
@@ -626,22 +629,37 @@ impl App {
                 None => true,
             };
             if ready {
-                let action = match event::read()? {
-                    Event::Key(k) => input::map_key(k, self.input_context()),
-                    Event::Resize(_, _) => {
-                        // The terminal clears on resize, taking images with it.
-                        self.gfx.refresh_cell_size();
-                        self.gfx.invalidate();
-                        Action::Redraw
-                    }
-                    _ => Action::Nop,
-                };
-                self.dispatch(action);
+                self.handle_event(event::read()?);
+                // Take whatever else is already waiting (key repeat, a
+                // paste, a burst of resizes) before drawing again: one
+                // frame shows them all.
+                let mut taken = 1;
+                while taken < MAX_EVENTS_PER_FRAME
+                    && !self.should_quit
+                    && event::poll(Duration::ZERO)?
+                {
+                    self.handle_event(event::read()?);
+                    taken += 1;
+                }
             } else {
                 self.dispatch(Action::Tick);
             }
         }
         Ok(())
+    }
+
+    fn handle_event(&mut self, event: Event) {
+        let action = match event {
+            Event::Key(k) => input::map_key(k, self.input_context()),
+            Event::Resize(_, _) => {
+                // The terminal clears on resize, taking images with it.
+                self.gfx.refresh_cell_size();
+                self.gfx.invalidate();
+                Action::Redraw
+            }
+            _ => Action::Nop,
+        };
+        self.dispatch(action);
     }
 
     /// Text first, then images over it, painted as one synchronized update.
