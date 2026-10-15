@@ -72,18 +72,17 @@ Open items:
   replay of every kitty image command through typing → `:login` → back left
   no stray placements. Needs the owner's terminal, a screenshot, when it
   appears, and whether `:set graphics off` makes it go away.
-- **README install section** still only says `cargo install --path .`: add
-  `brew tap andples/ttyp`, `brew trust andples/ttyp` (Homebrew 6+ refuses
-  untrusted taps), `brew install ttyp`, and `cargo install ttyp`. Users have
-  reported not being able to install.
 - **Off-machine backups:** `./backups` is on the same disk as the database.
 - **Responsiveness audit** (2026-09-29, not applied): kitty startup spends
   ~75 ms parsing the system Nerd Font (default to the bundled font or use
   ttf-parser); `fc-list` spawned on every start (make lazy); resize
   re-uploads every glyph image; no event coalescing under key repeat.
 - **Backup sidecar runs as root** to write the host-mounted `./backups`.
-- **Distribution:** AUR registration was down. Prebuilt binaries now exist,
-  so `cargo binstall` metadata would be a small addition.
+- **Distribution:** the README covers Homebrew (with `brew trust`), crates.io
+  and `cargo binstall` (metadata in `Cargo.toml` since 2.6.3, using the musl
+  builds on Linux). The AUR package was never published: `~/Projects/aur-ttyp`
+  has a PKGBUILD that builds (needs `options=('!lto')` for ring), waiting on
+  AUR registration (down since ~September 2026) and an AUR SSH key.
 
 Operating: `docker compose ps` on the owner's machine; `docker compose logs
 -f ttyp-server`; restore steps in `crates/ttyp-server/README.md`; release

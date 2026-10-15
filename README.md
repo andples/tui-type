@@ -28,6 +28,16 @@ cargo install ttyp
 cargo install --path .
 ```
 
+With [cargo-binstall](https://github.com/cargo-bins/cargo-binstall), which
+downloads the release's prebuilt binary instead of compiling:
+
+```sh
+cargo binstall ttyp
+```
+
+Any version works the same way: `cargo install ttyp --version 2.6.1` or
+`cargo binstall ttyp@2.6.1`.
+
 Prebuilt binaries for macOS (arm64, x86_64) and Linux (musl arm64, x86_64)
 are also attached to every [GitHub release](https://github.com/andples/tui-type/releases).
 
@@ -94,7 +104,8 @@ see it. Set it in the config as `pace = "pb"` / `"last"` / `87`, with
 ### HUD
 
 The readouts above the words are the HUD: the timer (seconds left, or words
-typed out of the total) and live wpm, your speed so far. `:hud` opens a
+typed out of the total), live wpm (your speed so far), raw wpm (every key,
+mistakes too), accuracy and the number of wrong keys. `:hud` opens a
 checklist with a preview of the line: `space` shows or hides the highlighted
 item and `←`/`→` move it along the line. `:hud wpm` toggles one straight
 from the command line (`:hud wpm on`/`off` to be explicit). It's saved as

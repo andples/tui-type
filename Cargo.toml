@@ -10,6 +10,13 @@ keywords = ["typing", "tui", "monkeytype", "terminal", "ratatui"]
 categories = ["command-line-utilities", "games"]
 include = ["src/**", "assets/**", "Cargo.toml", "README.md", "LICENSE*"]
 
+# `cargo binstall ttyp` downloads the release workflow's binaries instead
+# of compiling (Linux builds are musl; binstall falls back to them).
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/{ name }-{ target }.tar.gz"
+bin-dir = "{ name }-{ target }/{ bin }{ binary-ext }"
+pkg-fmt = "tgz"
+
 [workspace]
 members = ["crates/*"]
 # `cargo test`/`cargo clippy` at the root cover the client and core; the
