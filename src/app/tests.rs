@@ -25,11 +25,15 @@ fn app(name: &str, extra: &str) -> App {
     app_with_history(name, extra, 0)
 }
 
+/// Starts on the typing screen unless `extra` turns the splash on.
 fn app_with_history(name: &str, extra: &str, history: usize) -> App {
-    let config = format!("server = \"\"\nsplash = false\nupdate_check = false\n{extra}\n");
-    let app = App::new(scratch(name, &config, history), None).unwrap();
-    assert_eq!(app.screen, Screen::Typing);
-    app
+    let splash = if extra.contains("splash") {
+        ""
+    } else {
+        "splash = false\n"
+    };
+    let config = format!("server = \"\"\nupdate_check = false\n{splash}{extra}\n");
+    App::new(scratch(name, &config, history), None).unwrap()
 }
 
 /// As if a frame had just been drawn.
@@ -68,7 +72,9 @@ fn ticks_that_change_nothing_on_screen_draw_nothing() {
     assert!(!a.dirty, "the timer hasn't turned");
 
     // The drawn timer is out of date: redraw.
-    a.drawn_clock.as_mut().unwrap().hud[0] = "31".into();
+    if let Some(super::ClockView::Typing { hud, .. }) = &mut a.drawn_clock {
+        hud[0] = "31".into();
+    }
     a.dispatch(Action::Tick);
     assert!(a.dirty);
 
@@ -95,4 +101,24 @@ fn the_pace_target_follows_new_runs() {
     assert_eq!(a.pace_target(), Some(101.0));
     a.config.pace = crate::config::Pace::Wpm(50);
     assert_eq!(a.pace_target(), Some(50.0));
+}
+
+#[test]
+fn other_screens_redraw_on_ticks_only_while_they_animate() {
+    let mut a = app("still", "[mode]\ntime = 30");
+    a.dispatch(Action::ShowStats);
+    drawn(&mut a);
+    a.dispatch(Action::Tick);
+    assert!(!a.dirty, "the stats screen doesn't move");
+
+    let mut a = app("splash", "splash = true");
+    assert_eq!(a.screen, Screen::Splash);
+    drawn(&mut a);
+    assert_eq!(a.drawn_clock, None, "the intro plays");
+    a.dispatch(Action::Tick);
+    assert!(a.dirty);
+    a.dispatch(Action::SkipIntro);
+    drawn(&mut a);
+    a.dispatch(Action::Tick);
+    assert!(!a.dirty, "the landing screen waits");
 }

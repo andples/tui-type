@@ -147,6 +147,11 @@ impl Screensaver {
         matches!(self.scene, Scene::Typing(_))
     }
 
+    /// Nothing is typing or crumbling.
+    pub fn waiting(&self) -> bool {
+        matches!(self.scene, Scene::Waiting)
+    }
+
     /// A key while the ghost types: freeze its frame and crumble it.
     pub fn wake(&mut self, now: Instant) {
         if let Scene::Typing(g) = &self.scene {

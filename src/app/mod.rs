@@ -328,13 +328,18 @@ struct PaceInputs {
     synced: Option<u64>,
 }
 
-/// The parts of the typing screen that change with time alone: a tick
-/// that leaves them as they were drawn needs no new frame.
+/// What time alone changes on screen: a tick that leaves it as it was
+/// drawn needs no new frame.
 #[derive(Debug, PartialEq)]
-struct ClockView {
-    status: Status,
-    hud: Vec<String>,
-    pace: Option<(usize, usize)>,
+enum ClockView {
+    /// Nothing on screen moves by itself.
+    Still,
+    /// The typing screen's live parts.
+    Typing {
+        status: Status,
+        hud: Vec<String>,
+        pace: Option<(usize, usize)>,
+    },
 }
 
 impl App {
@@ -731,11 +736,16 @@ impl App {
         Some(rest.map_or(idle, |r| r.min(idle)))
     }
 
-    /// What time alone changes on screen at `now`; `None` where a tick
-    /// always redraws (animations, other screens).
+    /// What time alone changes on screen at `now`; `None` while
+    /// something animates, so every tick redraws.
     fn clock_view(&self, now: Instant) -> Option<ClockView> {
-        if self.screen != Screen::Typing || self.cmd_open || self.slider.is_some() {
-            return None;
+        match self.screen {
+            Screen::Typing => {}
+            Screen::Splash if !self.splash_frame().done || !self.idle.waiting() => return None,
+            Screen::Results if self.outcome.as_ref().is_some_and(|o| o.celebrating_at(now)) => {
+                return None;
+            }
+            _ => return Some(ClockView::Still),
         }
         let hud = if self.config.zen || self.config.fullscreen {
             Vec::new()
@@ -746,7 +756,7 @@ impl App {
                 .map(|i| ui::typing::hud_text(self, *i, now))
                 .collect()
         };
-        Some(ClockView {
+        Some(ClockView::Typing {
             status: self.engine.status(),
             hud,
             pace: self.pace_position_at(now),
@@ -955,8 +965,9 @@ impl App {
                 {
                     self.notice = None;
                 }
-                // Most ticks while typing change nothing on screen (the
-                // timer turns once a second, a network poll shows nothing).
+                // Most ticks change nothing on screen: the timer turns once
+                // a second, and a network poll or a notice's or the go-home
+                // timer's wake-up shows nothing new by itself.
                 if self.screen == screen
                     && self.notice.is_some() == had_notice
                     && !self.fresh_notice
