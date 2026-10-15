@@ -36,7 +36,9 @@ clap = { version = "4.6.7", features = ["derive"] }
 crossterm = "0.29.0"
 directories = "6.0.0"
 flate2 = "1.1.10"
-fontdue = "0.9.4"
+# `parallel` outlines a font's glyphs on every core when it loads: a large
+# system font (a Nerd Font has ~12k glyphs) parses in ~10 ms instead of ~60.
+fontdue = { version = "0.9.4", features = ["parallel"] }
 nucleo-matcher = "0.3.1"
 ratatui = "0.30.2"
 serde = { version = "1.0.229", features = ["derive"] }
