@@ -54,6 +54,29 @@ fn a_timed_test_wakes_on_the_second_unless_live_readouts_need_more() {
     a.dispatch(Action::TypeChar('x'));
     assert_eq!(a.clock_wake(Instant::now()), Some(TIMER_TICK));
 
+    let mut a = app("wake-raw", "hud = [\"raw\"]\n[mode]\nwords = 10");
+    a.dispatch(Action::TypeChar('x'));
+    assert_eq!(
+        a.clock_wake(Instant::now()),
+        Some(TIMER_TICK),
+        "raw wpm falls too"
+    );
+
+    // Accuracy and errors only change on keys.
+    let mut a = app(
+        "wake-acc",
+        "hud = [\"acc\", \"errors\"]\n[mode]\nwords = 10",
+    );
+    a.dispatch(Action::TypeChar('x'));
+    assert_eq!(a.clock_wake(Instant::now()), None);
+    let mut a = app(
+        "wake-acc-time",
+        "hud = [\"acc\", \"errors\"]\n[mode]\ntime = 30",
+    );
+    a.dispatch(Action::TypeChar('x'));
+    let wake = a.clock_wake(Instant::now()).unwrap();
+    assert!(wake > TIMER_TICK, "a timed test still ends on its second");
+
     let mut a = app("wake-words", "[mode]\nwords = 10");
     a.dispatch(Action::TypeChar('x'));
     assert_eq!(
