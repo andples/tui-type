@@ -17,5 +17,7 @@ pub mod stats;
 pub mod theme;
 pub mod ui;
 pub mod update;
+#[cfg(target_os = "macos")]
+pub mod utheme_client;
 
 pub use ttyp_core::{language, test};
