@@ -111,6 +111,14 @@ item and `←`/`→` move it along the line. `:hud wpm` toggles one straight
 from the command line (`:hud wpm on`/`off` to be explicit). It's saved as
 `hud = ["timer", "wpm"]` in the config, and a saved config can hold its own.
 
+### Mouse pointer
+
+ttyp asks the terminal to hide the mouse pointer while you type (xterm's
+pointer mode). Ghostty, kitty and Alacritty don't take that request from
+programs; turn it on in the terminal instead, for every program at once:
+`mouse-hide-while-typing = true` (Ghostty), `mouse_hide_wait -1` (kitty) or
+`hide_when_typing = true` under `[mouse]` (Alacritty).
+
 ### Practice missed words
 
 Every word you get wrong is remembered per language (or custom set), even
