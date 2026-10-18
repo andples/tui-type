@@ -232,7 +232,10 @@ impl App {
         self.configs_changed();
     }
 
-    /// Write `to`'s config files and switch on its active configs.
+    /// Write `to`'s config files and switch on its active configs. A config
+    /// whose file is there but doesn't load here stays in the active list
+    /// (reported, not switched off): pushed as off, it would go off on
+    /// every machine.
     fn apply_configs(&mut self, from: &Configs, to: &Configs) {
         if let Err(e) = sync::write_configs(&self.paths.profiles_dir, from, to) {
             self.report("sync", format!("config sync: {e}"));
@@ -242,20 +245,36 @@ impl App {
         self.profiles = ProfileRegistry::load(&self.paths.profiles_dir, |w| warnings.push(w));
         let before = self.config.clone();
         self.config.profiles.clear();
+        let mut failed = Vec::new();
         for name in &to.active {
             if let Err(e) = self.profiles.activate(name, &mut self.config) {
-                warnings.push(e);
+                if self.profiles.load_error(name).is_some() && !self.config.profiles.contains(name)
+                {
+                    self.config.profiles.push(name.clone());
+                }
+                failed.push(e);
             }
+        }
+        for w in &warnings {
+            errlog::warn("sync", w.as_str());
         }
         self.refresh_profile_completions();
         if self.screen == Screen::Profiles {
             let latest = self.config.profiles.last().cloned();
             self.profile_menu = ProfileMenu::list_at(&self.profiles, latest.as_deref());
         }
-        match (warnings.first(), self.config.profiles.as_slice()) {
-            (Some(w), _) => self.notify(format!("config sync: {w}")),
-            (None, []) => self.notify("configs synced"),
-            (None, on) => self.notify(format!("configs synced · {} on", on.join(", "))),
+        match (failed.split_first(), warnings.first()) {
+            (Some((first, rest)), _) => {
+                for e in rest {
+                    errlog::warn("sync", format!("config sync: {e}"));
+                }
+                self.report("sync", format!("config sync: {first}"));
+            }
+            (None, Some(w)) => self.notify(format!("config sync: {w}")),
+            (None, None) => match self.config.profiles.as_slice() {
+                [] => self.notify("configs synced"),
+                on => self.notify(format!("configs synced · {} on", on.join(", "))),
+            },
         }
         self.apply_changes(&before);
         self.install_missing();

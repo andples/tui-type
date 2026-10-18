@@ -13,12 +13,13 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
 use crate::config::{
     Config, FONT_SIZE_RANGE, Hud, Keyboard, LINES_RANGE, MinWpm, PACE_MAX, Pace, PbEffect,
-    WORDS_PER_LINE_RANGE, clamp_setting,
+    WORDS_PER_LINE_RANGE, clamp_setting, merge_toml, parse_with_unknown,
 };
 use crate::test::mode::Mode;
 
@@ -26,7 +27,7 @@ pub use menu::{Editor, ProfileMenu};
 
 /// Results-screen sections a profile can set.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default)]
 pub struct ResultsSettings {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chart: Option<bool>,
@@ -47,8 +48,12 @@ impl ResultsSettings {
 }
 
 /// The settings a profile controls: `Config` with every field optional.
+/// Keys it doesn't know (a setting from a newer ttyp, synced from another
+/// machine) are ignored on read and kept in the file on save
+/// (`config::merge_toml`), so the profile still loads, applies what it can
+/// and stays on.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default)]
 pub struct ProfileSettings {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub theme: Option<String>,
@@ -293,19 +298,22 @@ impl fmt::Display for SettingKey {
 }
 
 impl ProfileSettings {
+    /// Keys this version doesn't know are skipped.
     pub fn parse(text: &str) -> Result<Self, String> {
-        let s: Self = toml::from_str(text).map_err(|e| e.message().to_string())?;
+        let (s, _) = parse_with_unknown::<Self>(text).map_err(|e| e.message().to_string())?;
         s.validate()?;
         Ok(s)
     }
 
     /// `parse` for a file on disk: out-of-range values are clamped (one
-    /// note each in the returned list) rather than rejecting the profile.
-    pub fn parse_clamped(text: &str) -> Result<(Self, Vec<String>), String> {
-        let mut s: Self = toml::from_str(text).map_err(|e| e.message().to_string())?;
+    /// note each in the first list) rather than rejecting the profile. The
+    /// second list is the keys this version doesn't know.
+    pub fn parse_clamped(text: &str) -> Result<(Self, Vec<String>, Vec<String>), String> {
+        let (mut s, unknown) =
+            parse_with_unknown::<Self>(text).map_err(|e| e.message().to_string())?;
         let changed = s.normalize();
         s.validate()?;
-        Ok((s, changed))
+        Ok((s, changed, unknown))
     }
 
     /// `Config::normalize` for the settings this profile sets.
@@ -414,11 +422,30 @@ pub fn is_name_char(c: char) -> bool {
     c.is_ascii_alphanumeric() || c == '-' || c == '_'
 }
 
+/// Log a profile's unknown key once per run: the registry is loaded again
+/// after every sync, and a key from a newer ttyp is no fault of this one.
+fn note_unknown(name: &str, key: &str) {
+    static NOTED: Mutex<Vec<(String, String)>> = Mutex::new(Vec::new());
+    let mut noted = NOTED.lock().unwrap_or_else(|e| e.into_inner());
+    let entry = (name.to_string(), key.to_string());
+    if !noted.contains(&entry) {
+        crate::errlog::warn(
+            "config",
+            format!("config {name}: unknown setting `{key}` ignored (from a newer ttyp?)"),
+        );
+        noted.push(entry);
+    }
+}
+
 /// All profiles on disk, keyed by name.
 #[derive(Debug, Clone, Default)]
 pub struct ProfileRegistry {
     dir: PathBuf,
     profiles: BTreeMap<String, Profile>,
+    /// Files that are there but didn't load, with why. An active one stays
+    /// active (`reconcile` can't check it): a file this version can't read
+    /// is no reason to switch it off on every machine.
+    broken: BTreeMap<String, String>,
 }
 
 impl ProfileRegistry {
@@ -427,7 +454,7 @@ impl ProfileRegistry {
     pub fn load(dir: &Path, mut warn: impl FnMut(String)) -> Self {
         let mut reg = Self {
             dir: dir.to_path_buf(),
-            profiles: BTreeMap::new(),
+            ..Self::default()
         };
         let Ok(entries) = fs::read_dir(dir) else {
             return reg;
@@ -448,9 +475,12 @@ impl ProfileRegistry {
                 .map_err(|e| e.to_string())
                 .and_then(|text| ProfileSettings::parse_clamped(&text));
             match parsed {
-                Ok((settings, changed)) => {
+                Ok((settings, changed, unknown)) => {
                     for c in changed {
                         warn(format!("config {name}: {c}"));
+                    }
+                    for key in unknown {
+                        note_unknown(name, &key);
                     }
                     reg.profiles.insert(
                         name.to_string(),
@@ -460,7 +490,10 @@ impl ProfileRegistry {
                         },
                     );
                 }
-                Err(e) => warn(format!("config {name}: {e}")),
+                Err(e) => {
+                    warn(format!("config {name}: {e}"));
+                    reg.broken.insert(name.to_string(), e);
+                }
             }
         }
         reg
@@ -468,6 +501,11 @@ impl ProfileRegistry {
 
     pub fn get(&self, name: &str) -> Option<&Profile> {
         self.profiles.get(name)
+    }
+
+    /// Why `name`'s file is there but didn't load.
+    pub fn load_error(&self, name: &str) -> Option<&str> {
+        self.broken.get(name).map(String::as_str)
     }
 
     pub fn names(&self) -> impl Iterator<Item = &str> {
@@ -498,10 +536,15 @@ impl ProfileRegistry {
         if profile.settings.is_empty() {
             return Err("pick at least one setting".into());
         }
-        if replacing != Some(profile.name.as_str()) && self.profiles.contains_key(&profile.name) {
+        let taken =
+            self.profiles.contains_key(&profile.name) || self.broken.contains_key(&profile.name);
+        if replacing != Some(profile.name.as_str()) && taken {
             return Err(format!("config `{}` already exists", profile.name));
         }
-        let text = toml::to_string_pretty(&profile.settings).map_err(|e| e.to_string())?;
+        // Edit the file in place, so settings from a newer ttyp and
+        // comments survive (and sync carries the same text on).
+        let old = fs::read_to_string(self.path(replacing.unwrap_or(&profile.name))).ok();
+        let text = merge_toml(old.as_deref(), &profile.settings).map_err(|e| e.to_string())?;
         let path = self.path(&profile.name);
         crate::config::write_atomic(&path, text).map_err(|e| format!("{}: {e}", path.display()))?;
         if let Some(old) = replacing.filter(|old| *old != profile.name) {
@@ -519,6 +562,7 @@ impl ProfileRegistry {
             Err(e) => return Err(format!("{}: {e}", path.display())),
         }
         self.profiles.remove(name);
+        self.broken.remove(name);
         Ok(())
     }
 
@@ -537,7 +581,12 @@ impl ProfileRegistry {
 
     /// Apply `name` to `config` and mark it active, deactivating every active
     /// profile that shares a setting with it. Returns the replaced profiles.
+    /// A profile whose file didn't load is an error and `config` is left
+    /// alone.
     pub fn activate(&self, name: &str, config: &mut Config) -> Result<Vec<String>, String> {
+        if let Some(e) = self.load_error(name) {
+            return Err(format!("config {name} could not be read: {e}"));
+        }
         let profile = self
             .get(name)
             .ok_or_else(|| format!("unknown config `{name}`"))?;
@@ -556,13 +605,16 @@ impl ProfileRegistry {
 
     /// Drop active profiles that no longer exist or no longer match the
     /// config (a setting they control was changed). Returns the dropped names.
+    /// Only the settings this version knows are compared, and a profile whose
+    /// file didn't load can't be compared at all, so it stays.
     pub fn reconcile(&self, config: &mut Config) -> Vec<String> {
         let mut dropped = Vec::new();
         let mut seen: Vec<&str> = Vec::new();
         let mut keep = Vec::new();
         for name in &config.profiles {
             let ok = !seen.contains(&name.as_str())
-                && self.get(name).is_some_and(|p| p.settings.matches(config));
+                && (self.broken.contains_key(name)
+                    || self.get(name).is_some_and(|p| p.settings.matches(config)));
             if ok {
                 seen.push(name);
                 keep.push(name.clone());
@@ -615,20 +667,30 @@ mod tests {
     }
 
     #[test]
-    fn rejects_unknown_keys_and_bad_values() {
-        assert!(ProfileSettings::parse("them = \"nord\"").is_err());
+    fn skips_unknown_keys_and_rejects_bad_values() {
+        assert!(
+            ProfileSettings::parse("them = \"nord\"")
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(
+            ProfileSettings::parse("theme = \"nord\"\n[results]\nsparkline = true")
+                .unwrap()
+                .keys(),
+            [SettingKey::Theme]
+        );
+        assert!(ProfileSettings::parse("theme = 3").is_err());
         assert!(ProfileSettings::parse("font_size = 99").is_err());
         assert!(ProfileSettings::parse("lines = 0").is_err());
         assert!(ProfileSettings::parse("words_per_line = 2").is_err());
         assert!(ProfileSettings::parse("mode = { time = 0 }").is_err());
-        assert!(ProfileSettings::parse("[results]\nbogus = true").is_err());
         assert!(ProfileSettings::parse("").unwrap().is_empty());
         assert!(ProfileSettings::parse("min_wpm = 9999").is_err());
     }
 
     #[test]
     fn files_on_disk_are_clamped_not_dropped() {
-        let (s, changed) =
+        let (s, changed, _) =
             ProfileSettings::parse_clamped("font_size = 0\nmin_wpm = 9999\nmode = { words = 0 }")
                 .unwrap();
         assert_eq!(changed.len(), 3, "{changed:?}");
@@ -749,6 +811,75 @@ mod tests {
     }
 
     #[test]
+    fn a_profile_with_unknown_keys_loads_activates_and_keeps_them() {
+        let dir = std::env::temp_dir().join(format!("ttyp-profile-unknown-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let text = "# from the laptop\ntheme = \"nord\"\nsparkle = \"gold\" # newer ttyp\n\n[results]\nchart = false\nheatmap = true\n";
+        fs::write(dir.join("dark.toml"), text).unwrap();
+        let mut reg = ProfileRegistry::load(&dir, |w| panic!("{w}"));
+        let dark = reg.get("dark").unwrap().clone();
+        assert_eq!(
+            dark.settings.keys(),
+            [SettingKey::Theme, SettingKey::ResultsChart]
+        );
+
+        let mut c = Config::default();
+        reg.activate("dark", &mut c).unwrap();
+        assert_eq!((c.theme.as_str(), c.results.chart), ("nord", false));
+        assert!(
+            reg.reconcile(&mut c).is_empty(),
+            "unknown keys aren't a mismatch"
+        );
+        assert_eq!(c.profiles, ["dark"]);
+
+        // Saved from the editor: the known setting changes, the rest stays.
+        let mut edited = dark.clone();
+        edited.settings.theme = Some("light".into());
+        reg.save(edited.clone(), Some("dark")).unwrap();
+        let saved = fs::read_to_string(dir.join("dark.toml")).unwrap();
+        assert_eq!(saved, text.replace("\"nord\"", "\"light\""));
+        let reloaded = ProfileRegistry::load(&dir, |w| panic!("{w}"));
+        assert_eq!(reloaded.get("dark").unwrap().settings, edited.settings);
+
+        // Renamed: the new file keeps them too.
+        let renamed = Profile {
+            name: "night".into(),
+            ..edited
+        };
+        reg.save(renamed, Some("dark")).unwrap();
+        assert!(!dir.join("dark.toml").exists());
+        let moved = fs::read_to_string(dir.join("night.toml")).unwrap();
+        assert!(moved.contains("sparkle = \"gold\" # newer ttyp"), "{moved}");
+        assert!(moved.contains("heatmap = true"), "{moved}");
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_profile_that_does_not_load_stays_on() {
+        let dir = std::env::temp_dir().join(format!("ttyp-profile-broken-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("odd.toml"), "theme = 3\n").unwrap();
+        fs::write(dir.join("fast.toml"), "mode = { time = 15 }\n").unwrap();
+        let mut reg = ProfileRegistry::load(&dir, |_| {});
+        let mut c = Config::default();
+        reg.activate("fast", &mut c).unwrap();
+        c.profiles.push("odd".into());
+        let e = reg.activate("odd", &mut c).unwrap_err();
+        assert!(e.contains("odd"), "{e}");
+        assert_eq!(c.profiles, ["fast", "odd"], "left alone");
+        assert!(reg.reconcile(&mut c).is_empty());
+        assert_eq!(c.profiles, ["fast", "odd"]);
+        // Its name can't be taken by a new profile.
+        assert!(reg.save(profile("odd", "zen = true"), None).is_err());
+        // Deleted for real, it goes.
+        reg.delete("odd").unwrap();
+        assert_eq!(reg.reconcile(&mut c), ["odd"]);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
     fn registry_saves_renames_and_deletes() {
         let dir = std::env::temp_dir().join(format!("ttyp-profiles-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
@@ -783,6 +914,7 @@ mod tests {
         let reloaded = ProfileRegistry::load(&dir, |w| warnings.push(w));
         assert_eq!(reloaded.len(), 1);
         assert_eq!(warnings.len(), 1);
+        assert!(reloaded.load_error("broken").is_some());
 
         reg.delete("faster").unwrap();
         assert!(reg.is_empty());

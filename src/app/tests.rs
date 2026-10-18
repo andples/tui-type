@@ -251,3 +251,81 @@ fn a_queued_daily_the_server_turns_down_leaves_the_queue() {
         "{notice}"
     );
 }
+
+/// `app` as if logged in, with `base` as the state last agreed with the
+/// server. Nothing reaches a server: a push only marks the sync busy.
+fn synced_app(name: &str, base: ttyp_core::sync::Configs) -> App {
+    use crate::online::{Client, Online};
+    let mut a = app(name, "");
+    a.online = Some(Online::new(
+        Client::new("http://127.0.0.1:9", Some("token".into())),
+        None,
+    ));
+    a.synced = Some(crate::online::sync::Synced {
+        rev: 1,
+        configs: base,
+    });
+    a
+}
+
+fn remote(files: &[(&str, &str)], active: &[&str]) -> ttyp_core::sync::ConfigSync {
+    ttyp_core::sync::ConfigSync {
+        rev: 2,
+        configs: ttyp_core::sync::Configs {
+            files: files
+                .iter()
+                .map(|(n, t)| (n.to_string(), t.to_string()))
+                .collect(),
+            active: active.iter().map(|n| n.to_string()).collect(),
+        },
+    }
+}
+
+#[test]
+fn a_synced_config_with_a_newer_setting_stays_on() {
+    // A newer ttyp synced `dark` with a setting this one doesn't know.
+    let text = "theme = \"nord\"\nsparkle = \"gold\" # newer ttyp\n";
+    let mut a = synced_app("sync-unknown", Default::default());
+    let server = remote(&[("dark", text)], &["dark"]);
+    a.configs_reply(None, Ok(server.clone()));
+
+    assert_eq!(a.config.profiles, ["dark"]);
+    assert_eq!(a.config.theme, "nord", "what it knows is applied");
+    let on_disk = std::fs::read_to_string(a.paths.profiles_dir.join("dark.toml")).unwrap();
+    assert_eq!(on_disk, text);
+    // This machine now agrees with the server: nothing to push, so no
+    // deactivation goes back to the newer machine.
+    assert_eq!(
+        crate::online::sync::local_configs(&a.paths.profiles_dir, &a.config.profiles).unwrap(),
+        server.configs
+    );
+    assert!(!a.config_sync_busy, "nothing was pushed");
+
+    // An unrelated change and a restart keep it on.
+    a.config.zen = true;
+    a.save_config();
+    assert_eq!(a.config.profiles, ["dark"]);
+    assert!(!a.config_sync_busy);
+    let again = App::new(a.paths.clone(), None).unwrap();
+    assert_eq!(again.config.profiles, ["dark"]);
+}
+
+#[test]
+fn a_synced_config_that_does_not_load_is_reported_not_switched_off() {
+    let mut a = synced_app("sync-broken", Default::default());
+    let server = remote(
+        &[("odd", "theme = 3\n"), ("fast", "zen = true\n")],
+        &["odd", "fast"],
+    );
+    a.configs_reply(None, Ok(server.clone()));
+
+    assert_eq!(a.config.profiles, ["odd", "fast"]);
+    assert!(a.config.zen);
+    let notice = a.notice_text().unwrap_or_default();
+    assert!(notice.contains("odd"), "{notice}");
+    assert_eq!(
+        crate::online::sync::local_configs(&a.paths.profiles_dir, &a.config.profiles).unwrap(),
+        server.configs
+    );
+    assert!(!a.config_sync_busy, "nothing was pushed");
+}
