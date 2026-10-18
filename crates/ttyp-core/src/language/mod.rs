@@ -32,6 +32,9 @@ pub struct Language {
 impl Language {
     pub fn parse(text: &str) -> Result<Self, LanguageError> {
         let mut lang: Language = toml::from_str(text)?;
+        // A blank word can't be typed (and an all-blank list would leave
+        // nothing to generate from).
+        lang.words.retain(|w| !w.trim().is_empty());
         if lang.words.is_empty() {
             return Err(LanguageError::Empty(lang.name));
         }
@@ -131,6 +134,13 @@ mod tests {
     #[test]
     fn empty_rejected() {
         assert!(Language::parse("name = \"x\"\nwords = []").is_err());
+        assert!(Language::parse("name = \"x\"\nwords = [\"\", \"  \"]").is_err());
+    }
+
+    #[test]
+    fn blank_words_dropped() {
+        let l = Language::parse("name = \"x\"\nwords = [\"a\", \"\", \" \", \"b\"]").unwrap();
+        assert_eq!(l.words, ["a", "b"]);
     }
 
     #[test]

@@ -92,8 +92,8 @@ pub fn language_key(language: &str, modules: &[&Language]) -> String {
 
 /// The words a test draws from: the language's, then each module's. With
 /// `trim` on, every `trim` string of the language and its modules is cut
-/// out of each word (`print()` → `print`); words that end up empty or
-/// repeated are dropped.
+/// out of each word (`print()` → `print`); words that end up blank or
+/// repeated are dropped. The pool can come out empty (every word cut).
 pub fn word_pool(base: &Language, modules: &[&Language], trim: bool) -> Vec<String> {
     let cuts: Vec<&str> = if trim {
         std::iter::once(base)
@@ -109,7 +109,7 @@ pub fn word_pool(base: &Language, modules: &[&Language], trim: bool) -> Vec<Stri
         .chain(modules.iter().copied())
         .flat_map(|l| l.words.iter())
         .map(|w| cuts.iter().fold(w.clone(), |w, cut| w.replace(cut, "")))
-        .filter(|w| !w.is_empty() && seen.insert(w.clone()))
+        .filter(|w| !w.trim().is_empty() && seen.insert(w.clone()))
         .collect()
 }
 
@@ -145,6 +145,15 @@ mod tests {
             word_pool(&py, &[&np], true),
             ["print", "len", "np.zeros"],
             "the language's trim applies to its modules"
+        );
+    }
+
+    #[test]
+    fn trim_can_leave_nothing() {
+        let l = lang("x", &["()", "( )"], &["()", "(", ")"]);
+        assert!(
+            word_pool(&l, &[], true).is_empty(),
+            "blank leftovers are dropped"
         );
     }
 
