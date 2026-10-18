@@ -1,0 +1,36 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
+      # Following utheme live: on macOS ttyp must follow a fake utheme folder,
+      # anywhere else it must ignore it (scripts/utheme-e2e.sh).
+      - name: utheme end to end
+        run: |
+          command -v tmux || { if [ "$RUNNER_OS" = macOS ]; then brew install tmux; else sudo apt-get install -y tmux; fi; }
+          cargo build --release
+          e=$(mktemp -d); mkdir -p "$e/c" "$e/d"
+          printf 'theme = "utheme"\nserver = ""\nupdate_check = false\nsplash = false\n' > "$e/c/config.toml"
+          scripts/utheme-e2e.sh ttyp "$e/c/config.toml" C-c -- target/release/ttyp --config-dir "$e/c" --data-dir "$e/d"
+  # Windows isn't released, but must keep building as before.
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build
