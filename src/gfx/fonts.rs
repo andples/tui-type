@@ -144,7 +144,9 @@ fn in_fonts_dir(spec: &str, fonts_dir: &Path) -> Option<PathBuf> {
 }
 
 /// Names to offer in the `:font` palette: bundled fonts, files in the fonts
-/// dir, and installed monospace families.
+/// dir that can draw text, and installed monospace families that cover
+/// English (which leaves out emoji, symbol and icon fonts). Files left out
+/// are logged.
 pub fn list(fonts_dir: &Path) -> Vec<String> {
     let mut names: BTreeSet<String> = BUNDLED.iter().map(|b| b.name.to_string()).collect();
     if let Ok(entries) = std::fs::read_dir(fonts_dir) {
@@ -154,11 +156,20 @@ pub fn list(fonts_dir: &Path) -> Vec<String> {
             if EXTENSIONS.contains(&ext.to_ascii_lowercase().as_str())
                 && let Some(stem) = p.file_stem().and_then(|s| s.to_str())
             {
-                names.insert(stem.to_string());
+                match usable(&p) {
+                    Ok(()) => {
+                        names.insert(stem.to_string());
+                    }
+                    Err(e) => crate::errlog::log(
+                        crate::errlog::Level::Warn,
+                        "font",
+                        format!("not offering {}: {e}", p.display()),
+                    ),
+                }
             }
         }
     }
-    if let Some(out) = run("fc-list", &[":spacing=mono", "family"]) {
+    if let Some(out) = run("fc-list", &[":spacing=mono:lang=en", "family"]) {
         for line in out.lines() {
             if let Some(family) = line.split(',').next().map(str::trim)
                 && !family.is_empty()
@@ -174,6 +185,16 @@ struct Match {
     path: PathBuf,
     index: u32,
     families: String,
+}
+
+/// Whether the font file parses and has the Latin letters (its first face).
+pub fn usable(path: &Path) -> Result<(), String> {
+    let data = std::fs::read(path).map_err(|e| e.to_string())?;
+    let font = fontdue::Font::from_bytes(data, fontdue::FontSettings::default())?;
+    match ('a'..='z').all(|c| font.lookup_glyph_index(c) != 0) {
+        true => Ok(()),
+        false => Err("no Latin letters".into()),
+    }
 }
 
 fn fc_match(pattern: &str) -> Option<Match> {
@@ -260,7 +281,23 @@ mod tests {
             resolve(file.to_str().unwrap(), &dir),
             Ok(Source::File(file, 0))
         );
-        assert!(list(&dir).contains(&"MyFont".to_string()));
+        assert!(
+            !list(&dir).contains(&"MyFont".to_string()),
+            "not a font: not offered"
+        );
+        let real = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/assets/fonts/fira-code-latin.ttf"
+        );
+        std::fs::copy(real, dir.join("Good.ttf")).unwrap();
+        let ext = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/assets/fonts/fira-code-latin-ext.ttf"
+        );
+        std::fs::copy(ext, dir.join("NoLetters.ttf")).unwrap();
+        let names = list(&dir);
+        assert!(names.contains(&"Good".to_string()));
+        assert!(!names.contains(&"NoLetters".to_string()));
         let upper = dir.join("Other.TTF");
         std::fs::write(&upper, b"x").unwrap();
         assert_eq!(resolve("Other", &dir), Ok(Source::File(upper, 0)));
