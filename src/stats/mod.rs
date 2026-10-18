@@ -7,7 +7,7 @@ pub mod validity;
 
 use std::collections::{BTreeMap, HashMap};
 use std::fs::{self, OpenOptions};
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
@@ -183,10 +183,22 @@ impl StatsStore for LocalJsonlStore {
         }
         let mut f = OpenOptions::new()
             .create(true)
+            .read(true)
             .append(true)
             .open(&self.path)
             .map_err(io)?;
-        let mut line = serde_json::to_string(record)?;
+        // A line cut short (a crash mid-write) would swallow this record
+        // too; start a fresh line so only the cut one is lost.
+        let mut line = String::new();
+        if f.metadata().map_err(io)?.len() > 0 {
+            let mut last = [0u8];
+            f.seek(SeekFrom::End(-1)).map_err(io)?;
+            f.read_exact(&mut last).map_err(io)?;
+            if last[0] != b'\n' {
+                line.push('\n');
+            }
+        }
+        line.push_str(&serde_json::to_string(record)?);
         line.push('\n');
         f.write_all(line.as_bytes()).map_err(io)?;
         self.records.push(record.clone());
@@ -318,6 +330,25 @@ mod tests {
         let (store, skipped) = LocalJsonlStore::open(&path).unwrap();
         assert_eq!(store.all().len(), 2);
         assert_eq!(skipped, 1);
+        assert_eq!(store.all()[1].mode, Mode::Words(25));
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn append_after_a_cut_line_starts_a_new_one() {
+        let dir = std::env::temp_dir().join(format!("ttyp-stats-cut-{}", std::process::id()));
+        let path = dir.join("history.jsonl");
+        let (mut store, _) = LocalJsonlStore::open(&path).unwrap();
+        store.append(&rec(Mode::Time(30), 80.0)).unwrap();
+        // A crash mid-write leaves half a line with no newline.
+        let text = fs::read_to_string(&path).unwrap();
+        fs::write(&path, format!("{text}{}", &text[..text.len() / 2])).unwrap();
+        let (mut store, skipped) = LocalJsonlStore::open(&path).unwrap();
+        assert_eq!(skipped, 1);
+        store.append(&rec(Mode::Words(25), 90.0)).unwrap();
+        let (store, skipped) = LocalJsonlStore::open(&path).unwrap();
+        assert_eq!(skipped, 1, "only the cut line is lost");
+        assert_eq!(store.all().len(), 2);
         assert_eq!(store.all()[1].mode, Mode::Words(25));
         fs::remove_dir_all(&dir).unwrap();
     }
