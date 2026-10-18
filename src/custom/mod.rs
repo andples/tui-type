@@ -53,7 +53,18 @@ impl CustomStore {
     /// skipped.
     pub fn load(dir: &Path, mut warn: impl FnMut(String)) -> Self {
         let mut sets = BTreeMap::new();
-        if let Ok(entries) = fs::read_dir(dir) {
+        let entries = match fs::read_dir(dir) {
+            Ok(entries) => Some(entries),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => None,
+            Err(e) => {
+                warn(format!(
+                    "could not read custom sets in {}: {e}",
+                    dir.display()
+                ));
+                None
+            }
+        };
+        if let Some(entries) = entries {
             for entry in entries.flatten() {
                 let path = entry.path();
                 if path.extension().is_none_or(|e| e != "toml") {
@@ -103,9 +114,8 @@ impl CustomStore {
         if !valid_name(&set.name) {
             return Err(io::Error::other(format!("bad name `{}`", set.name)));
         }
-        fs::create_dir_all(&self.dir)?;
         let text = toml::to_string(&set).map_err(io::Error::other)?;
-        fs::write(self.path(&set.name), text)?;
+        crate::config::write_atomic(&self.path(&set.name), text)?;
         self.sets.insert(set.name.clone(), set);
         Ok(())
     }

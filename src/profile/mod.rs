@@ -502,9 +502,8 @@ impl ProfileRegistry {
             return Err(format!("config `{}` already exists", profile.name));
         }
         let text = toml::to_string_pretty(&profile.settings).map_err(|e| e.to_string())?;
-        fs::create_dir_all(&self.dir).map_err(|e| format!("{}: {e}", self.dir.display()))?;
         let path = self.path(&profile.name);
-        fs::write(&path, text).map_err(|e| format!("{}: {e}", path.display()))?;
+        crate::config::write_atomic(&path, text).map_err(|e| format!("{}: {e}", path.display()))?;
         if let Some(old) = replacing.filter(|old| *old != profile.name) {
             self.delete(old)?;
         }

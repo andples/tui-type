@@ -205,31 +205,34 @@ pub fn install(dir: &Path, name: &str, text: &str) -> Result<PathBuf, String> {
     if !valid_name(name) {
         return Err(format!("bad name `{name}`"));
     }
-    std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let path = dir.join(format!("{name}.toml"));
-    let tmp = dir.join(format!(".{name}.toml.tmp"));
-    std::fs::write(&tmp, text)
-        .and_then(|()| std::fs::rename(&tmp, &path))
-        .map_err(|e| {
-            let _ = std::fs::remove_file(&tmp);
-            format!("{}: {e}", path.display())
-        })?;
+    crate::config::write_atomic(&path, text).map_err(|e| format!("{}: {e}", path.display()))?;
     Ok(path)
 }
 
 /// Remove every file in `dir` that defines `name` (whatever the file is
 /// called). Returns how many were removed.
 pub fn uninstall(dir: &Path, name: &str) -> Result<usize, String> {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return Ok(0);
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+        Err(e) => return Err(format!("{}: {e}", dir.display())),
     };
     let mut removed = 0;
     for path in entries.flatten().map(|e| e.path()) {
         if path.extension().and_then(|e| e.to_str()) != Some("toml") {
             continue;
         }
-        let Ok(text) = std::fs::read_to_string(&path) else {
-            continue;
+        let text = match std::fs::read_to_string(&path) {
+            Ok(text) => text,
+            Err(e) => {
+                // Can't tell what it defines; leave it, but say so.
+                crate::errlog::warn(
+                    "catalog",
+                    format!("uninstall {name}: skipped {}: {e}", path.display()),
+                );
+                continue;
+            }
         };
         if defines(&text) != Some(name) {
             continue;
@@ -281,7 +284,7 @@ impl Source {
                 if e.kind() == std::io::ErrorKind::NotFound {
                     NOT_FOUND.to_string()
                 } else {
-                    "couldn't read the catalogue".to_string()
+                    format!("couldn't read the catalogue ({}: {e})", path.display())
                 }
             });
         };
@@ -294,7 +297,7 @@ impl Source {
             .with_config()
             .limit(MAX_BYTES)
             .read_to_string()
-            .map_err(|_| "couldn't read the catalogue".to_string())
+            .map_err(|e| format!("couldn't read the catalogue ({url}: {e})"))
     }
 
     pub fn index(&self) -> Result<Index, String> {

@@ -11,8 +11,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::test::mode::Mode;
 
+mod files;
 mod hud;
 mod keyboard;
+pub use files::{bad_path, load_state, move_aside, read_state, write_atomic, write_private};
 pub use hud::{Hud, HudItem};
 pub use keyboard::Keyboard;
 
@@ -706,13 +708,7 @@ impl Config {
 
     pub fn save(&self, path: &Path) -> Result<(), ConfigError> {
         let text = toml::to_string_pretty(self)?;
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).map_err(|source| ConfigError::Write {
-                path: path.to_path_buf(),
-                source,
-            })?;
-        }
-        fs::write(path, text).map_err(|source| ConfigError::Write {
+        write_atomic(path, text).map_err(|source| ConfigError::Write {
             path: path.to_path_buf(),
             source,
         })
