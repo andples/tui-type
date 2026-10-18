@@ -35,6 +35,21 @@ pub const BUNDLED: &[Bundled] = &[
     bundled!("Cascadia Code", "cascadia-code"),
     bundled!("Roboto Mono", "roboto-mono"),
     bundled!("Ubuntu Mono", "ubuntu-mono"),
+    bundled!("Inconsolata", "inconsolata"),
+    bundled!("Fira Mono", "fira-mono"),
+    bundled!("Noto Sans Mono", "noto-sans-mono"),
+    bundled!("Red Hat Mono", "red-hat-mono"),
+    bundled!("Overpass Mono", "overpass-mono"),
+    bundled!("Geist Mono", "geist-mono"),
+    bundled!("Atkinson Hyperlegible Mono", "atkinson-hyperlegible-mono"),
+    bundled!("DM Mono", "dm-mono"),
+    bundled!("Space Mono", "space-mono"),
+    bundled!("Courier Prime", "courier-prime"),
+    bundled!("Victor Mono", "victor-mono"),
+    bundled!("Martian Mono", "martian-mono"),
+    bundled!("Anonymous Pro", "anonymous-pro"),
+    bundled!("PT Mono", "pt-mono"),
+    bundled!("Cousine", "cousine"),
 ];
 
 #[derive(Debug, PartialEq, Eq)]
