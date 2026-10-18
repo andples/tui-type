@@ -71,7 +71,7 @@ struct Placed {
 #[derive(Default)]
 struct FaceSlot {
     face: OnceCell<Option<Face>>,
-    loading: RefCell<Option<JoinHandle<Result<Face, String>>>>,
+    loading: RefCell<Option<JoinHandle<Result<Loaded, String>>>>,
     /// Why the background load failed, until `Gfx::take_load_error`.
     error: RefCell<Option<String>>,
 }
@@ -105,7 +105,17 @@ impl FaceSlot {
                         .unwrap_or("unknown panic");
                     Err(format!("loading the font failed: {why}"))
                 });
-                result.map_err(|e| *self.error.borrow_mut() = Some(e)).ok()
+                match result {
+                    // A fallback face, with why the asked-for font isn't it.
+                    Ok((face, warning)) => {
+                        *self.error.borrow_mut() = warning;
+                        Some(face)
+                    }
+                    Err(e) => {
+                        *self.error.borrow_mut() = Some(e);
+                        None
+                    }
+                }
             })
             .as_ref()
     }
@@ -220,7 +230,12 @@ impl Gfx {
             self.face = if background {
                 FaceSlot::background(config.font.clone(), fonts_dir.to_path_buf())
             } else {
-                FaceSlot::ready(load(&config.font, fonts_dir)?)
+                let (face, warning) = load(&config.font, fonts_dir)?;
+                self.font_spec = Some(config.font.clone());
+                self.generation += 1;
+                self.face = FaceSlot::ready(face);
+                // Drawn in the fallback font; the caller says why.
+                return warning.map_or(Ok(()), Err);
             };
             self.font_spec = Some(config.font.clone());
             self.generation += 1;
@@ -244,15 +259,18 @@ impl Gfx {
         self.face.is_loading()
     }
 
-    /// Why the startup font didn't load, once it has finished trying
-    /// (waits for it when `wait`); reported once.
+    /// Why the startup font didn't load (text then uses a bundled font, or
+    /// blocks if even that failed), once it has finished trying (waits for
+    /// it when `wait`); reported once.
     pub fn take_load_error(&mut self, wait: bool) -> Option<String> {
         if !wait && self.face.is_loading() {
             return None;
         }
         self.face.get();
         let e = self.face.error.get_mut().take()?;
-        self.font_spec = None;
+        if self.face.is_none() {
+            self.font_spec = None;
+        }
         Some(e)
     }
 
@@ -466,21 +484,29 @@ impl Gfx {
     }
 }
 
-fn load(spec: &str, fonts_dir: &Path) -> Result<Face, String> {
-    let result = load_checked(spec, fonts_dir);
-    if spec.trim().is_empty()
-        && let Err(e) = &result
-    {
+/// A face to draw with, and why it isn't the one asked for.
+type Loaded = (Face, Option<String>);
+
+/// The font `spec` names, or the first bundled font when that can't be
+/// used: block glyphs are only for terminals without images. Err only when
+/// even the bundled font fails.
+fn load(spec: &str, fonts_dir: &Path) -> Result<Loaded, String> {
+    let e = match load_checked(spec, fonts_dir) {
+        Ok(face) => return Ok((face, None)),
+        Err(e) => e,
+    };
+    let fallback = fonts::BUNDLED[0].name;
+    let face = load_checked(fallback, fonts_dir).map_err(|_| e.clone())?;
+    if spec.trim().is_empty() {
         // No font was asked for, so any working one will do.
-        let fallback = fonts::BUNDLED[0].name;
         crate::errlog::log(
             crate::errlog::Level::Warn,
             "font",
             format!("{e}; using bundled {fallback}"),
         );
-        return load_checked(fallback, fonts_dir);
+        return Ok((face, None));
     }
-    result
+    Ok((face, Some(format!("{e}; using {fallback} instead (:font)"))))
 }
 
 /// Load the font `spec` names and check it can draw text.
@@ -520,14 +546,10 @@ fn load_checked(spec: &str, fonts_dir: &Path) -> Result<Face, String> {
     match missing.len() {
         0 => {}
         26.. => {
-            return Err(format!(
-                "{name} has no Latin letters (text would be boxes); using block glyphs, try :font"
-            ));
+            return Err(format!("{name} has no Latin letters (text would be boxes)"));
         }
         _ => {
-            return Err(format!(
-                "{name} lacks the letters {missing}; using block glyphs, try :font"
-            ));
+            return Err(format!("{name} lacks the letters {missing}"));
         }
     }
     // Characters the font lacks come from a bundled font where it has them.
@@ -643,17 +665,29 @@ mod tests {
             env!("CARGO_MANIFEST_DIR"),
             "/assets/fonts/jetbrains-mono-latin-ext.ttf"
         );
-        let e = load(ext, dir).err().expect("an error");
+        let e = load_checked(ext, dir).err().expect("an error");
         assert!(e.contains("no Latin letters"), "{e}");
         assert!(e.contains("jetbrains-mono-latin-ext.ttf"), "{e}");
 
         let junk = std::env::temp_dir().join(format!("ttyp-junk-{}.ttf", std::process::id()));
         std::fs::write(&junk, b"not a font").unwrap();
-        let e = load(junk.to_str().unwrap(), dir).err().expect("an error");
+        let e = load_checked(junk.to_str().unwrap(), dir)
+            .err()
+            .expect("an error");
         assert!(e.contains("can't be read"), "{e}");
         std::fs::remove_file(&junk).unwrap();
 
-        assert!(load("JetBrains Mono", dir).is_ok());
+        assert!(load_checked("JetBrains Mono", dir).is_ok());
+
+        // Drawn in a bundled font rather than blocks, with the reason.
+        let (face, warning) = load(ext, dir).unwrap();
+        assert_eq!(face.name, fonts::BUNDLED[0].name);
+        let warning = warning.expect("why");
+        assert!(warning.contains("no Latin letters") && warning.contains("instead"));
+        assert!(
+            load("", dir).unwrap().1.is_none(),
+            "nothing asked for, nothing to say"
+        );
     }
 
     #[test]
@@ -666,7 +700,8 @@ mod tests {
             "/assets/fonts/fira-code-latin.ttf"
         );
         std::fs::copy(latin, dir.join("Mine.ttf")).unwrap();
-        let mut face = load("mine", &dir).unwrap();
+        let (mut face, warning) = load("mine", &dir).unwrap();
+        assert_eq!(warning, None);
         assert_eq!(face.name, "mine");
         assert!(face.covers('ł'));
         assert!(!face.covers('ж'));
@@ -696,9 +731,11 @@ mod tests {
         let mut out = Vec::new();
         g.present(&[], &mut out).unwrap();
         let e = g.take_load_error(true).expect("an error");
-        assert!(e.contains("not found"), "{e}");
-        assert!(g.metrics(FontSize::from_level(5)).is_none());
-        assert_eq!(g.font_spec, None, "the same font is tried again");
+        assert!(e.contains("not found") && e.contains("instead"), "{e}");
+        assert!(
+            g.metrics(FontSize::from_level(5)).is_some(),
+            "real text in the bundled font, not blocks"
+        );
         assert_eq!(g.take_load_error(true), None, "reported once");
     }
 
