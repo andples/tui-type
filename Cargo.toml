@@ -46,6 +46,8 @@ serde_json = "1.0.151"
 thiserror = "2.0.20"
 toml = "1.1.6"
 ureq = { version = "3", features = ["json"] }
+toml_edit = "0.25.17"
+serde_ignored = "0.1.14"
 
 # Live themes from utheme (`src/utheme_client.rs`) are macOS-only, and so is
 # their file watcher: other platforms build exactly as before.

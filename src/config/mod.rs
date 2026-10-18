@@ -11,9 +11,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::test::mode::Mode;
 
+mod edit;
 mod files;
 mod hud;
 mod keyboard;
+pub use edit::{merge_toml, parse_with_unknown};
 pub use files::{bad_path, load_state, move_aside, read_state, write_atomic, write_private};
 pub use hud::{Hud, HudItem};
 pub use keyboard::Keyboard;
@@ -649,8 +651,16 @@ impl Config {
         warnings: &mut Vec<String>,
     ) -> Result<(Self, bool), ConfigError> {
         match fs::read_to_string(path) {
-            Ok(text) => Self::parse(&text)
-                .map(|mut c| {
+            Ok(text) => parse_with_unknown::<Self>(&text)
+                .map(|(mut c, unknown)| {
+                    // Kept by `save` (see `edit::merge_toml`), but said at
+                    // every start so a typo gets fixed.
+                    warnings.extend(unknown.into_iter().map(|key| {
+                        format!(
+                            "{}: unknown setting `{key}` (kept; a typo, or from a newer ttyp?)",
+                            path.display()
+                        )
+                    }));
                     warnings.extend(
                         c.normalize()
                             .into_iter()
@@ -706,8 +716,12 @@ impl Config {
         toml::from_str(text)
     }
 
+    /// Write the config to `path`. An existing file is edited in place
+    /// (`merge_toml`): settings this version doesn't know, and comments,
+    /// stay as they were.
     pub fn save(&self, path: &Path) -> Result<(), ConfigError> {
-        let text = toml::to_string_pretty(self)?;
+        let old = fs::read_to_string(path).ok();
+        let text = merge_toml(old.as_deref(), self)?;
         write_atomic(path, text).map_err(|source| ConfigError::Write {
             path: path.to_path_buf(),
             source,
@@ -916,6 +930,51 @@ mod tests {
         assert_eq!(c.font_size, 1);
         assert_eq!(warnings.len(), 1);
         assert!(warnings[0].contains("font_size"), "{warnings:?}");
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn unknown_settings_warn_and_survive_a_save() {
+        let dir = std::env::temp_dir().join(format!("ttyp-config-unknown-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.toml");
+        let text = "# shared between machines\ntheme = \"nord\" # dark\nfontsize = 4\ncelebrate = false\n\n[results]\nchart = false\nsparkline = true # newer ttyp\n";
+        fs::write(&path, text).unwrap();
+        let mut warnings = Vec::new();
+        let (mut c, _) = Config::load_with_text(&path, &mut warnings).unwrap();
+        assert_eq!(warnings.len(), 2, "{warnings:?}");
+        assert!(
+            warnings[0].contains("unknown setting `fontsize`") && warnings[0].contains("kept"),
+            "{warnings:?}"
+        );
+        assert!(warnings[1].contains("`results.sparkline`"), "{warnings:?}");
+        assert_eq!(c.pb_effect, PbEffect::Off);
+
+        c.theme = "light".into();
+        c.save(&path).unwrap();
+        let saved = fs::read_to_string(&path).unwrap();
+        for kept in [
+            "# shared between machines\n",
+            "theme = \"light\" # dark\n",
+            "fontsize = 4\n",
+            "sparkline = true # newer ttyp\n",
+            "chart = false\n",
+        ] {
+            assert!(saved.contains(kept), "{kept:?} in\n{saved}");
+        }
+        // The old name for `pb_effect` is replaced, not doubled.
+        assert!(!saved.contains("celebrate"), "{saved}");
+        assert!(saved.contains("pb_effect = \"off\""), "{saved}");
+        let mut again = Vec::new();
+        let (back, _) = Config::load_with_text(&path, &mut again).unwrap();
+        assert_eq!(back, c);
+        assert_eq!(again, warnings, "still there, still said");
+
+        // A file that doesn't parse is written whole.
+        fs::write(&path, "theme = ").unwrap();
+        c.save(&path).unwrap();
+        assert_eq!(Config::load(&path).unwrap(), c);
         fs::remove_dir_all(&dir).unwrap();
     }
 
