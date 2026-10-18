@@ -63,9 +63,14 @@ use ttyp_core::api::{Daily, ResultDetail, SubmitResponse};
 
 /// The error log's file name, for notices that point at it.
 fn log_name() -> String {
-    errlog::path()
-        .map(|p| p.display().to_string())
-        .unwrap_or_else(|| "ttyp.log".into())
+    let Some(path) = errlog::path() else {
+        return "ttyp.log".into();
+    };
+    // `~/…` keeps the notice short.
+    match std::env::var_os("HOME").and_then(|h| path.strip_prefix(h).ok()) {
+        Some(rest) => format!("~/{}", rest.display()),
+        None => path.display().to_string(),
+    }
 }
 
 /// How long a transient notice stays on the bottom line.

@@ -653,19 +653,19 @@ impl Config {
         match fs::read_to_string(path) {
             Ok(text) => parse_with_unknown::<Self>(&text)
                 .map(|(mut c, unknown)| {
+                    // The file name, not the whole path: a notice is one line.
+                    let name = path.file_name().map_or_else(
+                        || path.display().to_string(),
+                        |n| n.to_string_lossy().into_owned(),
+                    );
                     // Kept by `save` (see `edit::merge_toml`), but said at
                     // every start so a typo gets fixed.
                     warnings.extend(unknown.into_iter().map(|key| {
                         format!(
-                            "{}: unknown setting `{key}` (kept; a typo, or from a newer ttyp?)",
-                            path.display()
+                            "{name}: unknown setting `{key}` (kept; a typo, or from a newer ttyp?)"
                         )
                     }));
-                    warnings.extend(
-                        c.normalize()
-                            .into_iter()
-                            .map(|w| format!("{}: {w}", path.display())),
-                    );
+                    warnings.extend(c.normalize().into_iter().map(|w| format!("{name}: {w}")));
                     (c, text.contains("server"))
                 })
                 .map_err(|source| ConfigError::Parse {
