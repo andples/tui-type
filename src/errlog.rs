@@ -124,6 +124,20 @@ pub fn quiet<T, E: Display>(context: &str, result: Result<T, E>) -> Option<T> {
     result.map_err(|e| log(Level::Error, context, e)).ok()
 }
 
+/// Run `f`, turning a panic into an `Err` with its message, logged under
+/// `context`. For background threads whose answer the UI waits for: a
+/// thread that just died would leave it waiting forever.
+pub fn catch_panic<T>(context: &str, f: impl FnOnce() -> T) -> Result<T, String> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).map_err(|payload| {
+        let msg = payload
+            .downcast_ref::<&str>()
+            .map(|s| (*s).to_string())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .unwrap_or_else(|| "unknown panic".to_string());
+        error(context, format!("background thread panicked: {msg}"))
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -158,6 +172,18 @@ mod tests {
         assert!(fs::read_to_string(&path).unwrap().ends_with("fresh\n"));
         assert!(path.with_extension("log.old").is_file());
         fs::remove_dir_all(path.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn a_panic_becomes_an_error() {
+        assert_eq!(catch_panic("t", || 3), Ok(3));
+        let e = catch_panic("t", || -> u8 { panic!("boom {}", 1) }).unwrap_err();
+        assert!(e.contains("boom 1"), "{e}");
+        assert!(
+            catch_panic("t", || -> u8 { panic!("static") })
+                .unwrap_err()
+                .contains("static")
+        );
     }
 
     #[test]

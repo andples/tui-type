@@ -55,6 +55,12 @@ fn main() -> Result<()> {
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         ttyp::errlog::log(ttyp::errlog::Level::Error, "panic", info);
+        // A background thread's panic is caught and reported by its
+        // worker (`errlog::catch_panic`) while the UI carries on: leave the
+        // terminal alone and keep the text off the screen.
+        if std::thread::current().name() != Some("main") {
+            return;
+        }
         ratatui::restore();
         hide_pointer_while_typing(false);
         default_hook(info);

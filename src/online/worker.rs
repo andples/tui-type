@@ -226,49 +226,76 @@ impl Online {
                 let cancel = Arc::clone(&self.cancel_login);
                 cancel.store(false, Ordering::Relaxed);
                 let id = self.github_client_id.clone().unwrap_or_default();
-                thread::spawn(move || {
-                    let _ = tx.send(login(&client, &id, &tx, &cancel));
-                });
+                spawn(
+                    tx,
+                    |e| RemoteEvent::LoginFailed(e.to_string()),
+                    move |tx| login(&client, &id, tx, &cancel),
+                );
             }
-            Request::Logout => {
-                thread::spawn(move || {
+            Request::Logout => spawn(
+                tx,
+                |_| RemoteEvent::LoggedOut,
+                move |_| {
                     // Best effort: the local token goes either way.
                     let _ = client.logout();
-                    let _ = tx.send(RemoteEvent::LoggedOut);
-                });
-            }
-            Request::DailiesToday => {
-                thread::spawn(move || {
-                    let _ = tx.send(RemoteEvent::Dailies(client.dailies_today()));
-                });
-            }
+                    RemoteEvent::LoggedOut
+                },
+            ),
+            Request::DailiesToday => spawn(
+                tx,
+                |e| RemoteEvent::Dailies(Err(e)),
+                move |_| RemoteEvent::Dailies(client.dailies_today()),
+            ),
             Request::DailiesFor(date) => {
-                thread::spawn(move || {
-                    let result = client.dailies_for(&date);
-                    let _ = tx.send(RemoteEvent::DailiesFor { date, result });
-                });
+                let d = date.clone();
+                spawn(
+                    tx,
+                    |e| RemoteEvent::DailiesFor {
+                        date: d,
+                        result: Err(e),
+                    },
+                    move |_| {
+                        let result = client.dailies_for(&date);
+                        RemoteEvent::DailiesFor { date, result }
+                    },
+                );
             }
-            Request::Daily(id) => {
-                thread::spawn(move || {
-                    let _ = tx.send(RemoteEvent::Daily(client.daily(id)));
-                });
-            }
-            Request::Start(daily_id) => {
-                thread::spawn(move || {
-                    let result = client.start(daily_id);
-                    let _ = tx.send(RemoteEvent::Started { daily_id, result });
-                });
-            }
+            Request::Daily(id) => spawn(
+                tx,
+                |e| RemoteEvent::Daily(Err(e)),
+                move |_| RemoteEvent::Daily(client.daily(id)),
+            ),
+            Request::Start(daily_id) => spawn(
+                tx,
+                move |e| RemoteEvent::Started {
+                    daily_id,
+                    result: Err(e),
+                },
+                move |_| RemoteEvent::Started {
+                    daily_id,
+                    result: client.start(daily_id),
+                },
+            ),
             Request::Submit { body, date, queued } => {
-                thread::spawn(move || {
-                    let result = client.submit(&body);
-                    let _ = tx.send(RemoteEvent::Submitted {
-                        body,
-                        date,
-                        queued,
-                        result,
-                    });
-                });
+                let (b, d, q) = (body.clone(), date.clone(), queued.clone());
+                spawn(
+                    tx,
+                    |e| RemoteEvent::Submitted {
+                        body: b,
+                        date: d,
+                        queued: q,
+                        result: Err(e),
+                    },
+                    move |_| {
+                        let result = client.submit(&body);
+                        RemoteEvent::Submitted {
+                            body,
+                            date,
+                            queued,
+                            result,
+                        }
+                    },
+                );
             }
             Request::Leaderboard {
                 board,
@@ -277,123 +304,217 @@ impl Online {
                 offset,
                 limit,
             } => {
-                thread::spawn(move || {
-                    let result = client.board(board, &target, following, offset, limit);
-                    let _ = tx.send(RemoteEvent::Leaderboard {
+                let t = target.clone();
+                spawn(
+                    tx,
+                    move |e| RemoteEvent::Leaderboard {
                         board,
-                        target,
+                        target: t,
                         following,
                         offset,
-                        result,
-                    });
-                });
+                        result: Err(e),
+                    },
+                    move |_| {
+                        let result = client.board(board, &target, following, offset, limit);
+                        RemoteEvent::Leaderboard {
+                            board,
+                            target,
+                            following,
+                            offset,
+                            result,
+                        }
+                    },
+                );
             }
-            Request::Result(id) => {
-                thread::spawn(move || {
-                    let _ = tx.send(RemoteEvent::ResultDetail(client.result(id)));
-                });
-            }
-            Request::Account => {
-                thread::spawn(move || {
-                    let _ = tx.send(RemoteEvent::Account(client.account()));
-                });
-            }
-            Request::SetPublic(public) => {
-                thread::spawn(move || {
-                    let _ = tx.send(RemoteEvent::Account(client.set_public(public)));
-                });
-            }
+            Request::Result(id) => spawn(
+                tx,
+                |e| RemoteEvent::ResultDetail(Err(e)),
+                move |_| RemoteEvent::ResultDetail(client.result(id)),
+            ),
+            Request::Account => spawn(
+                tx,
+                |e| RemoteEvent::Account(Err(e)),
+                move |_| RemoteEvent::Account(client.account()),
+            ),
+            Request::SetPublic(public) => spawn(
+                tx,
+                |e| RemoteEvent::Account(Err(e)),
+                move |_| RemoteEvent::Account(client.set_public(public)),
+            ),
             Request::User(login) => {
-                thread::spawn(move || {
-                    let result = client.user(&login);
-                    let _ = tx.send(RemoteEvent::User { login, result });
-                });
+                let l = login.clone();
+                spawn(
+                    tx,
+                    |e| RemoteEvent::User {
+                        login: l,
+                        result: Err(e),
+                    },
+                    move |_| {
+                        let result = client.user(&login);
+                        RemoteEvent::User { login, result }
+                    },
+                );
             }
             Request::Players {
                 query,
                 offset,
                 limit,
             } => {
-                thread::spawn(move || {
-                    let result = client.players(&query, offset, limit);
-                    let _ = tx.send(RemoteEvent::Players {
-                        query,
+                let q = query.clone();
+                spawn(
+                    tx,
+                    move |e| RemoteEvent::Players {
+                        query: q,
                         offset,
-                        result,
-                    });
-                });
+                        result: Err(e),
+                    },
+                    move |_| {
+                        let result = client.players(&query, offset, limit);
+                        RemoteEvent::Players {
+                            query,
+                            offset,
+                            result,
+                        }
+                    },
+                );
             }
-            Request::Follows => {
-                thread::spawn(move || {
-                    let _ = tx.send(RemoteEvent::Follows(client.follows()));
-                });
-            }
+            Request::Follows => spawn(
+                tx,
+                |e| RemoteEvent::Follows(Err(e)),
+                move |_| RemoteEvent::Follows(client.follows()),
+            ),
             Request::CustomList {
                 query,
                 offset,
                 limit,
             } => {
-                thread::spawn(move || {
-                    let result = client.custom_list(&query, offset, limit);
-                    let _ = tx.send(RemoteEvent::CustomList { query, result });
-                });
+                let q = query.clone();
+                spawn(
+                    tx,
+                    |e| RemoteEvent::CustomList {
+                        query: q,
+                        result: Err(e),
+                    },
+                    move |_| {
+                        let result = client.custom_list(&query, offset, limit);
+                        RemoteEvent::CustomList { query, result }
+                    },
+                );
             }
             Request::CustomInstall(name) => {
-                thread::spawn(move || {
-                    let result = client.custom_install(&name);
-                    let _ = tx.send(RemoteEvent::CustomInstalled { name, result });
-                });
+                let n = name.clone();
+                spawn(
+                    tx,
+                    |e| RemoteEvent::CustomInstalled {
+                        name: n,
+                        result: Err(e),
+                    },
+                    move |_| {
+                        let result = client.custom_install(&name);
+                        RemoteEvent::CustomInstalled { name, result }
+                    },
+                );
             }
             Request::CustomPublish(set) => {
-                thread::spawn(move || {
-                    let result = client.custom_publish(&set);
-                    let _ = tx.send(RemoteEvent::CustomPublished {
-                        name: set.name,
-                        result,
-                    });
-                });
+                let n = set.name.clone();
+                spawn(
+                    tx,
+                    |e| RemoteEvent::CustomPublished {
+                        name: n,
+                        result: Err(e),
+                    },
+                    move |_| {
+                        let result = client.custom_publish(&set);
+                        RemoteEvent::CustomPublished {
+                            name: set.name,
+                            result,
+                        }
+                    },
+                );
             }
             Request::CustomUnpublish(name) => {
-                thread::spawn(move || {
-                    let result = client.custom_unpublish(&name);
-                    let _ = tx.send(RemoteEvent::CustomUnpublished { name, result });
-                });
+                let n = name.clone();
+                spawn(
+                    tx,
+                    |e| RemoteEvent::CustomUnpublished {
+                        name: n,
+                        result: Err(e),
+                    },
+                    move |_| {
+                        let result = client.custom_unpublish(&name);
+                        RemoteEvent::CustomUnpublished { name, result }
+                    },
+                );
             }
-            Request::Configs => {
-                thread::spawn(move || {
-                    let result = client.configs();
-                    let _ = tx.send(RemoteEvent::Configs {
-                        pushed: None,
-                        result,
-                    });
-                });
-            }
+            Request::Configs => spawn(
+                tx,
+                |e| RemoteEvent::Configs {
+                    pushed: None,
+                    result: Err(e),
+                },
+                move |_| RemoteEvent::Configs {
+                    pushed: None,
+                    result: client.configs(),
+                },
+            ),
             Request::PushConfigs(push) => {
-                thread::spawn(move || {
-                    let result = client.push_configs(&push);
-                    let _ = tx.send(RemoteEvent::Configs {
-                        pushed: Some(push),
-                        result,
-                    });
-                });
+                let p = push.clone();
+                spawn(
+                    tx,
+                    |e| RemoteEvent::Configs {
+                        pushed: Some(p),
+                        result: Err(e),
+                    },
+                    move |_| {
+                        let result = client.push_configs(&push);
+                        RemoteEvent::Configs {
+                            pushed: Some(push),
+                            result,
+                        }
+                    },
+                );
             }
-            Request::PushBests(bests) => {
-                thread::spawn(move || {
-                    let _ = tx.send(RemoteEvent::Bests(client.push_bests(&bests)));
-                });
-            }
+            Request::PushBests(bests) => spawn(
+                tx,
+                |e| RemoteEvent::Bests(Err(e)),
+                move |_| RemoteEvent::Bests(client.push_bests(&bests)),
+            ),
             Request::SetFollow { login, follow } => {
-                thread::spawn(move || {
-                    let result = client.set_follow(&login, follow);
-                    let _ = tx.send(RemoteEvent::Followed {
-                        login,
+                let l = login.clone();
+                spawn(
+                    tx,
+                    move |e| RemoteEvent::Followed {
+                        login: l,
                         follow,
-                        result,
-                    });
-                });
+                        result: Err(e),
+                    },
+                    move |_| {
+                        let result = client.set_follow(&login, follow);
+                        RemoteEvent::Followed {
+                            login,
+                            follow,
+                            result,
+                        }
+                    },
+                );
             }
         }
     }
+}
+
+/// Run `work` on its own thread and send what it returns. If it panics,
+/// `failed` makes the reply instead (with `OnlineError::Internal`), so the
+/// request still ends and `pending` drops back.
+fn spawn(
+    tx: Sender<RemoteEvent>,
+    failed: impl FnOnce(OnlineError) -> RemoteEvent + Send + 'static,
+    work: impl FnOnce(&Sender<RemoteEvent>) -> RemoteEvent + Send + 'static,
+) {
+    thread::spawn(move || {
+        let ev = crate::errlog::catch_panic("online", || work(&tx))
+            .unwrap_or_else(|msg| failed(OnlineError::Internal(msg)));
+        let _ = tx.send(ev);
+    });
 }
 
 /// Device flow against GitHub, then the token exchange with the server.

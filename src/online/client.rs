@@ -20,6 +20,8 @@ pub enum OnlineError {
     Unauthorized,
     /// The server answered with an error (`{"error": …}`).
     Server { status: u16, message: String },
+    /// The request's thread panicked (a bug; the panic is in the log).
+    Internal(String),
 }
 
 impl fmt::Display for OnlineError {
@@ -28,6 +30,7 @@ impl fmt::Display for OnlineError {
             OnlineError::Unreachable(e) => write!(f, "{e}"),
             OnlineError::Unauthorized => write!(f, "not logged in (:login)"),
             OnlineError::Server { message, .. } => write!(f, "{message}"),
+            OnlineError::Internal(e) => write!(f, "internal error: {e}"),
         }
     }
 }

@@ -54,47 +54,82 @@ impl Fetcher {
     }
 
     pub fn fetch_index(&mut self) {
-        let (src, tx) = (self.source.clone(), self.tx.clone());
+        let src = self.source.clone();
         self.pending += 1;
-        thread::spawn(move || {
-            let _ = tx.send(CatalogEvent::Index(src.index()));
-        });
+        spawn(
+            self.tx.clone(),
+            |e| CatalogEvent::Index(Err(e)),
+            move || CatalogEvent::Index(src.index()),
+        );
     }
 
     /// Fetch one of `language`'s modules.
     pub fn fetch_module(&mut self, language: String, module: String) {
-        let (src, tx) = (self.source.clone(), self.tx.clone());
+        let src = self.source.clone();
         self.pending += 1;
-        thread::spawn(move || {
-            let result = src.fetch_module(&language, &module);
-            let _ = tx.send(CatalogEvent::ModuleFetched {
-                language,
-                module,
-                result,
-            });
-        });
+        let (l, m) = (language.clone(), module.clone());
+        spawn(
+            self.tx.clone(),
+            |e| CatalogEvent::ModuleFetched {
+                language: l,
+                module: m,
+                result: Err(e),
+            },
+            move || {
+                let result = src.fetch_module(&language, &module);
+                CatalogEvent::ModuleFetched {
+                    language,
+                    module,
+                    result,
+                }
+            },
+        );
     }
 
     /// Fetch `name`. Without a `kind` the index says which list it's in.
     pub fn fetch(&mut self, kind: Option<Kind>, name: String, use_it: bool) {
-        let (src, tx) = (self.source.clone(), self.tx.clone());
+        let src = self.source.clone();
         self.pending += 1;
-        thread::spawn(move || {
-            let result = match kind {
-                Some(k) => Ok(k),
-                None => src.index().and_then(|index| {
-                    index
-                        .kind_of(&name)
-                        .ok_or_else(|| format!("`{name}` is not in the catalogue"))
-                }),
-            }
-            .and_then(|k| src.fetch(k, &name).map(|text| (k, text)));
-            let _ = tx.send(CatalogEvent::Fetched {
+        let n = name.clone();
+        spawn(
+            self.tx.clone(),
+            move |e| CatalogEvent::Fetched {
                 kind,
-                name,
+                name: n,
                 use_it,
-                result,
-            });
-        });
+                result: Err(e),
+            },
+            move || {
+                let result = match kind {
+                    Some(k) => Ok(k),
+                    None => src.index().and_then(|index| {
+                        index
+                            .kind_of(&name)
+                            .ok_or_else(|| format!("`{name}` is not in the catalogue"))
+                    }),
+                }
+                .and_then(|k| src.fetch(k, &name).map(|text| (k, text)));
+                CatalogEvent::Fetched {
+                    kind,
+                    name,
+                    use_it,
+                    result,
+                }
+            },
+        );
     }
+}
+
+/// Run `work` on its own thread and send what it returns. If it panics,
+/// `failed` makes the reply instead, so `pending` still drops back.
+fn spawn(
+    tx: Sender<CatalogEvent>,
+    failed: impl FnOnce(String) -> CatalogEvent + Send + 'static,
+    work: impl FnOnce() -> CatalogEvent + Send + 'static,
+) {
+    thread::spawn(move || {
+        let ev = crate::errlog::catch_panic("catalog", work)
+            .unwrap_or_else(|msg| failed(format!("internal error: {msg}")));
+        let _ = tx.send(ev);
+    });
 }
