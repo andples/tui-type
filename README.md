@@ -230,9 +230,9 @@ where it is.
 When a newer ttyp is out, the landing screen says so in the accent colour,
 with how to upgrade (`brew upgrade ttyp`, `cargo install ttyp`, …, guessed
 from where ttyp is installed). A new major version gets a bigger, framed
-notice. ttyp asks GitHub for the latest release at most once a day, in the
-background, and never while offline (`server = ""`); `:set update_check off`
-(`update_check = false`) turns it off.
+notice. ttyp asks GitHub for the latest release when it starts, at most
+once an hour, in the background, and never while offline (`server = ""`);
+`:set update_check off` (`update_check = false`) turns it off.
 
 ## Commands
 

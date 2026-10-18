@@ -1,4 +1,4 @@
-//! Update notice: asks GitHub for the latest release at most once a day,
+//! Update notice: asks GitHub for the latest release at most once an hour,
 //! on a background thread, and remembers the answer in `Paths::update_file`
 //! so the landing screen can say so from the next start without waiting.
 //! Off when the client is offline (`server = ""`) or `update_check = false`.
@@ -16,8 +16,10 @@ pub const RELEASES_URL: &str = match option_env!("TTYP_RELEASES_URL") {
     None => "https://api.github.com/repos/andples/tui-type/releases/latest",
 };
 
-/// How long an answer is trusted before asking again.
-pub const CHECK_EVERY: Duration = Duration::from_secs(24 * 60 * 60);
+/// How long an answer is trusted before asking again at the next start.
+/// An hour, so releases a few hours apart are both noticed; GitHub allows
+/// 60 unauthenticated requests an hour, and a start makes at most one.
+pub const CHECK_EVERY: Duration = Duration::from_secs(60 * 60);
 
 /// `major.minor.patch`; a leading `v` and any `-pre`/`+build` are ignored.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -232,6 +234,8 @@ mod tests {
             latest: "2.6.0".into(),
         };
         assert!(!c.due(1_000_000 + 60));
+        assert!(!c.due(1_000_000 + 59 * 60), "within the hour");
+        assert!(c.due(1_000_000 + 60 * 60), "an hour on");
         assert!(c.due(1_000_000 + CHECK_EVERY.as_secs()));
         assert!(c.due(10), "a clock that went back asks again");
         assert!(Cache::default().due(now_secs()));

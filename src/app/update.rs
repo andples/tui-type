@@ -1,5 +1,5 @@
 //! The update notice's app side: the cached answer at start, a background
-//! check when the last one is a day old, and saving what it finds.
+//! check when the last one is an hour old, and saving what it finds.
 //! `crate::update` holds the rules; `ui::splash` draws `App::update`.
 
 use super::App;

@@ -140,7 +140,7 @@ pub struct Config {
     /// Play the short landing screen (logo, login/daily hints) on start.
     /// Not a profile setting.
     pub splash: bool,
-    /// Look for a newer ttyp once a day and say so on the landing screen.
+    /// Look for a newer ttyp at start (at most hourly) and say so on the landing screen.
     /// Never while offline (`server = ""`). Not a profile setting.
     pub update_check: bool,
     /// What the results screen does when a test sets a new personal best:
