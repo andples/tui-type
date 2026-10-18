@@ -532,6 +532,22 @@ error_extra = "#eba0ac" # characters typed past the end of a word
 
 Built in: `default`. The rest are in the catalogue (`:install`).
 
+### Live themes with utheme (macOS)
+
+utheme, a macOS theme switcher, changes the theme of every app at
+once. With `theme = "utheme"` (which utheme's ttyp integration sets, or
+`:theme utheme`), ttyp on macOS follows it live: it starts in utheme's current
+theme and recolours within a second of `utheme set <theme>`, with no restart.
+Pick any other theme and ttyp stops following.
+
+ttyp only reads utheme's files (`~/.local/share/utheme/current`) and writes one
+status file for `utheme clients` (`~/.local/state/utheme/clients/ttyp-<pid>.json`,
+removed on exit). It never changes your config. If utheme isn't set up, ttyp
+uses the `themes/utheme.toml` utheme wrote, else `default`. `UTHEME_HOME`
+moves utheme's folders, as it does for utheme itself.
+
+On Linux and Windows `theme = "utheme"` just loads `themes/utheme.toml`.
+
 ### Adding a language
 
 Drop a file in `~/.config/ttyp/languages/`:

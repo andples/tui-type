@@ -24,6 +24,8 @@ mod sync;
 mod tests;
 mod update;
 mod user;
+#[cfg(target_os = "macos")]
+mod utheme;
 
 use std::io::Write;
 use std::time::{Duration, Instant};
@@ -317,6 +319,9 @@ pub struct App {
     /// `pace_target`'s last answer and what it was worked out from.
     pace_memo: std::cell::RefCell<Option<(PaceInputs, Option<f64>)>>,
     dirty: bool,
+    /// Following utheme live (`theme = "utheme"`, macOS).
+    #[cfg(target_os = "macos")]
+    utheme: utheme::Live,
 }
 
 #[derive(Debug, PartialEq)]
@@ -384,7 +389,13 @@ impl App {
         if skipped > 0 {
             warnings.push(format!("skipped {skipped} corrupt history line(s)"));
         }
-        if themes.get(&config.theme).is_none() {
+        // utheme says itself when it can't be followed (`utheme_apply`).
+        #[cfg(target_os = "macos")]
+        let theme_missing =
+            themes.get(&config.theme).is_none() && config.theme != crate::utheme_client::THEME;
+        #[cfg(not(target_os = "macos"))]
+        let theme_missing = themes.get(&config.theme).is_none();
+        if theme_missing {
             warnings.push(format!(
                 "theme `{}` isn't installed, using default (:install)",
                 config.theme
@@ -495,12 +506,17 @@ impl App {
             drawn_clock: None,
             pace_memo: Default::default(),
             dirty: true,
+            #[cfg(target_os = "macos")]
+            utheme: Default::default(),
         };
         app.refresh_catalog_lists();
         app.refresh_custom_names();
         if let Some(w) = warnings.first() {
             app.notify(w.clone());
         }
+        // Read before the first frame, so it never shows another theme first.
+        #[cfg(target_os = "macos")]
+        app.utheme_tick();
         app.install_missing();
         app.check_catalog_updates();
         app.retry_queued_submissions();
@@ -559,7 +575,21 @@ impl App {
         {
             return t;
         }
+        #[cfg(target_os = "macos")]
+        if let Some(t) = self.utheme_theme() {
+            return t;
+        }
         self.themes.get_or_default(&self.config.theme)
+    }
+
+    /// Whether `name` can be chosen. On macOS `utheme` always can: it
+    /// follows utheme live, falling back if utheme isn't there.
+    fn theme_installed(&self, name: &str) -> bool {
+        #[cfg(target_os = "macos")]
+        if name == crate::utheme_client::THEME {
+            return true;
+        }
+        self.themes.get(name).is_some()
     }
 
     /// Max width of the content column for the screen being shown.
@@ -639,6 +669,8 @@ impl App {
             *s = Splash::new(Instant::now());
         }
         let result = self.event_loop(terminal);
+        #[cfg(target_os = "macos")]
+        self.utheme_stop();
         self.flush_missed_words();
         self.gfx.clear(terminal.backend_mut())?;
         result
@@ -650,6 +682,8 @@ impl App {
             self.drain_catalog();
             self.drain_update();
             self.sync_tick();
+            #[cfg(target_os = "macos")]
+            self.utheme_tick();
             if let Some(e) = self.gfx.take_load_error(false) {
                 self.notify(e);
             }
@@ -658,6 +692,11 @@ impl App {
                 self.dirty = false;
             }
             let timeout = self.poll_timeout();
+            // Following utheme wakes up to look for a switch; that's not a `Tick`.
+            #[cfg(target_os = "macos")]
+            let (timeout, utheme_wake) = self.utheme_wait(timeout);
+            #[cfg(not(target_os = "macos"))]
+            let utheme_wake = false;
             let ready = match timeout {
                 Some(t) => event::poll(t)?,
                 None => true,
@@ -675,7 +714,7 @@ impl App {
                     self.handle_event(event::read()?);
                     taken += 1;
                 }
-            } else {
+            } else if !utheme_wake {
                 self.dispatch(Action::Tick);
             }
         }
@@ -1348,7 +1387,7 @@ impl App {
                 changed_test = true;
             }
             Command::Theme(name) => {
-                if self.themes.get(&name).is_none() {
+                if !self.theme_installed(&name) {
                     self.notify(format!("theme `{name}` isn't installed (:install)"));
                     return;
                 }
@@ -1555,7 +1594,7 @@ impl App {
                     self.notify(e);
                     return;
                 }
-                if self.themes.get(&self.config.theme).is_none() {
+                if !self.theme_installed(&self.config.theme) {
                     self.notify(format!("unknown theme `{}`", self.config.theme));
                 }
                 if matches!(key.as_str(), "font" | "graphics")
