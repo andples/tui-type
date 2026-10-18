@@ -51,6 +51,7 @@ ureq = { version = "3", features = ["json"] }
 # their file watcher: other platforms build exactly as before.
 [target.'cfg(target_os = "macos")'.dependencies]
 notify = "8.2.0"
+libc = "0.2"
 
 # Font rasterizing and zlib are far too slow unoptimized; keep dev builds
 # responsive by optimizing dependencies (built once, then cached).

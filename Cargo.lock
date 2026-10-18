@@ -3104,6 +3104,7 @@ dependencies = [
  "directories",
  "flate2",
  "fontdue",
+ "libc",
  "notify",
  "nucleo-matcher",
  "rand 0.10.2",

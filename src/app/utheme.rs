@@ -13,10 +13,10 @@ use crate::utheme_client::{self, Client, Paths, Rgb, Snapshot, Update, mix};
 /// The palette keys the role mapping reads.
 const NEEDS: &[&str] = &["background", "foreground", "muted", "accent", "red"];
 
-/// How often the event loop looks for a switch while following. The watcher
-/// thread does the reading; this only bounds how long a recolour waits for
-/// the next frame when no key comes in.
-const WAKE: Duration = Duration::from_millis(200);
+/// The longest the event loop sleeps while following. The watcher thread
+/// wakes it on every switch (`utheme_client::wake_terminal`: a `SIGWINCH`,
+/// which arrives as a resize); this is only the fallback.
+const WAKE: Duration = utheme_client::POLL;
 
 /// Following state: the client while `theme = "utheme"`, and the theme it
 /// last delivered. Dropping it removes the heartbeat.
@@ -56,8 +56,8 @@ impl App {
         if wanted && self.utheme.client.is_none() {
             let (app, version) = ("ttyp", env!("CARGO_PKG_VERSION"));
             let started = match &self.utheme.paths {
-                Some(p) => Some(Client::start_in(p.clone(), app, version, NEEDS)),
-                None => Client::start(app, version, NEEDS),
+                Some(p) => Some(Client::start_in(p.clone(), app, version, NEEDS, None)),
+                None => Client::start(app, version, NEEDS, Some(utheme_client::wake_terminal)),
             };
             if let Some((client, first)) = started {
                 self.utheme.client = Some(client);
