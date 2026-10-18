@@ -3117,7 +3117,7 @@ dependencies = [
 
 [[package]]
 name = "ttyp"
-version = "2.8.0"
+version = "2.8.1"
 dependencies = [
  "anyhow",
  "base64 0.23.1",
