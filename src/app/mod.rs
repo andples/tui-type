@@ -420,6 +420,9 @@ impl App {
         if let Err(e) = gfx.configure_in_background(&config, &paths.fonts_dir) {
             warnings.push(e);
         }
+        if let Some(why) = gfx.blocks_reason() {
+            warnings.push(why.to_string());
+        }
         let completions = Completions {
             themes: themes.names().map(str::to_string).collect(),
             languages: languages.names().map(str::to_string).collect(),
@@ -767,17 +770,11 @@ impl App {
         if let Some(e) = self.gfx.take_load_error(false) {
             self.report("font", e);
         }
-        let missing = self.gfx.take_missing();
-        if missing.is_empty() {
+        let Some((font, missing)) = self.gfx.take_missing() else {
             return;
-        }
+        };
         let shown: String = missing.iter().take(12).collect();
         let more = if missing.len() > 12 { "…" } else { "" };
-        let font = if self.config.font.trim().is_empty() {
-            "the system font"
-        } else {
-            self.config.font.trim()
-        };
         self.report(
             "font",
             format!("{font} has no glyph for {shown}{more} (shown as boxes); try :font"),
@@ -1479,7 +1476,7 @@ impl App {
                 let old = std::mem::replace(&mut self.config.font, spec);
                 if let Err(e) = self.apply_graphics() {
                     self.config.font = old;
-                    let _ = self.apply_graphics();
+                    errlog::quiet("font", self.apply_graphics());
                     self.report("font", e);
                     return;
                 }
@@ -1487,6 +1484,8 @@ impl App {
                     self.notify(
                         "font saved; this terminal has no kitty graphics, so it shows block glyphs",
                     );
+                } else if let Some(why) = self.gfx.blocks_reason() {
+                    self.notify(format!("font saved; {why}"));
                 } else {
                     let name = if self.config.font.is_empty() {
                         "system monospace"
@@ -1639,6 +1638,7 @@ impl App {
                 self.notify(format!("results {section} {}", on_off(new)));
             }
             Command::Set { key, value } => {
+                let before = self.config.clone();
                 if let Err(e) = self.config.set(&key, &value) {
                     self.notify(e);
                     return;
@@ -1649,7 +1649,11 @@ impl App {
                 if matches!(key.as_str(), "font" | "graphics")
                     && let Err(e) = self.apply_graphics()
                 {
+                    // Like `:font`: keep the setting that worked.
+                    self.config = before;
+                    errlog::quiet("font", self.apply_graphics());
                     self.report("font", e);
+                    return;
                 }
                 // Reconnect so `:set server …` works without a restart.
                 if key == "catalog" {

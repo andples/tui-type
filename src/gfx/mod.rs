@@ -97,9 +97,14 @@ impl FaceSlot {
         self.face
             .get_or_init(|| {
                 let handle = self.loading.borrow_mut().take()?;
-                let result = handle
-                    .join()
-                    .unwrap_or_else(|_| Err("loading the font failed".into()));
+                let result = handle.join().unwrap_or_else(|panic| {
+                    let why = panic
+                        .downcast_ref::<String>()
+                        .map(String::as_str)
+                        .or_else(|| panic.downcast_ref::<&str>().copied())
+                        .unwrap_or("unknown panic");
+                    Err(format!("loading the font failed: {why}"))
+                });
                 result.map_err(|e| *self.error.borrow_mut() = Some(e)).ok()
             })
             .as_ref()
@@ -181,8 +186,9 @@ impl Gfx {
         g
     }
 
-    /// Apply the `graphics` and `font` settings. On error images stay off
-    /// and the caller should tell the user why.
+    /// Apply the `graphics` and `font` settings. On error (the font) images
+    /// stay off and the caller should tell the user why; `blocks_reason`
+    /// says when they are off for lack of a pixel size.
     pub fn configure(&mut self, config: &Config, fonts_dir: &Path) -> Result<(), String> {
         self.configure_with(config, fonts_dir, false)
     }
@@ -219,9 +225,6 @@ impl Gfx {
             self.font_spec = Some(config.font.clone());
             self.generation += 1;
         }
-        if self.cell.is_none() {
-            return Err("terminal did not report its size in pixels; using block glyphs".into());
-        }
         Ok(())
     }
 
@@ -253,16 +256,19 @@ impl Gfx {
         Some(e)
     }
 
-    /// Characters drawn since the last call that the font has no glyph for
-    /// (each reported once per font).
-    pub fn take_missing(&mut self) -> Vec<char> {
+    /// The font's name and the characters drawn since the last call that
+    /// it has no glyph for (each reported once per font).
+    pub fn take_missing(&mut self) -> Option<(String, Vec<char>)> {
         // Never waits for a background load: nothing was drawn before it.
-        self.face
-            .face
-            .get_mut()
-            .and_then(Option::as_mut)
-            .map(Face::take_missing)
-            .unwrap_or_default()
+        let face = self.face.face.get_mut()?.as_mut()?;
+        let missing = face.take_missing();
+        (!missing.is_empty()).then(|| (face.name.clone(), missing))
+    }
+
+    /// Why text shows as block glyphs although the terminal has graphics.
+    pub fn blocks_reason(&self) -> Option<&'static str> {
+        (self.supported && self.cell.is_none())
+            .then_some("terminal did not report its size in pixels; using block glyphs")
     }
 
     /// Whether the terminal speaks the protocol, even if no font loaded.
@@ -481,18 +487,30 @@ fn load(spec: &str, fonts_dir: &Path) -> Result<Face, String> {
 fn load_checked(spec: &str, fonts_dir: &Path) -> Result<Face, String> {
     let source = fonts::resolve(spec, fonts_dir)?;
     let files = source.load()?;
-    let refs: Vec<&[u8]> = files.iter().map(Vec::as_slice).collect();
-    let name = || match &source {
-        fonts::Source::Bundled(name) => format!("font `{name}`"),
-        fonts::Source::File(path) if spec.trim().is_empty() => {
-            format!("system monospace font {}", path.display())
+    let faces: Vec<(&[u8], u32)> = files.iter().map(|(d, i)| (d.as_slice(), *i)).collect();
+    let (short, name) = match &source {
+        fonts::Source::Bundled(name) => (name.to_string(), format!("font `{name}`")),
+        fonts::Source::File(path, _) => {
+            let file = path.file_name().map_or_else(
+                || path.display().to_string(),
+                |n| n.to_string_lossy().into_owned(),
+            );
+            let name = if spec.trim().is_empty() {
+                format!("system monospace font {}", path.display())
+            } else if Path::new(spec.trim()) == path {
+                format!("font {}", path.display())
+            } else {
+                format!("font `{}` ({})", spec.trim(), path.display())
+            };
+            let short = if spec.trim().is_empty() {
+                file
+            } else {
+                spec.trim().to_string()
+            };
+            (short, name)
         }
-        fonts::Source::File(path) if Path::new(spec.trim()) == path => {
-            format!("font {}", path.display())
-        }
-        fonts::Source::File(path) => format!("font `{}` ({})", spec.trim(), path.display()),
     };
-    let face = Face::from_files(&refs).map_err(|e| format!("{} can't be read: {e}", name()))?;
+    let mut face = Face::from_faces(&faces).map_err(|e| format!("{name} can't be read: {e}"))?;
     // A font can parse and still have no letters (a symbols, icon or emoji
     // font, or the wrong face of a collection): every glyph would be a box.
     let missing: String = ('a'..='z')
@@ -500,16 +518,26 @@ fn load_checked(spec: &str, fonts_dir: &Path) -> Result<Face, String> {
         .filter(|&c| !face.covers(c))
         .collect();
     match missing.len() {
-        0 => Ok(face),
-        26.. => Err(format!(
-            "{} has no Latin letters (text would be boxes); using block glyphs, try :font",
-            name()
-        )),
-        _ => Err(format!(
-            "{} lacks the letters {missing}; using block glyphs, try :font",
-            name()
-        )),
+        0 => {}
+        26.. => {
+            return Err(format!(
+                "{name} has no Latin letters (text would be boxes); using block glyphs, try :font"
+            ));
+        }
+        _ => {
+            return Err(format!(
+                "{name} lacks the letters {missing}; using block glyphs, try :font"
+            ));
+        }
     }
+    // Characters the font lacks come from a bundled font where it has them.
+    if !matches!(source, fonts::Source::Bundled(_)) {
+        for data in fonts::BUNDLED[0].files {
+            face.add_fallback(data)?;
+        }
+    }
+    face.name = short;
+    Ok(face)
 }
 
 /// Terminals known to implement the kitty graphics protocol. Anything else,
@@ -626,6 +654,32 @@ mod tests {
         std::fs::remove_file(&junk).unwrap();
 
         assert!(load("JetBrains Mono", dir).is_ok());
+    }
+
+    #[test]
+    fn a_user_font_falls_back_to_a_bundled_one_for_what_it_lacks() {
+        let dir = std::env::temp_dir().join(format!("ttyp-fallback-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        // Fira Code's Latin subset alone has no `ł`; JetBrains Mono's does.
+        let latin = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/assets/fonts/fira-code-latin.ttf"
+        );
+        std::fs::copy(latin, dir.join("Mine.ttf")).unwrap();
+        let mut face = load("mine", &dir).unwrap();
+        assert_eq!(face.name, "mine");
+        assert!(face.covers('ł'));
+        assert!(!face.covers('ж'));
+        let geom = face.geom(20);
+        let g = raster::Glyph {
+            ch: 'ж',
+            fg: [0; 3],
+            bg: None,
+            underline: false,
+        };
+        face.render_glyph(&g, geom);
+        assert_eq!(face.take_missing(), vec!['ж']);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

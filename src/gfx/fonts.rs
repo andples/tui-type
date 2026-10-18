@@ -55,20 +55,22 @@ pub const BUNDLED: &[Bundled] = &[
 #[derive(Debug, PartialEq, Eq)]
 pub enum Source {
     Bundled(&'static str),
-    File(PathBuf),
+    /// A font file, and which face in it (a `.ttc` collection holds several).
+    File(PathBuf, u32),
 }
 
 impl Source {
-    pub fn load(&self) -> Result<Vec<Vec<u8>>, String> {
+    /// Each font's data and face index, the first one the main font.
+    pub fn load(&self) -> Result<Vec<(Vec<u8>, u32)>, String> {
         match self {
             Source::Bundled(name) => Ok(bundled(name)
                 .expect("resolved names are bundled")
                 .files
                 .iter()
-                .map(|f| f.to_vec())
+                .map(|f| (f.to_vec(), 0))
                 .collect()),
-            Source::File(path) => std::fs::read(path)
-                .map(|d| vec![d])
+            Source::File(path, index) => std::fs::read(path)
+                .map(|d| vec![(d, *index)])
                 .map_err(|e| format!("{}: {e}", path.display())),
         }
     }
@@ -80,19 +82,11 @@ fn bundled(name: &str) -> Option<&'static Bundled> {
 }
 
 pub fn resolve(spec: &str, fonts_dir: &Path) -> Result<Source, String> {
-    resolve_path(spec, fonts_dir).map(|p| match p {
-        Ok(path) => Source::File(path),
-        Err(name) => Source::Bundled(name),
-    })
-}
-
-/// `Ok(path)` for a font file, `Err(name)` for a bundled font.
-fn resolve_path(spec: &str, fonts_dir: &Path) -> Result<Result<PathBuf, &'static str>, String> {
     let spec = spec.trim();
     if spec.is_empty() {
         return Ok(fc_match("monospace")
-            .map(|(path, _)| path)
-            .ok_or(BUNDLED[0].name));
+            .map(|m| Source::File(m.path, m.index))
+            .unwrap_or(Source::Bundled(BUNDLED[0].name)));
     }
     let expanded = match spec.strip_prefix("~/") {
         Some(rest) => std::env::var_os("HOME")
@@ -101,29 +95,52 @@ fn resolve_path(spec: &str, fonts_dir: &Path) -> Result<Result<PathBuf, &'static
         None => PathBuf::from(spec),
     };
     if expanded.is_file() {
-        return Ok(Ok(expanded));
+        return Ok(Source::File(expanded, 0));
     }
-    if let Some(p) = std::iter::once(fonts_dir.join(spec))
-        .chain(
-            EXTENSIONS
-                .iter()
-                .map(|e| fonts_dir.join(format!("{spec}.{e}"))),
-        )
-        .find(|p| p.is_file())
-    {
-        return Ok(Ok(p));
+    if let Some(p) = in_fonts_dir(spec, fonts_dir) {
+        return Ok(Source::File(p, 0));
     }
     if let Some(b) = bundled(spec) {
-        return Ok(Err(b.name));
+        return Ok(Source::Bundled(b.name));
     }
+    // A fontconfig pattern (`Family:style=Bold`) names its family first.
+    let family = spec.split(':').next().unwrap_or("").trim();
     match fc_match(spec) {
         // fc-match always answers with *something*; only accept it when it
-        // is the family that was asked for (or the spec is a full pattern).
-        Some((path, families)) if spec.contains(':') || family_matches(spec, &families) => {
-            Ok(Ok(path))
+        // is the family that was asked for.
+        Some(m) if family.is_empty() || family_matches(family, &m.families) => {
+            Ok(Source::File(m.path, m.index))
         }
-        _ => Err(format!("font `{spec}` not found")),
+        Some(m) => Err(format!(
+            "font `{spec}` not found (the closest installed is {})",
+            m.families.split(',').next().unwrap_or("another font")
+        )),
+        None => Err(format!("font `{spec}` not found")),
     }
+}
+
+/// A file in the fonts dir named `spec`, or `spec` plus a font extension,
+/// ignoring case (`MyFont` finds `myfont.TTF`).
+fn in_fonts_dir(spec: &str, fonts_dir: &Path) -> Option<PathBuf> {
+    let entries = std::fs::read_dir(fonts_dir).ok()?;
+    let mut paths: Vec<PathBuf> = entries.flatten().map(|e| e.path()).collect();
+    // An exact name first, then by extension order.
+    paths.sort();
+    let name_is = |p: &Path, want: &str| {
+        p.file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.eq_ignore_ascii_case(want))
+    };
+    paths
+        .iter()
+        .find(|p| name_is(p, spec))
+        .or_else(|| {
+            EXTENSIONS
+                .iter()
+                .find_map(|e| paths.iter().find(|p| name_is(p, &format!("{spec}.{e}"))))
+        })
+        .filter(|p| p.is_file())
+        .cloned()
 }
 
 /// Names to offer in the `:font` palette: bundled fonts, files in the fonts
@@ -153,12 +170,29 @@ pub fn list(fonts_dir: &Path) -> Vec<String> {
     names.into_iter().collect()
 }
 
-fn fc_match(pattern: &str) -> Option<(PathBuf, String)> {
-    let out = run("fc-match", &[pattern, "--format=%{file}\n%{family}"])?;
+struct Match {
+    path: PathBuf,
+    index: u32,
+    families: String,
+}
+
+fn fc_match(pattern: &str) -> Option<Match> {
+    let out = run(
+        "fc-match",
+        &[pattern, "--format=%{file}\n%{index}\n%{family}"],
+    )?;
     let mut lines = out.lines();
     let path = PathBuf::from(lines.next()?.trim());
+    let index = lines
+        .next()
+        .and_then(|i| i.trim().parse().ok())
+        .unwrap_or(0);
     let families = lines.next().unwrap_or("").to_string();
-    path.is_file().then_some((path, families))
+    path.is_file().then_some(Match {
+        path,
+        index,
+        families,
+    })
 }
 
 fn run(cmd: &str, args: &[&str]) -> Option<String> {
@@ -220,12 +254,16 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("MyFont.otf");
         std::fs::write(&file, b"x").unwrap();
-        assert_eq!(resolve("MyFont", &dir), Ok(Source::File(file.clone())));
+        assert_eq!(resolve("MyFont", &dir), Ok(Source::File(file.clone(), 0)));
+        assert_eq!(resolve("myfont", &dir), Ok(Source::File(file.clone(), 0)));
         assert_eq!(
             resolve(file.to_str().unwrap(), &dir),
-            Ok(Source::File(file))
+            Ok(Source::File(file, 0))
         );
         assert!(list(&dir).contains(&"MyFont".to_string()));
+        let upper = dir.join("Other.TTF");
+        std::fs::write(&upper, b"x").unwrap();
+        assert_eq!(resolve("Other", &dir), Ok(Source::File(upper, 0)));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

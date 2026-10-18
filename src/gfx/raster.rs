@@ -59,6 +59,8 @@ pub struct GlyphImage {
 /// A font plus fallbacks for characters it lacks (bundled fonts ship as
 /// separate script subsets).
 pub struct Face {
+    /// What to call the font in notices.
+    pub name: String,
     fonts: Vec<Font>,
     bitmaps: HashMap<(char, u32), (Metrics, Vec<u8>)>,
     /// ASCII advances per pixel size (`f32` bits): the typing screen
@@ -73,20 +75,41 @@ pub struct Face {
 
 impl Face {
     pub fn from_files(files: &[&[u8]]) -> Result<Self, String> {
+        let faces: Vec<(&[u8], u32)> = files.iter().map(|d| (*d, 0)).collect();
+        Self::from_faces(&faces)
+    }
+
+    /// Fonts by data and face index in a collection, the first the main one.
+    pub fn from_faces(files: &[(&[u8], u32)]) -> Result<Self, String> {
         let fonts = files
             .iter()
-            .map(|d| Font::from_bytes(*d, FontSettings::default()).map_err(str::to_string))
+            .map(|&(d, collection_index)| {
+                let settings = FontSettings {
+                    collection_index,
+                    ..FontSettings::default()
+                };
+                Font::from_bytes(d, settings).map_err(str::to_string)
+            })
             .collect::<Result<Vec<_>, _>>()?;
         if fonts.is_empty() {
             return Err("no font data".into());
         }
         Ok(Self {
+            name: String::new(),
             fonts,
             bitmaps: HashMap::new(),
             ascii: RefCell::new(HashMap::new()),
             missing: BTreeSet::new(),
             reported: BTreeSet::new(),
         })
+    }
+
+    /// Use `data` for characters the fonts so far lack.
+    pub fn add_fallback(&mut self, data: &[u8]) -> Result<(), String> {
+        let font = Font::from_bytes(data, FontSettings::default()).map_err(str::to_string)?;
+        self.fonts.push(font);
+        self.ascii.borrow_mut().clear();
+        Ok(())
     }
 
     /// Whether some font in the face has a glyph for `ch`.
