@@ -46,6 +46,10 @@ fn main() -> Result<()> {
     };
 
     ttyp::errlog::init(paths.log_file.clone());
+    #[cfg(target_os = "macos")]
+    ttyp::utheme_client::set_log(|msg| {
+        ttyp::errlog::log(ttyp::errlog::Level::Warn, "utheme", msg);
+    });
     let mut app = App::new(paths, cli.theme).inspect_err(|e| {
         ttyp::errlog::error("startup", format!("{e:#}"));
     })?;
