@@ -14,8 +14,8 @@
 use std::collections::HashMap;
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
 use std::io::Write as _;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread;
@@ -271,7 +271,9 @@ impl Watcher {
             .name("utheme".into())
             .spawn(move || watch(paths, needs, seen, tx, on_update, fs_wake, wakes))
         {
-            log(format!("no live theme updates: could not start the watcher: {e}"));
+            log(format!(
+                "no live theme updates: could not start the watcher: {e}"
+            ));
         }
         Watcher { rx, wake }
     }
