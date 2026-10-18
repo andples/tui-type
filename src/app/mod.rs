@@ -430,11 +430,14 @@ impl App {
             profiles: profiles.names().map(str::to_string).collect(),
             ..Default::default()
         };
-        let missed_words = crate::stats::missed_words::MissedWords::load(&paths.missed_words_file);
+        let missed_words =
+            crate::stats::missed_words::MissedWords::load(&paths.missed_words_file, |w| {
+                warnings.push(w)
+            });
         let customs = CustomStore::load(&paths.custom_dir, |w| warnings.push(w));
         let (engine, engine_warning) = Self::build_engine(&config, &languages, &modules, &customs);
         warnings.extend(engine_warning);
-        let online = Self::connect(&config, &paths);
+        let online = Self::connect(&config, &paths, |w| warnings.push(w));
         let follows = Follows::load(&paths.views_file);
         let synced = crate::online::sync::Synced::load(&paths.sync_file);
         let bests = crate::online::sync::Bests::load(&paths.bests_file);
@@ -1701,11 +1704,15 @@ impl App {
                     });
                 }
                 if matches!(key.as_str(), "server" | "github_client_id") {
-                    self.online = Self::connect(&self.config, &self.paths);
+                    let mut warning = None;
+                    self.online = Self::connect(&self.config, &self.paths, |w| warning = Some(w));
                     self.notify(match &self.online {
                         Some(_) => "online: server set",
                         None => "offline: server unset",
                     });
+                    if let Some(w) = warning {
+                        self.report("online", w);
+                    }
                 }
                 changed_test = !matches!(
                     key.as_str(),

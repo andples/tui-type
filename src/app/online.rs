@@ -8,7 +8,12 @@ use ttyp_core::test::{FixedGenerator, Mode, TestEngine};
 
 use super::{App, DailyOutcome, DailyStart, DailyStatus, Screen};
 use crate::config::{Config, Paths};
+use crate::errlog;
 use crate::online::{Client, Online, OnlineError, RemoteEvent, Request, queue, token};
+
+fn unqueue_error(path: &Path, e: std::io::Error) -> String {
+    format!("could not remove queued daily {}: {e}", path.display())
+}
 
 /// The UTC day dailies are keyed by.
 fn today() -> String {
@@ -18,9 +23,19 @@ fn today() -> String {
 impl App {
     /// An `Online` when the config names a server; otherwise ttyp stays
     /// fully offline and never touches the network.
-    pub(super) fn connect(config: &Config, paths: &Paths) -> Option<Online> {
+    /// A token file that can't be read goes to `warn` (and reads as logged
+    /// out for now).
+    pub(super) fn connect(
+        config: &Config,
+        paths: &Paths,
+        mut warn: impl FnMut(String),
+    ) -> Option<Online> {
         let server = config.server_url()?;
-        let client = Client::new(server, token::load(&paths.token_file));
+        let token = token::load(&paths.token_file).unwrap_or_else(|e| {
+            warn(e);
+            None
+        });
+        let client = Client::new(server, token);
         Some(Online::new(client, config.github_client_id.clone()))
     }
 
@@ -364,7 +379,7 @@ impl App {
         }
     }
 
-    fn submitted(
+    pub(super) fn submitted(
         &mut self,
         body: SubmitRequest,
         date: String,
@@ -374,7 +389,7 @@ impl App {
         let status = match result {
             Ok(r) => {
                 if let Some(path) = queued {
-                    let _ = queue::remove(path);
+                    self.unqueue(path);
                     self.notify(match (r.valid, r.rank_best) {
                         (true, Some(n)) => format!("queued daily submitted: #{n} best"),
                         (true, None) => "queued daily submitted".to_string(),
@@ -383,8 +398,20 @@ impl App {
                 }
                 DailyStatus::Ranked(r)
             }
+            // The server turned a queued one down: sending it again on
+            // every start won't change that.
+            Err(OnlineError::Server { status, message }) if status < 500 && queued.is_some() => {
+                if let Some(path) = queued {
+                    self.unqueue(path);
+                }
+                self.report("online", format!("queued daily was rejected: {message}"));
+                return;
+            }
             // A retry that failed again just stays queued.
-            Err(_) if queued.is_some() => return,
+            Err(e) if queued.is_some() => {
+                errlog::warn("online", format!("queued daily not sent yet: {e}"));
+                return;
+            }
             // The server said no; trying again later won't help.
             Err(OnlineError::Server { message, .. }) => DailyStatus::Failed(message),
             Err(e) => self.queue_submission(&date, body.clone(), &e.to_string()),
@@ -407,7 +434,10 @@ impl App {
         let today = today();
         for (path, q) in queue::load(&self.paths.queue_dir) {
             if q.date != today {
-                let _ = queue::remove(&path);
+                errlog::quiet(
+                    "online",
+                    queue::remove(&path).map_err(|e| unqueue_error(&path, e)),
+                );
             } else if online.logged_in() {
                 online.request(Request::Submit {
                     body: q.request,
@@ -415,6 +445,14 @@ impl App {
                     queued: Some(path),
                 });
             }
+        }
+    }
+
+    /// Take a sent (or refused) daily out of the queue, so it isn't sent
+    /// again on the next start.
+    fn unqueue(&mut self, path: &Path) {
+        if let Err(e) = queue::remove(path) {
+            self.report("online", unqueue_error(path, e));
         }
     }
 

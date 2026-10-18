@@ -4,7 +4,6 @@
 //! and `:pm` practises the top ones. Stored as JSON in the data dir.
 
 use std::collections::BTreeMap;
-use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
@@ -28,11 +27,15 @@ pub struct MissedWords {
 }
 
 impl MissedWords {
-    /// From `path`; a missing or unreadable file is an empty record.
-    pub fn load(path: &Path) -> Self {
-        let languages = fs::read_to_string(path)
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
+    /// From `path`; a missing file is an empty record. An unreadable one
+    /// is moved aside to `<file>.bad` (so the next save doesn't overwrite
+    /// it) and reported to `warn`.
+    pub fn load(path: &Path, mut warn: impl FnMut(String)) -> Self {
+        let languages = crate::config::read_state(path, |t| serde_json::from_str(t))
+            .unwrap_or_else(|e| {
+                warn(format!("missed words: {e}"));
+                None
+            })
             .unwrap_or_default();
         Self {
             languages,
@@ -90,11 +93,8 @@ impl MissedWords {
         let Some(path) = &self.path else {
             return Ok(());
         };
-        if let Some(dir) = path.parent() {
-            fs::create_dir_all(dir)?;
-        }
         let json = serde_json::to_string(&self.languages).map_err(io::Error::other)?;
-        fs::write(path, json)
+        crate::config::write_atomic(path, json)
     }
 }
 
@@ -139,11 +139,29 @@ mod tests {
     #[test]
     fn it_survives_a_restart() {
         let dir = std::env::temp_dir().join(format!("ttyp-missed-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
         let path = dir.join("missed_words.json");
-        let mut m = MissedWords::load(&path);
+        let no_warning = |w: String| panic!("{w}");
+        let mut m = MissedWords::load(&path, no_warning);
         m.record("english", ["their"], 1);
         m.save().unwrap();
-        assert_eq!(MissedWords::load(&path).count("english"), 1);
-        let _ = fs::remove_dir_all(dir);
+        assert_eq!(MissedWords::load(&path, no_warning).count("english"), 1);
+
+        // A damaged file is kept aside, not overwritten by the next save.
+        std::fs::write(&path, "{\"english\": {\"the").unwrap();
+        let mut warnings = Vec::new();
+        let mut m = MissedWords::load(&path, |w| warnings.push(w));
+        assert_eq!(m.count("english"), 0);
+        assert_eq!(warnings.len(), 1);
+        assert!(
+            warnings[0].contains("missed_words.json.bad"),
+            "{}",
+            warnings[0]
+        );
+        m.record("english", ["which"], 2);
+        m.save().unwrap();
+        let bad = std::fs::read_to_string(dir.join("missed_words.json.bad")).unwrap();
+        assert_eq!(bad, "{\"english\": {\"the");
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

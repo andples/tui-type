@@ -204,3 +204,50 @@ fn a_custom_set_of_blank_words_falls_back_to_english() {
     assert!(!a.engine.words().is_empty());
     a.dispatch(Action::TypeChar('x'));
 }
+
+#[test]
+fn a_queued_daily_the_server_turns_down_leaves_the_queue() {
+    use crate::online::{OnlineError, queue};
+    use ttyp_core::api::SubmitRequest;
+
+    let mut a = app("queue-rejected", "");
+    let dir = a.paths.queue_dir.clone();
+    let body = SubmitRequest {
+        daily_id: 7,
+        keylog: vec![],
+        start_id: None,
+    };
+    let date = "2026-10-18".to_string();
+    let path = queue::save(
+        &dir,
+        &queue::Queued {
+            date: date.clone(),
+            request: body.clone(),
+        },
+    )
+    .unwrap();
+
+    // Offline again, or the server is down: it stays for the next start.
+    let down = OnlineError::Unreachable("offline".into());
+    a.submitted(body.clone(), date.clone(), Some(&path), Err(down));
+    let bad_gateway = OnlineError::Server {
+        status: 502,
+        message: "http 502".into(),
+    };
+    a.submitted(body.clone(), date.clone(), Some(&path), Err(bad_gateway));
+    assert!(path.exists());
+
+    // Refused: removed, and the reason shown.
+    let refused = OnlineError::Server {
+        status: 409,
+        message: "already submitted".into(),
+    };
+    a.submitted(body, date, Some(&path), Err(refused));
+    assert!(!path.exists());
+    assert!(queue::load(&dir).is_empty());
+    let notice = a.notice_text().unwrap_or_default();
+    assert!(
+        notice.contains("rejected") && notice.contains("already submitted"),
+        "{notice}"
+    );
+}

@@ -23,9 +23,10 @@ pub struct Synced {
 
 impl Synced {
     /// `None` before the first sync (or after logging out).
+    /// A bad file is logged and moved aside: the next sync is then a
+    /// first sync (a union with the server's configs), which loses nothing.
     pub fn load(path: &Path) -> Option<Self> {
-        let text = fs::read_to_string(path).ok()?;
-        serde_json::from_str(&text).ok()
+        crate::config::load_state("sync", path, |t| serde_json::from_str(t))
     }
 
     pub fn save(&self, path: &Path) -> Result<(), String> {
@@ -37,10 +38,7 @@ impl Synced {
 }
 
 fn write(path: &Path, text: &str) -> Result<(), String> {
-    if let Some(dir) = path.parent() {
-        fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-    }
-    fs::write(path, text).map_err(|e| format!("{}: {e}", path.display()))
+    crate::config::write_atomic(path, text).map_err(|e| format!("{}: {e}", path.display()))
 }
 
 /// Remove `path`; a file that isn't there is fine.
@@ -53,27 +51,33 @@ pub fn forget(path: &Path) -> Result<(), String> {
 }
 
 /// The config files in `dir` as they are on disk (even ones this version
-/// can't read, so they pass through), and the active list.
-pub fn local_configs(dir: &Path, active: &[String]) -> Configs {
+/// can't parse, so they pass through), and the active list. A file that
+/// can't be read at all is an error: left out, it would look deleted and
+/// the deletion would be pushed to every machine.
+pub fn local_configs(dir: &Path, active: &[String]) -> Result<Configs, String> {
     let mut files = BTreeMap::new();
-    for entry in fs::read_dir(dir).into_iter().flatten().flatten() {
-        let path = entry.path();
+    let entries = match fs::read_dir(dir) {
+        Ok(entries) => Some(entries),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => return Err(format!("{}: {e}", dir.display())),
+    };
+    for entry in entries.into_iter().flatten() {
+        let path = entry.map_err(|e| format!("{}: {e}", dir.display()))?.path();
         if path.extension().and_then(|e| e.to_str()) != Some("toml") {
             continue;
         }
         let Some(name) = path.file_stem().and_then(|s| s.to_str()) else {
             continue;
         };
-        if valid_config_name(name)
-            && let Ok(text) = fs::read_to_string(&path)
-        {
+        if valid_config_name(name) {
+            let text = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
             files.insert(name.to_string(), text);
         }
     }
-    Configs {
+    Ok(Configs {
         files,
         active: active.to_vec(),
-    }
+    })
 }
 
 /// Make the files in `dir` those of `configs`: write the new and changed
@@ -102,9 +106,8 @@ pub struct Bests {
 
 impl Bests {
     pub fn load(path: &Path) -> Self {
-        let list = fs::read_to_string(path)
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
+        // A bad cache is logged and moved aside; the next fetch refills it.
+        let list = crate::config::load_state("sync", path, |t| serde_json::from_str(t))
             .unwrap_or_default();
         Self {
             list,
@@ -184,7 +187,7 @@ mod tests {
         fs::write(d.join("b.toml"), "lines = 3\n").unwrap();
         fs::write(d.join("not a name.toml"), "x").unwrap();
         fs::write(d.join("notes.txt"), "x").unwrap();
-        let local = local_configs(&d, &["a".into()]);
+        let local = local_configs(&d, &["a".into()]).unwrap();
         assert_eq!(local.files.keys().collect::<Vec<_>>(), ["a", "b"]);
         assert_eq!(local.active, ["a"]);
 
@@ -193,8 +196,18 @@ mod tests {
         to.files.insert("a".into(), "zen = false\n".into());
         to.files.insert("c".into(), "future_setting = 1\n".into());
         write_configs(&d, &local, &to).unwrap();
-        assert_eq!(local_configs(&d, &[]).files, to.files);
+        assert_eq!(local_configs(&d, &[]).unwrap().files, to.files);
+
+        // A config that can't be read stops the sync rather than reading
+        // as deleted.
+        fs::write(d.join("broken.toml"), [0xff, 0xfe]).unwrap();
+        let e = local_configs(&d, &[]).unwrap_err();
+        assert!(e.contains("broken.toml"), "{e}");
         fs::remove_dir_all(&d).unwrap();
+        assert!(
+            local_configs(&d, &[]).unwrap().files.is_empty(),
+            "no dir yet"
+        );
     }
 
     #[test]

@@ -123,9 +123,7 @@ impl Follows {
     /// With the profile views saved at `path` (missing or bad files are
     /// an empty history).
     pub fn load(path: &Path) -> Self {
-        let views = std::fs::read_to_string(path)
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
+        let views = crate::config::load_state("players", path, |t| serde_json::from_str(t))
             .unwrap_or_default();
         Self {
             list: None,
@@ -179,10 +177,12 @@ impl Follows {
         if let Some(path) = &self.path
             && let Ok(json) = serde_json::to_string(&self.views)
         {
-            if let Some(dir) = path.parent() {
-                let _ = std::fs::create_dir_all(dir);
-            }
-            let _ = std::fs::write(path, json);
+            // Best effort: only the follow list's order depends on it.
+            crate::errlog::quiet(
+                "players",
+                crate::config::write_atomic(path, json)
+                    .map_err(|e| format!("could not save {}: {e}", path.display())),
+            );
         }
     }
 

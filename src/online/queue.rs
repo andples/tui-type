@@ -17,18 +17,18 @@ pub struct Queued {
 
 /// Write one queued submission; the name keeps entries unique and ordered.
 pub fn save(dir: &Path, q: &Queued) -> io::Result<PathBuf> {
-    fs::create_dir_all(dir)?;
     let ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis())
         .unwrap_or(0);
     let path = dir.join(format!("{}-{ms}.json", q.request.daily_id));
     let json = serde_json::to_vec(q).map_err(io::Error::other)?;
-    fs::write(&path, json)?;
+    crate::config::write_atomic(&path, json)?;
     Ok(path)
 }
 
-/// Every readable entry, oldest first. Unreadable files are skipped.
+/// Every readable entry, oldest first. A file that can't be read is
+/// logged and moved aside (`<file>.bad`), so it isn't retried forever.
 pub fn load(dir: &Path) -> Vec<(PathBuf, Queued)> {
     let Ok(entries) = fs::read_dir(dir) else {
         return Vec::new();
@@ -42,8 +42,7 @@ pub fn load(dir: &Path) -> Vec<(PathBuf, Queued)> {
     paths
         .into_iter()
         .filter_map(|p| {
-            let text = fs::read(&p).ok()?;
-            let q = serde_json::from_slice(&text).ok()?;
+            let q = crate::config::load_state("queue", &p, |t| serde_json::from_str(t))?;
             Some((p, q))
         })
         .collect()
@@ -84,6 +83,10 @@ mod tests {
         fs::write(dir.join("junk.json"), b"not json").unwrap();
         let loaded = load(&dir);
         assert_eq!(loaded, vec![(path.clone(), q)]);
+        // The junk is moved aside, not tried again on every start.
+        assert!(!dir.join("junk.json").exists());
+        assert_eq!(fs::read(dir.join("junk.json.bad")).unwrap(), b"not json");
+        assert_eq!(load(&dir).len(), 1);
         remove(&path).unwrap();
         remove(&path).unwrap();
         assert!(load(&dir).is_empty());

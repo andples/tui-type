@@ -155,7 +155,12 @@ impl App {
                 self.refresh_catalog_lists();
                 self.update_stale();
             }
-            CatalogEvent::Index(Err(e)) => self.catalog_menu.index = IndexState::Failed(e),
+            // Shown on the install screen; logged since it may be why an
+            // install or update check did nothing.
+            CatalogEvent::Index(Err(e)) => {
+                crate::errlog::error("catalog", format!("catalogue index: {e}"));
+                self.catalog_menu.index = IndexState::Failed(e);
+            }
             CatalogEvent::ModuleFetched {
                 language,
                 module,
@@ -277,7 +282,13 @@ impl App {
             Kind::Language => {
                 // Its modules go with it.
                 let dir = crate::catalog::modules::dir(&self.paths.languages_dir, name);
-                let _ = std::fs::remove_dir_all(dir);
+                match std::fs::remove_dir_all(&dir) {
+                    Err(e) if e.kind() != std::io::ErrorKind::NotFound => self.report(
+                        "catalog",
+                        format!("could not remove {name}'s modules {}: {e}", dir.display()),
+                    ),
+                    _ => {}
+                }
                 self.config.modules.remove(name);
                 self.reload_modules();
                 if self.config.language == name {

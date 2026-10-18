@@ -14,6 +14,7 @@ use ttyp_core::sync::{Best, ConfigPush, ConfigSync, Configs};
 use ttyp_core::test::{Mode, Status};
 
 use super::{App, Screen};
+use crate::errlog;
 use crate::online::sync::{self, Synced};
 use crate::online::{OnlineError, Request};
 use crate::profile::{ProfileMenu, ProfileRegistry};
@@ -75,9 +76,13 @@ impl App {
     }
 
     pub(super) fn bests_reply(&mut self, result: Result<Vec<Best>, OnlineError>) {
-        // Quietly on failure: they're sent again with the next fetch.
-        let Ok(list) = result else {
-            return;
+        // No notice on failure: they're sent again with the next fetch.
+        let list = match result {
+            Ok(list) => list,
+            Err(e) => {
+                errlog::warn("sync", format!("bests sync: {e}"));
+                return;
+            }
         };
         if let Err(e) = self.bests.set(list) {
             self.report("sync", format!("could not save bests: {e}"));
@@ -96,8 +101,16 @@ impl App {
         self.sync_request(Request::Configs);
     }
 
-    fn local_configs(&self) -> Configs {
-        sync::local_configs(&self.paths.profiles_dir, &self.config.profiles)
+    /// `None` (reported) when a config file can't be read: syncing then
+    /// would delete it everywhere.
+    fn local_configs(&mut self) -> Option<Configs> {
+        match sync::local_configs(&self.paths.profiles_dir, &self.config.profiles) {
+            Ok(c) => Some(c),
+            Err(e) => {
+                self.report("sync", format!("config sync paused: {e}"));
+                None
+            }
+        }
     }
 
     /// After any change to the configs or which are on: send them unless
@@ -107,11 +120,16 @@ impl App {
         if self.config_sync_busy || !self.logged_in() {
             return;
         }
-        let Some(synced) = &self.synced else {
+        if self.synced.is_none() {
             self.pull_configs();
             return;
+        }
+        let Some(local) = self.local_configs() else {
+            return;
         };
-        let local = self.local_configs();
+        let Some(synced) = &self.synced else {
+            return;
+        };
         if local != synced.configs {
             let push = ConfigPush {
                 base_rev: synced.rev,
@@ -130,10 +148,21 @@ impl App {
         self.config_sync_busy = false;
         let remote = match result {
             Ok(r) => r,
-            Err(OnlineError::Unauthorized) => return,
+            Err(OnlineError::Unauthorized) => {
+                errlog::warn(
+                    "sync",
+                    "config sync: the server no longer accepts the login",
+                );
+                return;
+            }
+            // A notice only where configs are being looked at; it's tried
+            // again with the next fetch or change.
             Err(e) => {
+                let msg = format!("config sync: {e}");
                 if self.screen == Screen::Profiles {
-                    self.report("sync", format!("config sync: {e}"));
+                    self.report("sync", msg);
+                } else {
+                    errlog::error("sync", msg);
                 }
                 return;
             }
@@ -183,7 +212,9 @@ impl App {
             self.configs_changed();
             return;
         }
-        let local = self.local_configs();
+        let Some(local) = self.local_configs() else {
+            return;
+        };
         let merged = Configs::merge(
             self.synced.as_ref().map(|s| &s.configs),
             &local,

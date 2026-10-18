@@ -4,32 +4,22 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
-pub fn load(path: &Path) -> Option<String> {
-    fs::read_to_string(path)
-        .ok()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
+/// The saved token: `Ok(None)` when there is none (logged out). A token
+/// file that exists but can't be read is an error, not a logout.
+pub fn load(path: &Path) -> Result<Option<String>, String> {
+    match fs::read_to_string(path) {
+        Ok(s) => Ok(Some(s.trim().to_string()).filter(|s| !s.is_empty())),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!(
+            "could not read the login token {}: {e}",
+            path.display()
+        )),
+    }
 }
 
+/// Owner-only (0600), replaced all at once.
 pub fn save(path: &Path, token: &str) -> io::Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let mut opts = fs::OpenOptions::new();
-    opts.write(true).create(true).truncate(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        opts.mode(0o600);
-    }
-    let mut f = opts.open(path)?;
-    // An existing file keeps its old mode; force it.
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        f.set_permissions(fs::Permissions::from_mode(0o600))?;
-    }
-    io::Write::write_all(&mut f, format!("{token}\n").as_bytes())
+    crate::config::write_private(path, format!("{token}\n"))
 }
 
 pub fn delete(path: &Path) -> io::Result<()> {
@@ -47,9 +37,9 @@ mod tests {
     fn round_trip_owner_only() {
         let dir = std::env::temp_dir().join(format!("ttyp-token-{}", std::process::id()));
         let path = dir.join("token");
-        assert_eq!(load(&path), None);
+        assert_eq!(load(&path), Ok(None));
         save(&path, "abc").unwrap();
-        assert_eq!(load(&path).as_deref(), Some("abc"));
+        assert_eq!(load(&path), Ok(Some("abc".into())));
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -60,7 +50,7 @@ mod tests {
         }
         delete(&path).unwrap();
         delete(&path).unwrap();
-        assert_eq!(load(&path), None);
+        assert_eq!(load(&path), Ok(None));
         let _ = fs::remove_dir_all(dir);
     }
 }

@@ -80,20 +80,20 @@ pub struct Cache {
 }
 
 impl Cache {
+    /// A bad cache file is logged, moved aside and read as no answer yet.
     pub fn load(path: &Path) -> Self {
-        std::fs::read_to_string(path)
-            .ok()
-            .and_then(|t| serde_json::from_str(&t).ok())
-            .unwrap_or_default()
+        crate::config::load_state("update", path, |t| serde_json::from_str(t)).unwrap_or_default()
     }
 
+    /// Best effort (logged): without it the next start just asks again.
     pub fn save(&self, path: &Path) {
-        if let Some(dir) = path.parent() {
-            let _ = std::fs::create_dir_all(dir);
-        }
-        if let Ok(text) = serde_json::to_string(self) {
-            let _ = std::fs::write(path, text);
-        }
+        let saved = serde_json::to_string(self)
+            .map_err(|e| e.to_string())
+            .and_then(|text| {
+                crate::config::write_atomic(path, text)
+                    .map_err(|e| format!("could not save {}: {e}", path.display()))
+            });
+        crate::errlog::quiet("update", saved);
     }
 
     pub fn update(&self) -> Option<Update> {
@@ -123,7 +123,7 @@ pub fn tag_of(json: &str) -> Option<Version> {
 }
 
 /// One background check; `poll` gives its answer once (`None` until then
-/// and after). Failures are dropped: the notice is a nicety.
+/// and after). Failures are only logged: the notice is a nicety.
 pub struct Checker {
     rx: Receiver<Version>,
 }
@@ -142,10 +142,14 @@ impl Checker {
                 .get(&url)
                 .header("Accept", "application/vnd.github+json")
                 .call()
-                .ok()
-                .and_then(|mut r| r.body_mut().read_to_string().ok())
-                .and_then(|body| tag_of(&body));
-            if let Some(v) = latest {
+                .map_err(|e| {
+                    let host = crate::online::net::host_of(&url);
+                    crate::online::net::explain(&e, host)
+                })
+                .and_then(|mut r| r.body_mut().read_to_string().map_err(|e| e.to_string()))
+                .and_then(|body| tag_of(&body).ok_or_else(|| "no release tag in the reply".into()))
+                .map_err(|e| format!("update check {url}: {e}"));
+            if let Some(v) = crate::errlog::quiet("update", latest) {
                 let _ = tx.send(v);
             }
         });
