@@ -84,7 +84,7 @@ impl App {
             },
             // Keep the colours already showing.
             Update::Error(e) if self.utheme.theme.is_some() => {
-                self.notify(format!("utheme: {e}"));
+                self.report("utheme", format!("utheme: {e}"));
                 return;
             }
             Update::Error(e) => e,

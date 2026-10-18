@@ -194,7 +194,9 @@ impl App {
             Ok(list) => self.set_follows(list),
             // Quietly: this runs at startup too.
             Err(OnlineError::Unauthorized) => self.follows.clear(),
-            Err(e) if self.screen == Screen::Players => self.notify(format!("follows: {e}")),
+            Err(e) if self.screen == Screen::Players => {
+                self.report("online", format!("follows: {e}"))
+            }
             Err(_) => {}
         }
     }
@@ -223,7 +225,7 @@ impl App {
             Err(OnlineError::Server { status: 404, .. }) => {
                 self.notify(format!("{login} has no public profile"));
             }
-            Err(e) => self.notify(format!("follow: {e}")),
+            Err(e) => self.report("online", format!("follow: {e}")),
         }
     }
 

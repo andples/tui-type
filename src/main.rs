@@ -45,12 +45,16 @@ fn main() -> Result<()> {
         }
     };
 
-    let mut app = App::new(paths, cli.theme)?;
+    ttyp::errlog::init(paths.log_file.clone());
+    let mut app = App::new(paths, cli.theme).inspect_err(|e| {
+        ttyp::errlog::error("startup", format!("{e:#}"));
+    })?;
 
     // Restore the terminal even if we panic, so a crash never leaves the
     // shell in raw mode.
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
+        ttyp::errlog::log(ttyp::errlog::Level::Error, "panic", info);
         ratatui::restore();
         hide_pointer_while_typing(false);
         default_hook(info);
@@ -59,6 +63,9 @@ fn main() -> Result<()> {
     let mut terminal = ratatui::init();
     hide_pointer_while_typing(true);
     let result = app.run(&mut terminal);
+    if let Err(e) = &result {
+        ttyp::errlog::error("run", format!("{e:#}"));
+    }
     ratatui::restore();
     hide_pointer_while_typing(false);
     result

@@ -227,7 +227,7 @@ impl App {
                     self.screen = Screen::Graph;
                 }
             }
-            Err(e) => self.notify(format!("graph: {e}")),
+            Err(e) => self.report("online", format!("graph: {e}")),
         }
     }
 }

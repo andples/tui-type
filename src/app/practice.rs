@@ -56,7 +56,7 @@ impl App {
             self.missed_words.record(&language, [word.as_str()], now);
         }
         if let Err(e) = self.missed_words.save() {
-            self.notify(format!("could not save missed words: {e}"));
+            self.report("missed words", format!("could not save missed words: {e}"));
         }
     }
 

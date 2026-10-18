@@ -170,7 +170,7 @@ impl App {
                 self.catalog_menu.installing.retain(|(_, n)| *n != name);
                 match result {
                     Ok((kind, text)) => self.finish_install(kind, &name, &text, use_it),
-                    Err(e) => self.notify(e),
+                    Err(e) => self.report("catalog", e),
                 }
                 self.sync_catalog();
             }
@@ -210,7 +210,7 @@ impl App {
     fn finish_install(&mut self, kind: Kind, name: &str, text: &str, use_it: bool) {
         let dir = self.catalog_dir(kind).to_path_buf();
         if let Err(e) = catalog::install(&dir, name, text) {
-            self.notify(format!("could not install {kind} {name}: {e}"));
+            self.report("catalog", format!("could not install {kind} {name}: {e}"));
             return;
         }
         self.reload_catalogued();
@@ -262,7 +262,7 @@ impl App {
             }
             Ok(_) => {}
             Err(e) => {
-                self.notify(format!("could not remove {kind} {name}: {e}"));
+                self.report("catalog", format!("could not remove {kind} {name}: {e}"));
                 return;
             }
         }

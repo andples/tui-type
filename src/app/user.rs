@@ -104,7 +104,7 @@ impl App {
                     p.public = a.public;
                 }
             }
-            Err(e) => self.notify(format!("account: {e}")),
+            Err(e) => self.report("online", format!("account: {e}")),
         }
     }
 

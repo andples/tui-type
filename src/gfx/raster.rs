@@ -1,7 +1,7 @@
 //! Anti-aliased glyph rasterization from real font files.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 use fontdue::{Font, FontSettings, Metrics};
 
@@ -64,6 +64,11 @@ pub struct Face {
     /// ASCII advances per pixel size (`f32` bits): the typing screen
     /// measures every character of every word each frame.
     ascii: RefCell<HashMap<u32, [f32; 128]>>,
+    /// Characters drawn that no font has (they show as the font's
+    /// "missing" box), until `take_missing`.
+    missing: BTreeSet<char>,
+    /// Every character `missing` has ever held, so each is reported once.
+    reported: BTreeSet<char>,
 }
 
 impl Face {
@@ -79,7 +84,21 @@ impl Face {
             fonts,
             bitmaps: HashMap::new(),
             ascii: RefCell::new(HashMap::new()),
+            missing: BTreeSet::new(),
+            reported: BTreeSet::new(),
         })
+    }
+
+    /// Whether some font in the face has a glyph for `ch`.
+    pub fn covers(&self, ch: char) -> bool {
+        self.fonts.iter().any(|f| f.lookup_glyph_index(ch) != 0)
+    }
+
+    /// Characters drawn as boxes since the last call, each reported once.
+    pub fn take_missing(&mut self) -> Vec<char> {
+        let new: Vec<char> = self.missing.difference(&self.reported).copied().collect();
+        self.reported.append(&mut self.missing);
+        new
     }
 
     fn font_for(&self, ch: char) -> &Font {
@@ -174,6 +193,9 @@ impl Face {
     }
 
     fn bitmap(&mut self, ch: char, px: f32) -> &(Metrics, Vec<u8>) {
+        if !self.covers(ch) && !ch.is_control() {
+            self.missing.insert(ch);
+        }
         let font = self
             .fonts
             .iter()
@@ -273,6 +295,24 @@ mod tests {
             h,
             px: vec![0; w * h * 4],
         }
+    }
+
+    #[test]
+    fn characters_without_a_glyph_are_reported_once() {
+        let mut face = Face::from_files(crate::gfx::fonts::BUNDLED[0].files).unwrap();
+        let geom = face.geom(20);
+        let glyph = |ch| Glyph {
+            ch,
+            fg: [0; 3],
+            bg: None,
+            underline: false,
+        };
+        for ch in ['a', 'ж', '字', 'ж'] {
+            face.render_glyph(&glyph(ch), geom);
+        }
+        assert_eq!(face.take_missing(), vec!['ж', '字']);
+        face.render_glyph(&glyph('字'), geom);
+        assert_eq!(face.take_missing(), Vec::<char>::new());
     }
 
     #[test]

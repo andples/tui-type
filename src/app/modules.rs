@@ -176,7 +176,7 @@ impl App {
         let dir = modules::dir(&self.paths.languages_dir, &language);
         for m in &remove {
             if let Err(e) = catalog::uninstall(&dir, m) {
-                self.notify(format!("could not remove {language}/{m}: {e}"));
+                self.report("modules", format!("could not remove {language}/{m}: {e}"));
             }
         }
         if !remove.is_empty() {
@@ -232,13 +232,16 @@ impl App {
         let text = match result {
             Ok(t) => t,
             Err(e) => {
-                self.notify(e);
+                self.report("modules", e);
                 return;
             }
         };
         let dir = modules::dir(&self.paths.languages_dir, &language);
         if let Err(e) = catalog::install(&dir, &module, &text) {
-            self.notify(format!("could not install {language}/{module}: {e}"));
+            self.report(
+                "modules",
+                format!("could not install {language}/{module}: {e}"),
+            );
             return;
         }
         self.reload_modules();

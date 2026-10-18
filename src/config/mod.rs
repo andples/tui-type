@@ -789,6 +789,8 @@ pub struct Paths {
     pub bests_file: PathBuf,
     /// The latest release as last checked (`crate::update`).
     pub update_file: PathBuf,
+    /// Errors and warnings (`crate::errlog`).
+    pub log_file: PathBuf,
 }
 
 impl Paths {
@@ -817,6 +819,7 @@ impl Paths {
             sync_file: data_dir.join("sync.json"),
             bests_file: data_dir.join("bests.json"),
             update_file: data_dir.join("update.json"),
+            log_file: data_dir.join("ttyp.log"),
         }
     }
 }

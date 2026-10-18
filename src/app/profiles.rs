@@ -144,7 +144,7 @@ impl App {
         if changed.iter().any(|k| k.affects_graphics())
             && let Err(e) = self.apply_graphics()
         {
-            self.notify_more(e);
+            self.notify_more(crate::errlog::error("font", e));
         }
         if changed.iter().any(|k| k.restarts_test()) {
             self.rebuild_test();
@@ -158,7 +158,7 @@ impl App {
         let profile = e.profile();
         let original = e.original.clone();
         if let Err(err) = self.profiles.save(profile.clone(), original.as_deref()) {
-            self.notify(err);
+            self.report("configs", err);
             return;
         }
         let name = profile.name;
@@ -184,7 +184,7 @@ impl App {
 
     fn delete_profile(&mut self, name: &str) {
         if let Err(e) = self.profiles.delete(name) {
-            self.notify(e);
+            self.report("configs", e);
             return;
         }
         self.config.profiles.retain(|n| n != name);

@@ -80,7 +80,7 @@ impl App {
             return;
         };
         if let Err(e) = self.bests.set(list) {
-            self.notify(format!("could not save bests: {e}"));
+            self.report("sync", format!("could not save bests: {e}"));
         }
         if self.screen == Screen::Stats {
             self.summary = Summary::from_records(self.stats.all()).with_bests(self.bests.by_mode());
@@ -133,7 +133,7 @@ impl App {
             Err(OnlineError::Unauthorized) => return,
             Err(e) => {
                 if self.screen == Screen::Profiles {
-                    self.notify(format!("config sync: {e}"));
+                    self.report("sync", format!("config sync: {e}"));
                 }
                 return;
             }
@@ -204,7 +204,7 @@ impl App {
     /// Write `to`'s config files and switch on its active configs.
     fn apply_configs(&mut self, from: &Configs, to: &Configs) {
         if let Err(e) = sync::write_configs(&self.paths.profiles_dir, from, to) {
-            self.notify(format!("config sync: {e}"));
+            self.report("sync", format!("config sync: {e}"));
             return;
         }
         let mut warnings = Vec::new();
@@ -233,7 +233,7 @@ impl App {
 
     fn set_synced(&mut self, synced: Synced) {
         if let Err(e) = synced.save(&self.paths.sync_file) {
-            self.notify(format!("config sync: {e}"));
+            self.report("sync", format!("config sync: {e}"));
         }
         self.synced = Some(synced);
     }
@@ -246,7 +246,7 @@ impl App {
         self.config_sync_busy = false;
         let done = sync::forget(&self.paths.sync_file).and_then(|()| self.bests.clear());
         if let Err(e) = done {
-            self.notify(format!("could not forget synced state: {e}"));
+            self.report("sync", format!("could not forget synced state: {e}"));
         }
     }
 }

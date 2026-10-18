@@ -42,6 +42,7 @@ use crate::config::{Config, HudItem, Pace, Paths};
 use crate::config::{FONT_SIZE_RANGE, FontSize, LINES_RANGE, WORDS_PER_LINE_RANGE};
 use crate::custom::CustomStore;
 use crate::custom::menu::{CustomEditor, CustomMenu};
+use crate::errlog;
 use crate::gfx::{self, Gfx};
 use crate::language::LanguageRegistry;
 use crate::online::{BoardView, Follows, Online, PlayersTab, PlayersView, UserView};
@@ -59,6 +60,13 @@ use input::InputContext;
 use misses::{MissedRange, Misses};
 use splash::Splash;
 use ttyp_core::api::{Daily, ResultDetail, SubmitResponse};
+
+/// The error log's file name, for notices that point at it.
+fn log_name() -> String {
+    errlog::path()
+        .map(|p| p.display().to_string())
+        .unwrap_or_else(|| "ttyp.log".into())
+}
 
 /// How long a transient notice stays on the bottom line.
 const NOTICE_TTL: Duration = Duration::from_millis(2500);
@@ -511,8 +519,18 @@ impl App {
         };
         app.refresh_catalog_lists();
         app.refresh_custom_names();
-        if let Some(w) = warnings.first() {
-            app.notify(w.clone());
+        for w in &warnings {
+            errlog::warn("startup", w.as_str());
+        }
+        match warnings.len() {
+            0 => {}
+            1 => app.notify(warnings[0].clone()),
+            n => app.notify(format!(
+                "{} (+{} more in {})",
+                warnings[0],
+                n - 1,
+                log_name()
+            )),
         }
         // Read before the first frame, so it never shows another theme first.
         #[cfg(target_os = "macos")]
@@ -646,6 +664,13 @@ impl App {
         self.dirty = true;
     }
 
+    /// Show an error as a notice and write it to the error log
+    /// (`crate::errlog`) under `context`, a short tag like `font`.
+    pub fn report(&mut self, context: &str, msg: impl Into<String>) {
+        let msg = errlog::error(context, msg);
+        self.notify(msg);
+    }
+
     /// Add to a notice raised by the same action rather than replacing it.
     fn notify_more(&mut self, msg: impl Into<String>) {
         let msg = msg.into();
@@ -684,12 +709,13 @@ impl App {
             self.sync_tick();
             #[cfg(target_os = "macos")]
             self.utheme_tick();
-            if let Some(e) = self.gfx.take_load_error(false) {
-                self.notify(e);
-            }
+            self.report_font_problems();
             if self.dirty {
                 self.draw(terminal)?;
                 self.dirty = false;
+                // Drawing may have waited for the font and found it broken;
+                // the notice redraws on the next pass.
+                self.report_font_problems();
             }
             let timeout = self.poll_timeout();
             // Following utheme wakes up to look for a switch; that's not a `Tick`.
@@ -733,6 +759,29 @@ impl App {
             _ => Action::Nop,
         };
         self.dispatch(action);
+    }
+
+    /// Report a startup font that failed to load, and once each, drawn
+    /// characters the font has no glyph for (they came out as boxes).
+    fn report_font_problems(&mut self) {
+        if let Some(e) = self.gfx.take_load_error(false) {
+            self.report("font", e);
+        }
+        let missing = self.gfx.take_missing();
+        if missing.is_empty() {
+            return;
+        }
+        let shown: String = missing.iter().take(12).collect();
+        let more = if missing.len() > 12 { "…" } else { "" };
+        let font = if self.config.font.trim().is_empty() {
+            "the system font"
+        } else {
+            self.config.font.trim()
+        };
+        self.report(
+            "font",
+            format!("{font} has no glyph for {shown}{more} (shown as boxes); try :font"),
+        );
     }
 
     /// Text first, then images over it, painted as one synchronized update.
@@ -1319,7 +1368,7 @@ impl App {
         let prev_best = self.best(record.mode, &record.language);
         let is_pb = record.counts() && prev_best.is_none_or(|b| record.wpm > b) && record.wpm > 0.0;
         if let Err(e) = self.stats.append(&record) {
-            self.notify(format!("could not save result: {e}"));
+            self.report("history", format!("could not save result: {e}"));
         }
         if is_pb {
             self.push_best(record.mode, &record.language, record.wpm);
@@ -1431,7 +1480,7 @@ impl App {
                 if let Err(e) = self.apply_graphics() {
                     self.config.font = old;
                     let _ = self.apply_graphics();
-                    self.notify(e);
+                    self.report("font", e);
                     return;
                 }
                 if !self.gfx.supported() {
@@ -1600,7 +1649,7 @@ impl App {
                 if matches!(key.as_str(), "font" | "graphics")
                     && let Err(e) = self.apply_graphics()
                 {
-                    self.notify(e);
+                    self.report("font", e);
                 }
                 // Reconnect so `:set server …` works without a restart.
                 if key == "catalog" {
@@ -1679,7 +1728,7 @@ impl App {
             self.notify_more(format!("config {} off", dropped.join(", ")));
         }
         if let Err(e) = self.config.save(&self.paths.config_file) {
-            self.notify(format!("could not save config: {e}"));
+            self.report("config", format!("could not save config: {e}"));
         }
         self.configs_changed();
     }

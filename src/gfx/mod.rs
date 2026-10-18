@@ -253,6 +253,18 @@ impl Gfx {
         Some(e)
     }
 
+    /// Characters drawn since the last call that the font has no glyph for
+    /// (each reported once per font).
+    pub fn take_missing(&mut self) -> Vec<char> {
+        // Never waits for a background load: nothing was drawn before it.
+        self.face
+            .face
+            .get_mut()
+            .and_then(Option::as_mut)
+            .map(Face::take_missing)
+            .unwrap_or_default()
+    }
+
     /// Whether the terminal speaks the protocol, even if no font loaded.
     pub fn supported(&self) -> bool {
         self.supported
@@ -449,9 +461,55 @@ impl Gfx {
 }
 
 fn load(spec: &str, fonts_dir: &Path) -> Result<Face, String> {
-    let files = fonts::resolve(spec, fonts_dir)?.load()?;
+    let result = load_checked(spec, fonts_dir);
+    if spec.trim().is_empty()
+        && let Err(e) = &result
+    {
+        // No font was asked for, so any working one will do.
+        let fallback = fonts::BUNDLED[0].name;
+        crate::errlog::log(
+            crate::errlog::Level::Warn,
+            "font",
+            format!("{e}; using bundled {fallback}"),
+        );
+        return load_checked(fallback, fonts_dir);
+    }
+    result
+}
+
+/// Load the font `spec` names and check it can draw text.
+fn load_checked(spec: &str, fonts_dir: &Path) -> Result<Face, String> {
+    let source = fonts::resolve(spec, fonts_dir)?;
+    let files = source.load()?;
     let refs: Vec<&[u8]> = files.iter().map(Vec::as_slice).collect();
-    Face::from_files(&refs)
+    let name = || match &source {
+        fonts::Source::Bundled(name) => format!("font `{name}`"),
+        fonts::Source::File(path) if spec.trim().is_empty() => {
+            format!("system monospace font {}", path.display())
+        }
+        fonts::Source::File(path) if Path::new(spec.trim()) == path => {
+            format!("font {}", path.display())
+        }
+        fonts::Source::File(path) => format!("font `{}` ({})", spec.trim(), path.display()),
+    };
+    let face = Face::from_files(&refs).map_err(|e| format!("{} can't be read: {e}", name()))?;
+    // A font can parse and still have no letters (a symbols, icon or emoji
+    // font, or the wrong face of a collection): every glyph would be a box.
+    let missing: String = ('a'..='z')
+        .chain('A'..='Z')
+        .filter(|&c| !face.covers(c))
+        .collect();
+    match missing.len() {
+        0 => Ok(face),
+        26.. => Err(format!(
+            "{} has no Latin letters (text would be boxes); using block glyphs, try :font",
+            name()
+        )),
+        _ => Err(format!(
+            "{} lacks the letters {missing}; using block glyphs, try :font",
+            name()
+        )),
+    }
 }
 
 /// Terminals known to implement the kitty graphics protocol. Anything else,
@@ -547,6 +605,27 @@ mod tests {
         g.clear(&mut out).unwrap();
         assert_eq!(count(&out, "d=I,"), 2);
         assert!(g.placed.is_empty());
+    }
+
+    #[test]
+    fn a_font_without_letters_is_an_error_not_boxes() {
+        let dir = Path::new("/nonexistent");
+        // Fontsource's Latin Extended subset has no plain a-z.
+        let ext = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/assets/fonts/jetbrains-mono-latin-ext.ttf"
+        );
+        let e = load(ext, dir).err().expect("an error");
+        assert!(e.contains("no Latin letters"), "{e}");
+        assert!(e.contains("jetbrains-mono-latin-ext.ttf"), "{e}");
+
+        let junk = std::env::temp_dir().join(format!("ttyp-junk-{}.ttf", std::process::id()));
+        std::fs::write(&junk, b"not a font").unwrap();
+        let e = load(junk.to_str().unwrap(), dir).err().expect("an error");
+        assert!(e.contains("can't be read"), "{e}");
+        std::fs::remove_file(&junk).unwrap();
+
+        assert!(load("JetBrains Mono", dir).is_ok());
     }
 
     #[test]

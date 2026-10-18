@@ -207,7 +207,7 @@ impl App {
 
     fn remove_custom(&mut self, name: &str) {
         if let Err(e) = self.customs.remove(name) {
-            self.notify(format!("could not remove {name}: {e}"));
+            self.report("custom", format!("could not remove {name}: {e}"));
             return;
         }
         if self.config.custom == name {
@@ -346,12 +346,12 @@ impl App {
                 return;
             }
             Err(e) => {
-                self.notify(format!("install {name}: {e}"));
+                self.report("custom", format!("install {name}: {e}"));
                 return;
             }
         };
         if let Err(e) = crate::custom::check(&set.name, &set.words) {
-            self.notify(format!("{name} can't be used: {e}"));
+            self.report("custom", format!("{name} can't be used: {e}"));
             return;
         }
         let local = CustomSet {
@@ -360,7 +360,7 @@ impl App {
             words: set.words,
         };
         if let Err(e) = self.customs.save(local) {
-            self.notify(format!("could not save {name}: {e}"));
+            self.report("custom", format!("could not save {name}: {e}"));
             return;
         }
         self.custom_menu.sync(&self.customs);
@@ -382,7 +382,7 @@ impl App {
                 ));
                 self.search_custom();
             }
-            Err(e) => self.notify(format!("publish {name}: {e}")),
+            Err(e) => self.report("custom", format!("publish {name}: {e}")),
         }
     }
 
@@ -392,7 +392,7 @@ impl App {
                 self.notify(format!("{name} is off the server · your copy stays"));
                 self.search_custom();
             }
-            Err(e) => self.notify(format!("unpublish {name}: {e}")),
+            Err(e) => self.report("custom", format!("unpublish {name}: {e}")),
         }
     }
 

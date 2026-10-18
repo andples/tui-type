@@ -74,7 +74,7 @@ impl App {
         self.follows_changed();
         self.forget_sync();
         if let Err(e) = token::delete(&self.paths.token_file) {
-            self.notify(format!("could not remove token: {e}"));
+            self.report("online", format!("could not remove token: {e}"));
         } else {
             self.notify("logged out");
         }
@@ -101,7 +101,7 @@ impl App {
                 self.leave_login();
             }
             RemoteEvent::LoginFailed(e) => {
-                self.notify(format!("login failed: {e}"));
+                self.report("online", format!("login failed: {e}"));
                 self.leave_login();
             }
             RemoteEvent::LoggedOut => {}
@@ -115,10 +115,10 @@ impl App {
             }
             RemoteEvent::Dailies(Err(e)) => {
                 self.pending_daily = None;
-                self.notify(format!("daily: {e}"));
+                self.report("online", format!("daily: {e}"));
             }
             RemoteEvent::Daily(Ok(d)) => self.start_daily(d),
-            RemoteEvent::Daily(Err(e)) => self.notify(format!("daily: {e}")),
+            RemoteEvent::Daily(Err(e)) => self.report("online", format!("daily: {e}")),
             RemoteEvent::Started { daily_id, result } => self.started(daily_id, result),
             RemoteEvent::Submitted {
                 body,
