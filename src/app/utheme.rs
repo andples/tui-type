@@ -230,6 +230,8 @@ mod tests {
         assert!(!beat.exists());
 
         assert_eq!(std::fs::read(&paths.config_file).unwrap(), config);
+        // No themes/utheme.toml here, and none is fetched from the catalogue.
+        assert!(a.is_installed(crate::catalog::Kind::Theme, "utheme"));
         let saved = String::from_utf8(config).unwrap();
         assert!(
             saved.contains("theme = \"utheme\""),

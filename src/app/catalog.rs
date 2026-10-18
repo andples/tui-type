@@ -300,10 +300,11 @@ impl App {
         self.notify_more(format!("{kind} {name}"));
     }
 
-    fn is_installed(&self, kind: Kind, name: &str) -> bool {
+    pub(super) fn is_installed(&self, kind: Kind, name: &str) -> bool {
         match kind {
             Kind::Language => self.languages.get(name).is_some(),
-            Kind::Theme => self.themes.get(name).is_some(),
+            // On macOS `utheme` needs no file: it follows utheme live.
+            Kind::Theme => self.theme_installed(name),
         }
     }
 
