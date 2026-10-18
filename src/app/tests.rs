@@ -145,3 +145,62 @@ fn other_screens_redraw_on_ticks_only_while_they_animate() {
     a.dispatch(Action::Tick);
     assert!(!a.dirty, "the landing screen waits");
 }
+
+#[test]
+fn out_of_range_config_values_are_clamped_not_fatal() {
+    let mut a = app("clamp", "font_size = 0\n[mode]\nwords = 0");
+    assert_eq!(a.config.mode, crate::test::mode::Mode::Words(1));
+    assert_eq!(a.config.font_size, 1);
+    let notice = a.notice_text().unwrap().to_string();
+    assert!(
+        notice.contains("words 0") || notice.contains("font_size"),
+        "{notice}"
+    );
+    // The first key used to index an empty word list.
+    a.dispatch(Action::TypeChar('x'));
+    // And the slider subtracted below its minimum.
+    a.open_slider(super::SliderTarget::FontSize);
+    assert_eq!(a.slider.unwrap().value, 1);
+}
+
+#[test]
+fn a_language_left_with_no_words_falls_back_to_english() {
+    let paths = scratch(
+        "empty-pool",
+        "server = \"\"\nupdate_check = false\nsplash = false\nlanguage = \"x\"\ntrim_syntax = true\n",
+        0,
+    );
+    std::fs::create_dir_all(&paths.languages_dir).unwrap();
+    std::fs::write(
+        paths.languages_dir.join("x.toml"),
+        "name = \"x\"\nwords = [\"()\"]\ntrim = [\"()\"]\n",
+    )
+    .unwrap();
+    let mut a = App::new(paths, None).unwrap();
+    let english = a.languages.get("english").unwrap().words.clone();
+    assert!(a.engine.words().iter().all(|w| {
+        let t: String = w.target.iter().collect();
+        english.contains(&t)
+    }));
+    assert!(a.notice_text().unwrap().contains("no words"));
+    a.dispatch(Action::TypeChar('x'));
+}
+
+#[test]
+fn a_custom_set_of_blank_words_falls_back_to_english() {
+    let paths = scratch(
+        "blank-custom",
+        "server = \"\"\nupdate_check = false\nsplash = false\ncustom = \"blank\"\n",
+        0,
+    );
+    std::fs::create_dir_all(&paths.custom_dir).unwrap();
+    std::fs::write(
+        paths.custom_dir.join("blank.toml"),
+        "name = \"blank\"\nwords = [\"\", \" \"]\n",
+    )
+    .unwrap();
+    let mut a = App::new(paths, None).unwrap();
+    assert!(a.notice_text().unwrap().contains("blank words"));
+    assert!(!a.engine.words().is_empty());
+    a.dispatch(Action::TypeChar('x'));
+}

@@ -634,15 +634,28 @@ impl Default for Config {
 impl Config {
     /// Load from `path`; a missing file yields the defaults.
     pub fn load(path: &Path) -> Result<Self, ConfigError> {
-        Self::load_with_text(path).map(|(c, _)| c)
+        Self::load_with_text(path, &mut Vec::new()).map(|(c, _)| c)
     }
 
     /// `load`, plus whether the file exists and already names `server`
     /// (so built-in defaults can be written into it once).
-    pub fn load_with_text(path: &Path) -> Result<(Self, bool), ConfigError> {
+    ///
+    /// Values out of range are brought into range (`normalize`); each one
+    /// changed is pushed onto `warnings`.
+    pub fn load_with_text(
+        path: &Path,
+        warnings: &mut Vec<String>,
+    ) -> Result<(Self, bool), ConfigError> {
         match fs::read_to_string(path) {
             Ok(text) => Self::parse(&text)
-                .map(|c| (c, text.contains("server")))
+                .map(|mut c| {
+                    warnings.extend(
+                        c.normalize()
+                            .into_iter()
+                            .map(|w| format!("{}: {w}", path.display())),
+                    );
+                    (c, text.contains("server"))
+                })
                 .map_err(|source| ConfigError::Parse {
                     path: path.to_path_buf(),
                     source,
@@ -653,6 +666,38 @@ impl Config {
                 source,
             }),
         }
+    }
+
+    /// Bring every ranged setting into its range, the way the commands
+    /// would have: a hand-edited `words = 0` or `font_size = 0` would
+    /// otherwise crash the typing screen or the slider. Returns one line
+    /// per value it changed.
+    pub fn normalize(&mut self) -> Vec<String> {
+        let mut changed = Vec::new();
+        let value = self.mode.value();
+        if value == 0 {
+            self.mode = match self.mode {
+                Mode::Time(_) => Mode::Time(1),
+                Mode::Words(_) => Mode::Words(1),
+            };
+            changed.push(format!("{} 0 is too low, using 1", self.mode.kind()));
+        }
+        clamp_setting(
+            &mut self.font_size,
+            FONT_SIZE_RANGE,
+            "font_size",
+            &mut changed,
+        );
+        clamp_setting(
+            &mut self.words_per_line,
+            WORDS_PER_LINE_RANGE,
+            "words_per_line",
+            &mut changed,
+        );
+        clamp_setting(&mut self.lines, LINES_RANGE, "lines", &mut changed);
+        // `min_wpm = 0` means off; above that it runs up to `PACE_MAX`.
+        clamp_setting(&mut self.min_wpm.0, (0, PACE_MAX), "min_wpm", &mut changed);
+        changed
     }
 
     pub fn parse(text: &str) -> Result<Self, toml::de::Error> {
@@ -753,6 +798,23 @@ impl Config {
     }
 }
 
+/// Clamp `value` into `range` (inclusive), noting the change in `changed`.
+pub fn clamp_setting<T: Copy + Ord + std::fmt::Display>(
+    value: &mut T,
+    (lo, hi): (T, T),
+    name: &str,
+    changed: &mut Vec<String>,
+) {
+    let clamped = (*value).clamp(lo, hi);
+    if clamped != *value {
+        changed.push(format!(
+            "{name} = {} is out of range ({lo}-{hi}), using {clamped}",
+            *value
+        ));
+        *value = clamped;
+    }
+}
+
 /// Parse an integer and check it lies in `range` (inclusive).
 pub fn parse_range(value: &str, range: (u8, u8)) -> Result<u8, String> {
     let n: u8 = value
@@ -827,6 +889,39 @@ impl Paths {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn normalize_brings_hand_edited_values_into_range() {
+        let mut c = Config::parse(
+            "font_size = 0\nwords_per_line = 99\nlines = 0\nmin_wpm = 9999\n[mode]\nwords = 0",
+        )
+        .unwrap();
+        let changed = c.normalize();
+        assert_eq!(changed.len(), 5, "{changed:?}");
+        assert_eq!(c.mode, Mode::Words(1));
+        assert_eq!(c.font_size, FONT_SIZE_RANGE.0);
+        assert_eq!(c.words_per_line, WORDS_PER_LINE_RANGE.1);
+        assert_eq!(c.lines, LINES_RANGE.0);
+        assert_eq!(c.min_wpm, MinWpm(PACE_MAX));
+        let mut c = Config::parse("[mode]\ntime = 0").unwrap();
+        assert_eq!(c.normalize().len(), 1);
+        assert_eq!(c.mode, Mode::Time(1));
+        assert!(Config::default().normalize().is_empty());
+    }
+
+    #[test]
+    fn load_normalizes_and_warns() {
+        let dir = std::env::temp_dir().join(format!("ttyp-config-norm-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.toml");
+        fs::write(&path, "font_size = 0\n").unwrap();
+        let mut warnings = Vec::new();
+        let (c, _) = Config::load_with_text(&path, &mut warnings).unwrap();
+        assert_eq!(c.font_size, 1);
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("font_size"), "{warnings:?}");
+        fs::remove_dir_all(&dir).unwrap();
+    }
 
     #[test]
     fn online_defaults_are_set() {

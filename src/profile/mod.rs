@@ -17,8 +17,8 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::config::{
-    Config, FONT_SIZE_RANGE, Hud, Keyboard, LINES_RANGE, MinWpm, Pace, PbEffect,
-    WORDS_PER_LINE_RANGE,
+    Config, FONT_SIZE_RANGE, Hud, Keyboard, LINES_RANGE, MinWpm, PACE_MAX, Pace, PbEffect,
+    WORDS_PER_LINE_RANGE, clamp_setting,
 };
 use crate::test::mode::Mode;
 
@@ -299,6 +299,45 @@ impl ProfileSettings {
         Ok(s)
     }
 
+    /// `parse` for a file on disk: out-of-range values are clamped (one
+    /// note each in the returned list) rather than rejecting the profile.
+    pub fn parse_clamped(text: &str) -> Result<(Self, Vec<String>), String> {
+        let mut s: Self = toml::from_str(text).map_err(|e| e.message().to_string())?;
+        let changed = s.normalize();
+        s.validate()?;
+        Ok((s, changed))
+    }
+
+    /// `Config::normalize` for the settings this profile sets.
+    pub fn normalize(&mut self) -> Vec<String> {
+        let mut changed = Vec::new();
+        if let Some(mode) = &mut self.mode
+            && mode.value() == 0
+        {
+            *mode = match mode {
+                Mode::Time(_) => Mode::Time(1),
+                Mode::Words(_) => Mode::Words(1),
+            };
+            changed.push(format!("{} 0 is too low, using 1", mode.kind()));
+        }
+        let mut clamp = |v: &mut Option<u8>, range: (u8, u8), name: &str| {
+            if let Some(v) = v {
+                clamp_setting(v, range, name, &mut changed);
+            }
+        };
+        clamp(&mut self.font_size, FONT_SIZE_RANGE, "font_size");
+        clamp(
+            &mut self.words_per_line,
+            WORDS_PER_LINE_RANGE,
+            "words_per_line",
+        );
+        clamp(&mut self.lines, LINES_RANGE, "lines");
+        if let Some(m) = &mut self.min_wpm {
+            clamp_setting(&mut m.0, (0, PACE_MAX), "min_wpm", &mut changed);
+        }
+        changed
+    }
+
     /// The settings this profile controls, in menu order.
     pub fn keys(&self) -> Vec<SettingKey> {
         SettingKey::ALL
@@ -329,6 +368,9 @@ impl ProfileSettings {
         in_range(self.font_size, FONT_SIZE_RANGE, "font_size")?;
         in_range(self.words_per_line, WORDS_PER_LINE_RANGE, "words_per_line")?;
         in_range(self.lines, LINES_RANGE, "lines")?;
+        if self.min_wpm.is_some_and(|m| m.0 > PACE_MAX) {
+            return Err(format!("min_wpm must be at most {PACE_MAX}"));
+        }
         if self.mode.is_some_and(|m| m.value() == 0) {
             return Err("mode needs a value above 0".into());
         }
@@ -404,9 +446,12 @@ impl ProfileRegistry {
             }
             let parsed = fs::read_to_string(&path)
                 .map_err(|e| e.to_string())
-                .and_then(|text| ProfileSettings::parse(&text));
+                .and_then(|text| ProfileSettings::parse_clamped(&text));
             match parsed {
-                Ok(settings) => {
+                Ok((settings, changed)) => {
+                    for c in changed {
+                        warn(format!("config {name}: {c}"));
+                    }
                     reg.profiles.insert(
                         name.to_string(),
                         Profile {
@@ -579,6 +624,32 @@ mod tests {
         assert!(ProfileSettings::parse("mode = { time = 0 }").is_err());
         assert!(ProfileSettings::parse("[results]\nbogus = true").is_err());
         assert!(ProfileSettings::parse("").unwrap().is_empty());
+        assert!(ProfileSettings::parse("min_wpm = 9999").is_err());
+    }
+
+    #[test]
+    fn files_on_disk_are_clamped_not_dropped() {
+        let (s, changed) =
+            ProfileSettings::parse_clamped("font_size = 0\nmin_wpm = 9999\nmode = { words = 0 }")
+                .unwrap();
+        assert_eq!(changed.len(), 3, "{changed:?}");
+        assert_eq!(s.font_size, Some(FONT_SIZE_RANGE.0));
+        assert_eq!(s.min_wpm, Some(MinWpm(PACE_MAX)));
+        assert_eq!(s.mode, Some(Mode::Words(1)));
+        assert!(s.validate().is_ok());
+        let mut c = Config::default();
+        s.apply_to(&mut c);
+        assert!(c.normalize().is_empty(), "applied values are in range");
+
+        let dir = std::env::temp_dir().join(format!("ttyp-profile-clamp-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("big.toml"), "font_size = 99\n").unwrap();
+        let mut warnings = Vec::new();
+        let reg = ProfileRegistry::load(&dir, |w| warnings.push(w));
+        assert_eq!(reg.get("big").unwrap().settings.font_size, Some(16));
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

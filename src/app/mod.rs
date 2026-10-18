@@ -360,7 +360,7 @@ enum ClockView {
 impl App {
     pub fn new(paths: Paths, theme_override: Option<String>) -> Result<Self> {
         let mut warnings = Vec::new();
-        let (mut config, names_server) = Config::load_with_text(&paths.config_file)
+        let (mut config, names_server) = Config::load_with_text(&paths.config_file, &mut warnings)
             .with_context(|| format!("loading {}", paths.config_file.display()))?;
         // `server = ""` opts out of the built-in server. It stays in the
         // config as written (see `Config::server_url`), so saving keeps it.
@@ -432,7 +432,8 @@ impl App {
         };
         let missed_words = crate::stats::missed_words::MissedWords::load(&paths.missed_words_file);
         let customs = CustomStore::load(&paths.custom_dir, |w| warnings.push(w));
-        let engine = Self::build_engine(&config, &languages, &modules, &customs);
+        let (engine, engine_warning) = Self::build_engine(&config, &languages, &modules, &customs);
+        warnings.extend(engine_warning);
         let online = Self::connect(&config, &paths);
         let follows = Follows::load(&paths.views_file);
         let synced = crate::online::sync::Synced::load(&paths.sync_file);
@@ -547,20 +548,40 @@ impl App {
         Ok(app)
     }
 
+    /// The test the config asks for. A custom set or language left with no
+    /// words to type (blank words, or all of them cut by `trim_syntax`)
+    /// falls back to english, with a warning to show.
     fn build_engine(
         config: &Config,
         languages: &LanguageRegistry,
         modules: &ModuleRegistry,
         customs: &CustomStore,
-    ) -> TestEngine {
+    ) -> (TestEngine, Option<String>) {
         let mods = Modifiers {
             punctuation: config.punctuation,
             numbers: config.numbers,
         };
+        let engine = |words: Vec<String>| {
+            TestEngine::new(config.mode, Box::new(RandomGenerator::new(words, mods)))
+        };
+        let mut warning = None;
         // A custom set replaces the language (and its modules).
+        // A set with no words at all (still being written) quietly falls
+        // back to the language, as it always has.
         if let Some(set) = customs.get(&config.custom).filter(|s| !s.words.is_empty()) {
-            let generator = RandomGenerator::new(set.words.clone(), mods);
-            return TestEngine::new(config.mode, Box::new(generator));
+            let words: Vec<String> = set
+                .words
+                .iter()
+                .filter(|w| !w.trim().is_empty())
+                .cloned()
+                .collect();
+            if !words.is_empty() {
+                return (engine(words), None);
+            }
+            warning = Some(format!(
+                "custom set `{}` has only blank words, using english",
+                set.name
+            ));
         }
         let lang = languages.get_or_default(&config.language);
         let wanted = config
@@ -568,11 +589,24 @@ impl App {
             .get(&lang.name)
             .map_or(&[][..], Vec::as_slice);
         let mixed = modules.selected(&lang.name, wanted);
-        let generator = RandomGenerator::new(
-            crate::catalog::modules::word_pool(lang, &mixed, config.trim_syntax),
-            mods,
-        );
-        TestEngine::new(config.mode, Box::new(generator))
+        let pool = crate::catalog::modules::word_pool(lang, &mixed, config.trim_syntax);
+        if warning.is_none() && !pool.is_empty() {
+            return (engine(pool), None);
+        }
+        if warning.is_none() {
+            warning = Some(format!(
+                "language `{}` has no words to type{}, using english",
+                lang.name,
+                if config.trim_syntax {
+                    " with trim_syntax on"
+                } else {
+                    ""
+                }
+            ));
+        }
+        let english = languages.get_or_default("english");
+        let pool = crate::catalog::modules::word_pool(english, &[], false);
+        (engine(pool), warning)
     }
 
     /// The theme to render with: a live palette preview wins over config.
@@ -1249,9 +1283,10 @@ impl App {
             SliderTarget::WordsPerLine => self.config.words_per_line,
             SliderTarget::Lines => self.config.lines,
         };
+        let (lo, hi) = target.range();
         self.slider = Some(Slider {
             target,
-            value: current,
+            value: current.clamp(lo, hi),
             original: current,
         });
     }

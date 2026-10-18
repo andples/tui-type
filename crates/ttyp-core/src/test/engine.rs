@@ -135,6 +135,8 @@ impl TestEngine {
         self.current
     }
 
+    /// The word under the caret. Panics on a test with no words (`words
+    /// 0`); `words().get(current_index())` doesn't.
     pub fn current_word(&self) -> &Word {
         &self.words[self.current]
     }
@@ -203,7 +205,8 @@ impl TestEngine {
     }
 
     pub fn type_char_at(&mut self, c: char, now: Instant) {
-        if self.status == Status::Finished {
+        // Nothing to type (a `words 0` test): every key does nothing.
+        if self.status == Status::Finished || self.words.is_empty() {
             return;
         }
         if self.status == Status::Idle {
@@ -281,7 +284,8 @@ impl TestEngine {
     /// Delete one character. Moves back into the previous word only if that
     /// word was left with an error (matching monkeytype's default).
     pub fn backspace(&mut self) {
-        if self.status == Status::Finished {
+        // Nothing to type (a `words 0` test): every key does nothing.
+        if self.status == Status::Finished || self.words.is_empty() {
             return;
         }
         self.log_untimed(Key::Backspace);
@@ -296,7 +300,8 @@ impl TestEngine {
     /// Ctrl+Backspace / Ctrl+W: clear the current word, or if it is already
     /// empty, go back to the previous erroneous word and clear that.
     pub fn delete_word(&mut self) {
-        if self.status == Status::Finished {
+        // Nothing to type (a `words 0` test): every key does nothing.
+        if self.status == Status::Finished || self.words.is_empty() {
             return;
         }
         self.log_untimed(Key::DeleteWord);
@@ -349,6 +354,19 @@ mod tests {
         for (i, c) in s.chars().enumerate() {
             e.type_char_at(c, t0 + Duration::from_millis(100 * i as u64));
         }
+    }
+
+    #[test]
+    fn no_words_ignores_keys() {
+        let mut e = TestEngine::new(Mode::Words(0), Box::new(Fixed(vec!["ab"])));
+        assert!(e.words().is_empty());
+        let t0 = Instant::now();
+        e.type_char_at('a', t0);
+        e.type_char_at(' ', t0);
+        e.backspace();
+        e.delete_word();
+        assert_eq!(e.status(), Status::Idle);
+        assert!(e.keystrokes().is_empty());
     }
 
     #[test]

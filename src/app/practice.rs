@@ -62,13 +62,18 @@ impl App {
 
     /// The next test: practice words while `:pm` is on, else the language
     /// or custom set.
-    pub(super) fn fresh_engine(&self) -> TestEngine {
+    pub(super) fn fresh_engine(&mut self) -> TestEngine {
         if let Some(n) = self.practice
             && let Some(engine) = self.practice_engine(n)
         {
             return engine;
         }
-        Self::build_engine(&self.config, &self.languages, &self.modules, &self.customs)
+        let (engine, warning) =
+            Self::build_engine(&self.config, &self.languages, &self.modules, &self.customs);
+        if let Some(w) = warning {
+            self.report("language", w);
+        }
+        engine
     }
 
     /// Endless: a timed test far longer than anyone types.
